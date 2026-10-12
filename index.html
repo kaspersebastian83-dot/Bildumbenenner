@@ -30,6 +30,9 @@ header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 
 .bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .brand{font-weight:700;letter-spacing:.2px;margin-right:6px}
 .brand span{color:var(--accent)}
+.ver{font:600 11px/1 var(--mono);padding:3px 6px;margin-left:4px;color:var(--muted);vertical-align:middle}
+.dialog .info td{padding:3px 12px 3px 0;vertical-align:top;font-size:13px}
+.dialog .info td:first-child{color:var(--muted);white-space:nowrap}
 .folder{font-family:var(--mono);font-size:13px;color:var(--muted)}
 .spacer{flex:1}
 .opts{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font-size:13px;color:var(--muted)}
@@ -45,10 +48,23 @@ main{flex:1;display:flex;min-height:0}
 .row.active{background:var(--focus);border-color:var(--accent)}
 .nr{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right}
 .thumb{width:96px;height:72px;border-radius:5px;background:var(--panel2);overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);cursor:pointer}
-.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block;flex:0 0 auto}
+.thumb{position:relative}
+.rotbtn{position:absolute;right:3px;bottom:3px;width:22px;height:22px;padding:0;border-radius:50%;border:0;font-size:13px;line-height:22px;text-align:center;background:rgba(0,0,0,.6);color:#fff;opacity:0;transition:opacity .12s}
+.row:hover .rotbtn,.row.rotated .rotbtn{opacity:1}
+.row.rotated .rotbtn{background:var(--accent)}
+.imgopts{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px}
+.imgopts select{padding:3px 6px}
 .mid{min-width:0;display:flex;flex-direction:column;gap:4px}
 .orig{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .desc{width:100%}
+.meta2{display:flex;gap:6px}
+.meta2 input{font-size:12.5px;padding:3px 7px}
+.meta2 .sec{flex:1;min-width:0}
+.meta2 .probe{width:110px;flex:0 0 auto}
+.meta2 .sec::placeholder{color:var(--muted)}
+.meta2 .sec.inherited::placeholder{color:var(--accent);opacity:.75}
+.row.discarded .meta2 input{color:var(--muted)}
 .res{font-family:var(--mono);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
 .res.change{color:var(--ok)}
 .res.conflict{color:var(--err);font-weight:600}
@@ -95,7 +111,8 @@ footer{background:var(--panel);border-top:1px solid var(--line);padding:8px 16px
 #stats b{color:var(--text)}
 #stats .bad{color:var(--err)}
 .keys{color:var(--muted);font-size:12px;flex:1 1 auto;min-width:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#btnRename,#btnZip{flex:0 0 auto;white-space:nowrap}
+#btnRename,#btnZip,#btnPdf{flex:0 0 auto;white-space:nowrap}
+.pdfOpen{padding:2px 8px;font-size:12.5px}
 .dialog .form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .dialog .form label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
 .dialog .form input{color:var(--text)}
@@ -142,7 +159,7 @@ progress{width:100%}
 
 @media (max-width:1100px){
   .keys{display:none}
-  #btnZip{margin-left:auto}
+  #btnPdf{margin-left:auto}
 }
 @media (max-width:860px){
   main{flex-direction:column}
@@ -156,7 +173,7 @@ progress{width:100%}
 
 <header>
   <div class="bar">
-    <div class="brand">Bild<span>umbenenner</span></div>
+    <div class="brand">Bild<span>umbenenner</span> <button id="btnInfo" class="ver" title="Version, Speicherorte, Änderungen">v1.0.0</button></div>
     <button id="btnOpen" class="primary">Ordner wählen …</button>
     <button id="btnReload" disabled>Neu einlesen</button>
     <button id="btnMeta" disabled>Projektdaten …</button>
@@ -182,6 +199,7 @@ progress{width:100%}
     <label><input type="checkbox" id="oSpaces"> Leerzeichen → _</label>
     <label><input type="checkbox" id="oUml"> ä → ae</label>
     <label><input type="checkbox" id="oLower"> Endung klein</label>
+    <label title="z. B. 03_P2_Küche_Decke.jpg"><input type="checkbox" id="oProbe"> Probe-Nr. im Namen</label>
     <label>Aussortierte
       <select id="oDiscard"><option value="move">→ Unterordner _aussortiert</option><option value="keep">im Ordner lassen</option></select>
     </label>
@@ -213,6 +231,8 @@ progress{width:100%}
       <button id="pvPrev">◀ vorheriges</button>
       <button id="pvNext">nächstes ▶</button>
       <span class="spacer"></span>
+      <button id="pvRotL" title="Links drehen (Alt+Shift+R)">↺</button>
+      <button id="pvRotR" title="Rechts drehen (Alt+R)">↻</button>
       <button id="pvDiscard" title="Alt+X">✕ Aussortieren</button>
     </div>
   </aside>
@@ -220,17 +240,48 @@ progress{width:100%}
 
 <footer id="foot" style="display:none">
   <span id="stats"></span>
-  <span class="keys" title="Enter / ↓: nächstes Bild · Shift+Enter / ↑: vorheriges Bild · Strg+D: Text vom vorherigen Bild übernehmen · Alt+X: aussortieren / wiederherstellen · Vorschaubild ziehen: verschieben · Esc: Vollbild schließen"><kbd>↵</kbd> nächstes · <kbd>⇧↵</kbd> vorheriges · <kbd>Strg D</kbd> übernehmen · <kbd>Alt X</kbd> aussortieren</span>
+  <span class="keys" title="Enter / ↓: nächstes Bild · Shift+Enter / ↑: vorheriges Bild · Strg+D: Text vom vorherigen Bild übernehmen · Alt+X: aussortieren / wiederherstellen · Alt+R / Alt+Shift+R: drehen · Vorschaubild ziehen: verschieben · Esc: Vollbild schließen"><kbd>↵</kbd> nächstes · <kbd>⇧↵</kbd> vorheriges · <kbd>Strg D</kbd> übernehmen · <kbd>Alt X</kbd> aussortieren · <kbd>Alt R</kbd> drehen</span>
+  <button id="btnPdf" disabled title="Bilddokumentation direkt als PDF erstellen (Deckblatt, 2 Bilder pro Seite, max. 14 MB je Datei)">PDF erstellen …</button>
   <button id="btnZip" disabled title="Verwendete Bilder mit neuen Namen + Anweisung/Projektdaten als ZIP speichern">ZIP exportieren …</button>
   <button id="btnRename" class="primary" disabled>Umbenennen</button>
 </footer>
 
+<datalist id="secList"></datalist>
 <div id="lightbox"><img id="lbImg" alt=""></div>
 <div id="overlay"><div class="dialog" id="dialog"></div></div>
 
 <script>
 (() => {
 'use strict';
+/* =====================================================================================================
+   Bildumbenenner – Bilddokumentation für Projektordner (eine Datei, offline, keine Bibliotheken)
+   Läuft in Chrome/Edge (File System Access API). Originalbilder werden nur umbenannt, nie verändert.
+
+   Inhalt dieses Skripts
+     version              APP_VERSION, CHANGELOG, Info-Dialog
+     storage              Browser (persönlich) vs. _Bildumbenenner.json im Projektordner (Projekt)
+     settings / helpers   Benennungsoptionen, Formatierung, Dateinamen bereinigen
+     per-image data       Drehung, Abschnitt, Probe-Nr., Umschlüsseln bei Umbenennung
+     EXIF date            Aufnahmedatum aus EXIF bzw. Dateiname
+     open folder          Ordner wählen, einlesen, Projektdatei laden
+     sorting / rows       Liste, Vorschaubilder, Drag & Drop, Aussortieren
+     name computation     Zielnamen, Abschnitts-Vererbung, Konflikte
+     focus + preview      Vorschau, Vollbild, Tastatur
+     renaming             zweiphasiges Umbenennen mit Prüfung, Rückgängig, CSV
+     ZIP export           ZIP-Writer, Projektdaten-Dialog, KI-Anweisung, Prüfsummen
+     image processing     Ausrichten/Verkleinern (gemeinsam für ZIP und PDF)
+     PDF annex            PDF-Writer, Layout, Aufteilung ≤ max. MB
+     banner / wiring      Statusmeldungen, Ereignisse
+   ===================================================================================================== */
+
+/* ---------- version ---------- */
+const APP_VERSION = '1.0.0';
+const APP_DATE = '2026-10-12';
+const CHANGELOG = [
+  ['1.0.0', '12.10.2026', 'Erste Version für das Büro: Umbenennen mit Vorschau, Aussortieren, Drag & Drop, Drehen, Abschnitte und Probe-Nr., Projektdaten, ZIP mit KI-Anweisung, SHA-256-Prüfsummen, PDF-Bilddokumentation (≤ 14 MB je Datei), Projektdaten in _Bildumbenenner.json im Projektordner.'],
+];
+const verNum = v => String(v || '0').split('.').map(x => parseInt(x, 10) || 0);
+const verCmp = (a, b) => { const x = verNum(a), y = verNum(b); for (let i = 0; i < 3; i++){ if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); } return 0; };
 const $ = id => document.getElementById(id);
 const IMG_EXT = ['jpg','jpeg','png','webp','gif','bmp','tif','tiff','heic','heif'];
 const PREVIEWABLE = ['jpg','jpeg','png','webp','gif','bmp'];
@@ -238,15 +289,146 @@ const S = { dir:null, items:[], view:[], otherNames:new Set(), focus:-1, lastRun
 const DISCARD_DIR = '_aussortiert';
 const TMP_PREFIX = 'umb-tmp_';
 
-/* ---------- storage (optional) ---------- */
+/* ---------- storage ----------
+   Two places, deliberately separate:
+   • store.get/set  → the browser (localStorage): personal settings – Sachverständiger, standard instructions,
+                      export options, default naming. Stays on this PC.
+   • projGet/projSet → _Bildumbenenner.json in the project folder: everything that belongs to the project
+                      (descriptions, sections, samples, rotations, order, original names, checksums, project data,
+                      naming). Travels with the folder, survives a cleared browser, can be continued by a coworker. */
+const PROJ_FILE = '_Bildumbenenner.json';
+const PROJ_KINDS = ['drafts', 'discard', 'rot', 'extra', 'orig', 'hash', 'order', 'meta'];
+const NAMING_KEYS = ['prefix', 'date', 'num', 'start', 'digits', 'sep', 'spaces', 'uml', 'lower', 'probe', 'discard', 'sort'];
+const P = { data: null, timer: null, writing: Promise.resolve(), dirty: false, failed: false, readOnly: false };
+const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
+const pickNaming = c => Object.fromEntries(NAMING_KEYS.filter(k => k in c).map(k => [k, c[k]]));
 const store = {
-  get(k, d){ try{ const v = localStorage.getItem(k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
-  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+  get(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){
+    try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){}
+    if (k === 'bu-settings' && P.data){          // naming is also part of the project, so renaming is reproducible for everyone
+      const n = pickNaming(v);
+      if (JSON.stringify(P.data.settings) !== JSON.stringify(n)){ P.data.settings = n; scheduleProjSave(); }
+    }
+  }
 };
+function projGet(kind, d){ return P.data && P.data[kind] !== undefined ? clone(P.data[kind]) : d; }
+function projSet(kind, v){
+  if (!P.data || JSON.stringify(P.data[kind]) === JSON.stringify(v)) return;
+  P.data[kind] = clone(v); scheduleProjSave();
+}
+
+function projToJson(){
+  const d = P.data, imgs = {};
+  const at = n => imgs[n] || (imgs[n] = {});
+  for (const [n, v] of Object.entries(d.drafts || {})) if (v) at(n).beschreibung = v;
+  for (const [n, v] of Object.entries(d.extra || {})){ if (v.sec) at(n).abschnitt = v.sec; if (v.probe) at(n).probe = v.probe; }
+  for (const [n, v] of Object.entries(d.rot || {})) if (v) at(n).drehung = v;
+  for (const n of d.discard || []) at(n).aussortiert = true;
+  for (const [n, v] of Object.entries(d.orig || {})){
+    at(n).original = typeof v === 'object' ? { name: v.o, aufnahme: v.d || '', datumsquelle: v.s || '' } : { name: v };
+  }
+  for (const [n, v] of Object.entries(d.hash || {})) at(n).sha256 = { wert: v.h, bytes: v.s, geaendert: v.m };
+  const sorted = Object.fromEntries(Object.keys(imgs).sort((a, b) => a.localeCompare(b, 'de', { numeric: true })).map(k => [k, imgs[k]]));
+  return JSON.stringify({
+    app: 'Bildumbenenner', format: 1, version: APP_VERSION,
+    hinweis: 'Projektdaten des Bildumbenenners (Beschreibungen, Abschnitte, Proben, Drehungen, Originalnamen, Prüfsummen). Bitte nicht löschen oder umbenennen.',
+    gespeichert: new Date().toISOString(),
+    projekt: d.meta || {}, benennung: d.settings || {}, reihenfolge: d.order || [], bilder: sorted
+  }, null, 2) + '\n';
+}
+function projFromJson(o){
+  const d = { drafts: {}, discard: [], rot: {}, extra: {}, orig: {}, hash: {}, order: o.reihenfolge || [], meta: o.projekt || {}, settings: o.benennung || null };
+  for (const [n, v] of Object.entries(o.bilder || {})){
+    if (v.beschreibung) d.drafts[n] = v.beschreibung;
+    if (v.abschnitt || v.probe) d.extra[n] = { sec: v.abschnitt || '', probe: v.probe || '' };
+    if (v.drehung) d.rot[n] = v.drehung;
+    if (v.aussortiert) d.discard.push(n);
+    if (v.original) d.orig[n] = { o: v.original.name, d: v.original.aufnahme || '', s: v.original.datumsquelle || '' };
+    if (v.sha256) d.hash[n] = { h: v.sha256.wert, s: v.sha256.bytes, m: v.sha256.geaendert };
+  }
+  return d;
+}
+
+function scheduleProjSave(){
+  if (!P.data || P.readOnly) return;
+  P.dirty = true; clearTimeout(P.timer); P.timer = setTimeout(flushProject, 400);
+}
+function flushProject(){
+  clearTimeout(P.timer);
+  if (!P.dirty || !S.dir || !P.data || P.readOnly) return P.writing;
+  P.dirty = false;
+  const dir = S.dir, json = projToJson();
+  P.writing = P.writing.then(async () => {
+    try{
+      const fh = await dir.getFileHandle(PROJ_FILE, { create: true });
+      const w = await fh.createWritable(); await w.write(json); await w.close();
+      if (P.failed){ P.failed = false; hideBanner(); }
+    }catch(e){
+      P.dirty = true;
+      if (!P.failed){ P.failed = true; banner('err', `Projektdatei „${PROJ_FILE}“ konnte nicht gespeichert werden: ${esc(e.message)} – Änderungen gehen beim Schließen verloren.`); }
+    }
+  });
+  return P.writing;
+}
+
+/* old versions kept per-project data in the browser, keyed only by folder name – take over what matches this folder */
+async function importLegacy(dir){
+  const d = { drafts: {}, discard: [], rot: {}, extra: {}, orig: {}, hash: {}, order: [], meta: {}, settings: null };
+  const names = new Set();
+  for await (const h of dir.values()) if (h.kind === 'file') names.add(h.name);
+  let hits = 0;
+  for (const kind of PROJ_KINDS){
+    if (kind === 'meta') continue;
+    const v = store.get(`bu-${kind}:${dir.name}`, null);
+    if (!v) continue;
+    if (Array.isArray(v)){ d[kind] = v.filter(n => names.has(n)); if (kind !== 'order') hits += d[kind].length; }
+    else for (const [n, x] of Object.entries(v)) if (names.has(n)){ d[kind][n] = x; if (kind !== 'hash') hits++; }
+  }
+  if (hits) d.meta = store.get(`bu-meta:${dir.name}`, {});   // project data only if the images clearly belong to this folder
+  return { d, hits };
+}
+
+async function loadProject(dir){
+  clearTimeout(P.timer); P.dirty = false; P.failed = false; P.readOnly = false;
+  let d = null, note = '';
+  try{
+    const txt = await (await (await dir.getFileHandle(PROJ_FILE)).getFile()).text();
+    // an empty file is what an interrupted *first* save leaves behind – nothing to protect, treat as "no file yet"
+    const o = txt.trim() ? JSON.parse(txt) : null;
+    d = o ? projFromJson(o) : null;
+    if (o && (o.format || 1) > 1){
+      P.readOnly = true;
+      note = `<b>„${PROJ_FILE}“ stammt aus einer neueren Version (${esc(o.version || '?')})</b> – sie wird nicht überschrieben. Bitte die aktuelle Version des Bildumbenenners verwenden.`;
+    } else if (o && o.version && verCmp(o.version, APP_VERSION) > 0){
+      note = `Hinweis: Dieses Projekt wurde zuletzt mit Version ${esc(o.version)} gespeichert, du nutzt ${APP_VERSION}. Bitte die aktuelle Version vom gemeinsamen Speicherort verwenden.`;
+    }
+  }catch(e){
+    if (e && e.name === 'NotFoundError') d = null;
+    else {
+      P.readOnly = true;   // never overwrite a file we could not read
+      note = `<b>Projektdatei „${PROJ_FILE}“ ist beschädigt oder nicht lesbar</b> (${esc(e.message)}). Sie wird nicht überschrieben – Änderungen werden in dieser Sitzung nicht gespeichert.`;
+      d = projFromJson({});
+    }
+  }
+  let imported = 0;
+  if (!d){ const r = await importLegacy(dir); d = r.d; imported = r.hits; }
+  P.data = d;
+  if (d.settings){
+    cfg = Object.assign({}, defaults, store.get('bu-settings', {}), d.settings);
+    applyCfgToUI();
+  } else {
+    if (!imported){ cfg.prefix = ''; applyCfgToUI(); }   // a new project starts without the previous project's prefix
+    d.settings = pickNaming(cfg);
+  }
+  if (imported){ P.dirty = true; await flushProject(); note = `Bisherige Angaben zu ${imported} Bild(ern) aus dem Browser übernommen und in „${PROJ_FILE}“ im Projektordner gespeichert.`; }
+  return note;
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushProject(); });
 
 /* ---------- settings ---------- */
-const OPT = { prefix:'oPrefix', date:'oDate', num:'oNum', start:'oStart', digits:'oDigits', sep:'oSep', spaces:'oSpaces', uml:'oUml', lower:'oLower', discard:'oDiscard' };
-const defaults = { prefix:'', date:false, num:true, start:1, digits:2, sep:'_', spaces:true, uml:false, lower:true, discard:'move', sort:'name' };
+const OPT = { prefix:'oPrefix', date:'oDate', num:'oNum', start:'oStart', digits:'oDigits', sep:'oSep', spaces:'oSpaces', uml:'oUml', lower:'oLower', probe:'oProbe', discard:'oDiscard' };
+const defaults = { prefix:'', date:false, num:true, start:1, digits:2, sep:'_', spaces:true, uml:false, lower:true, probe:true, discard:'move', sort:'name' };
 let cfg = Object.assign({}, defaults, store.get('bu-settings', {}));
 function applyCfgToUI(){
   for (const [k,id] of Object.entries(OPT)){
@@ -284,6 +466,61 @@ function sanitize(s){
   s = s.replace(/^[.~\s]+/, '');     // Chrome rejects names starting with "." or "~" on real disks
   return s;
 }
+
+/* ---------- per-image project data: rotation, sections/samples (rotation is shown in the app and applied only to exported copies – originals stay untouched) ---------- */
+let ROT = {};
+const rotOf = it => ROT[it.name] || 0;
+const canRotate = it => PREVIEWABLE.includes(it.ext.slice(1).toLowerCase()) && it.ext.toLowerCase() !== '.gif';
+function saveRot(){ projSet('rot', ROT); }
+/* per-image project data is keyed by file name – move entries along when files are renamed (or renamed back) */
+function remapKeys(kind, pairs){
+  const old = projGet(kind, {}), n = Object.assign({}, old);
+  for (const p of pairs) if (p.from in old) delete n[p.from];
+  for (const p of pairs) if (p.from in old) n[p.to] = old[p.from];
+  projSet(kind, n); return n;
+}
+let EXTRA = {}, ORIG = {};
+function saveExtra(){
+  if (!S.dir) return;
+  const o = {};
+  S.items.forEach(it => { const sec = it.sec.trim(), probe = it.probe.trim(); if (sec || probe) o[it.name] = { sec, probe }; });
+  projSet('extra', o);
+}
+function moveRotKeys(pairs){
+  ROT = remapKeys('rot', pairs);
+}
+function fitRotated(img, cw, ch, deg){
+  const nw = img.naturalWidth, nh = img.naturalHeight;
+  if (!nw || !cw || !ch) return;
+  const swap = deg % 180 !== 0;
+  const sc = Math.min(cw / (swap ? nh : nw), ch / (swap ? nw : nh), 1);
+  img.style.maxWidth = 'none'; img.style.maxHeight = 'none';
+  img.style.width = Math.round(nw * sc) + 'px'; img.style.height = Math.round(nh * sc) + 'px';
+  img.style.flex = '0 0 auto';
+  img.style.transform = deg ? `rotate(${deg}deg)` : '';
+}
+function applyRotThumb(it){
+  const box = it.el && it.el.querySelector('.thumb'), img = box && box.querySelector('img');
+  if (it.el) it.el.classList.toggle('rotated', !!rotOf(it));
+  if (!img) return;
+  const d = rotOf(it), swap = d % 180 !== 0;
+  img.style.width = swap ? box.clientHeight + 'px' : '';
+  img.style.height = swap ? box.clientWidth + 'px' : '';
+  img.style.transform = d ? `rotate(${d}deg)` : '';
+}
+function fitPreview(){
+  const it = S.view[S.focus], img = $('pvImg'), box = $('pvImgWrap');
+  if (!it || !img.getAttribute('src') || !img.naturalWidth) return;
+  fitRotated(img, box.clientWidth, box.clientHeight, rotOf(it));
+}
+function rotate(it, delta){
+  if (!it || !canRotate(it)) return;
+  const r = (rotOf(it) + delta + 360) % 360;
+  if (r) ROT[it.name] = r; else delete ROT[it.name];
+  saveRot(); applyRotThumb(it);
+  if (S.view[S.focus] === it){ fitPreview(); updatePreviewMeta(); }
+}
+window.addEventListener('resize', () => { fitPreview(); if ($('lightbox').classList.contains('show')) fitLightbox(); });
 
 /* ---------- EXIF date ---------- */
 async function readExifDate(file){
@@ -342,12 +579,16 @@ async function ensurePerm(dir){
 }
 async function openDir(dir){
   if (!(await ensurePerm(dir))){ banner('err','Ohne Schreibrecht kann nicht umbenannt werden.'); return; }
+  flushDrafts(); if (S.dir) saveExtra();
+  await flushProject();                       // finish writing the previous project before switching
   S.dir = dir; S.lastRun = null;
+  const note = await loadProject(dir);
   $('folderName').textContent = '📁 ' + dir.name;
   $('btnReload').disabled = false;
   $('btnMeta').disabled = false;
   hideBanner();
   await loadItems();
+  if (note) banner(P.readOnly ? 'err' : 'info', note);
 }
 
 async function loadItems(){
@@ -356,8 +597,12 @@ async function loadItems(){
   S.items = []; S.otherNames = new Set(); S.focus = -1;
   $('list').innerHTML = '';
   banner('info', 'Lese Ordner …');
-  const drafts = store.get('bu-drafts:' + dir.name, {});
-  const discards = new Set(store.get('bu-discard:' + dir.name, []));
+  const drafts = projGet('drafts', {});
+  ROT = projGet('rot', {});
+  HASH = projGet('hash', {});
+  EXTRA = projGet('extra', {});
+  ORIG = projGet('orig', {});
+  const discards = new Set(projGet('discard', []));
   const handles = [];
   for await (const h of dir.values()){
     if (h.kind !== 'file') continue;
@@ -369,12 +614,15 @@ async function loadItems(){
   for (const h of handles){
     const f = await h.getFile();
     const exif = /^jpe?g$/.test(extOf(h.name).slice(1).toLowerCase()) ? await readExifDate(f) : null;
-    const fromName = exif ? null : dateFromName(h.name);
-    const date = exif || fromName || new Date(f.lastModified);
+    const og = ORIG[h.name];
+    const kept = og && typeof og === 'object' && og.d && og.s !== 'Dateidatum' ? { d: new Date(og.d), s: og.s } : null;  // date from before renaming
+    const fromName = exif || kept ? null : dateFromName(h.name);
+    const date = exif || (kept && kept.d) || fromName || new Date(f.lastModified);
     S.items.push({
       handle:h, name:h.name, ext:extOf(h.name), size:f.size,
-      date, dateSrc: exif ? 'EXIF' : fromName ? 'Dateiname' : 'Dateidatum',
+      date, dateSrc: exif ? 'EXIF' : kept ? kept.s : fromName ? 'Dateiname' : 'Dateidatum',
       desc: drafts[h.name] || '', discard: discards.has(h.name),
+      sec: (EXTRA[h.name] || {}).sec || '', probe: (EXTRA[h.name] || {}).probe || '', orig: og ? (typeof og === 'object' ? og.o : og) : '', secEff: '',
       thumbUrl:null, thumbState:0, el:null, final:h.name, conflict:false
     });
     if (++n % 20 === 0) banner('info', `Lese Ordner … ${n} / ${handles.length}`);
@@ -399,13 +647,13 @@ function applySort(){
   else if (cfg.sort === 'date') S.items.sort((a,b) => (a.date - b.date) || byName(a,b));
   else {
     // manual: restore the saved order, new files go to the end
-    const ord = new Map(store.get('bu-order:' + (S.dir ? S.dir.name : ''), []).map((n, i) => [n, i]));
+    const ord = new Map(projGet('order', []).map((n, i) => [n, i]));
     const pos = it => ord.has(it.name) ? ord.get(it.name) : Infinity;
     S.items.sort((a,b) => (pos(a) - pos(b)) || byName(a,b));
   }
 }
 function saveOrder(names){
-  if (S.dir) store.set('bu-order:' + S.dir.name, names || S.view.map(it => it.name));
+  projSet('order', names || S.view.map(it => it.name));
 }
 
 /* ---------- rows ---------- */
@@ -431,6 +679,7 @@ function buildRows(){
         <div class="mid">
           <div class="orig"></div>
           <input class="desc" type="text" spellcheck="true" placeholder="Beschreibung eingeben …">
+          <div class="meta2"><input class="sec" type="text" list="secList" placeholder="Abschnitt (z. B. Küche)" title="Abschnitt – gilt auch für die folgenden Bilder, bis ein neuer gesetzt wird"><input class="probe" type="text" placeholder="Probe-Nr." title="Probenahmestelle, z. B. P1 (mehrere mit Komma)"></div>
           <div class="res"></div>
         </div>
         <div class="ord"><button class="up" title="nach oben">▲</button><button class="x" title="Aussortieren (Alt+X)">✕</button><button class="down" title="nach unten">▼</button></div>`;
@@ -443,6 +692,13 @@ function buildRows(){
       inp.addEventListener('input', () => { if (it.discard) return; it.desc = inp.value; recompute(); saveDrafts(); });
       inp.addEventListener('focus', () => setFocus(S.view.indexOf(it), false));
       inp.addEventListener('keydown', onKey);
+      for (const [cls, key] of [['sec', 'sec'], ['probe', 'probe']]){
+        const f = r.querySelector('.' + cls);
+        f.value = it[key];
+        f.addEventListener('input', () => { if (it.discard) return; it[key] = f.value; recompute(); saveExtra(); });
+        f.addEventListener('focus', () => setFocus(S.view.indexOf(it), false));
+        f.addEventListener('keydown', onKey);
+      }
       thumb.addEventListener('click', () => { setFocus(S.view.indexOf(it), true); });
       thumb.addEventListener('dblclick', openLightbox);
       r.querySelector('.up').addEventListener('click', () => move(it, -1));
@@ -479,7 +735,9 @@ function buildRows(){
     }
     const r = it.el;
     r.classList.toggle('discarded', it.discard);
+    r.classList.toggle('rotated', !!rotOf(it));
     r.querySelector('.desc').readOnly = it.discard;
+    r.querySelector('.sec').readOnly = it.discard; r.querySelector('.probe').readOnly = it.discard;
     r.querySelector('.up').style.visibility = it.discard ? 'hidden' : '';
     r.querySelector('.down').style.visibility = it.discard ? 'hidden' : '';
     const x = r.querySelector('.x');
@@ -542,16 +800,18 @@ function move(it, dir){
 }
 
 let draftTimer;
+function flushDrafts(){
+  clearTimeout(draftTimer);
+  if (!S.dir) return;
+  const d = {}; S.items.forEach(it => { if (it.desc.trim()) d[it.name] = it.desc; });
+  projSet('drafts', d);
+}
 function saveDrafts(){
   clearTimeout(draftTimer);
-  draftTimer = setTimeout(() => {
-    if (!S.dir) return;
-    const d = {}; S.items.forEach(it => { if (it.desc.trim()) d[it.name] = it.desc; });
-    store.set('bu-drafts:' + S.dir.name, d);
-  }, 400);
+  draftTimer = setTimeout(flushDrafts, 400);
 }
 function saveDiscards(){
-  if (S.dir) store.set('bu-discard:' + S.dir.name, S.items.filter(it => it.discard).map(it => it.name));
+  projSet('discard', S.items.filter(it => it.discard).map(it => it.name));
 }
 
 let thumbQueue = [], thumbActive = 0;
@@ -578,6 +838,13 @@ async function makeThumb(it){
     }catch(e){ url = URL.createObjectURL(f); }
     it.thumbUrl = url;
     box.innerHTML = ''; const img = new Image(); img.src = url; img.alt = ''; img.draggable = false; box.appendChild(img);
+    if (canRotate(it)){
+      const rb = document.createElement('button'); rb.className = 'rotbtn'; rb.textContent = '↻'; rb.title = 'Drehen (Alt+R)';
+      rb.addEventListener('click', e => { e.stopPropagation(); rotate(it, 90); });
+      rb.addEventListener('dblclick', e => e.stopPropagation());
+      box.appendChild(rb);
+    }
+    applyRotThumb(it);
   }catch(e){ box.textContent = '⚠'; }
 }
 
@@ -587,6 +854,7 @@ function buildName(it, nr){
   if (cfg.prefix.trim()) parts.push(sanitize(cfg.prefix));
   if (cfg.date && it.date) parts.push(fmtISO(it.date));
   if (cfg.num) parts.push(pad(nr, cfg.digits));
+  if (cfg.probe && it.probe && it.probe.trim()) parts.push(sanitize(it.probe.replace(/\s*[,;\/]\s*/g, '+')));
   parts.push(sanitize(it.desc));
   const ext = cfg.lower ? it.ext.toLowerCase() : it.ext;
   let base = parts.filter(Boolean).join(cfg.sep);
@@ -595,6 +863,20 @@ function buildName(it, nr){
 }
 function recompute(){
   readCfgFromUI();
+  // sections: an image without its own section inherits the one above it
+  let cur = ''; const secs = new Set();
+  S.view.forEach(it => {
+    if (!it.discard && it.sec.trim()){ cur = it.sec.trim(); secs.add(cur); }
+    it.secEff = it.discard ? it.sec.trim() : cur;
+    const f = it.el && it.el.querySelector('.sec');
+    if (f){
+      const inh = !it.sec.trim() && !it.discard && cur;
+      f.placeholder = inh ? `↳ ${cur}` : 'Abschnitt (z. B. Küche)';
+      f.classList.toggle('inherited', !!inh);
+    }
+  });
+  const dl = $('secList');
+  if (dl.dataset.k !== [...secs].join('|')){ dl.dataset.k = [...secs].join('|'); dl.innerHTML = [...secs].map(v => `<option value="${esc(v)}">`).join(''); }
   const moving = cfg.discard === 'move';
   let nr = cfg.start;
   S.view.forEach(it => {
@@ -635,7 +917,7 @@ function recompute(){
   if (tooLong) s += ` · <span class="bad">${tooLong} Namen sehr lang</span>`;
   $('stats').innerHTML = s;
   $('btnRename').disabled = !(changes || moves) || conflicts > 0 || S.busy;
-  $('btnZip').disabled = !(S.view.length - discarded) || conflicts > 0 || S.busy;
+  $('btnZip').disabled = $('btnPdf').disabled = !(S.view.length - discarded) || conflicts > 0 || S.busy;
   const parts = [];
   if (changes) parts.push(`${changes} umbenennen`);
   if (moves) parts.push(`${moves} aussortieren`);
@@ -670,8 +952,8 @@ async function loadPreview(it){
     if (tok !== S.pvToken) return;
     if (S.pvUrl) URL.revokeObjectURL(S.pvUrl);
     S.pvUrl = URL.createObjectURL(f);
-    img.alt = ''; img.src = S.pvUrl;
-    img.onload = () => { if (tok === S.pvToken){ it.dim = `${img.naturalWidth} × ${img.naturalHeight} px`; updatePreviewMeta(); } };
+    img.style.cssText = ''; img.alt = ''; img.src = S.pvUrl;
+    img.onload = () => { if (tok === S.pvToken){ it.dim = `${img.naturalWidth} × ${img.naturalHeight} px`; fitPreview(); updatePreviewMeta(); } };
   }catch(e){ img.removeAttribute('src'); img.alt = 'Datei nicht lesbar'; }
 }
 function updatePreviewMeta(){
@@ -681,7 +963,7 @@ function updatePreviewMeta(){
   $('pvInfo').textContent = [
     it.discard ? 'aussortiert' : `Bild ${S.focus+1} von ${active}`,
     `${fmtDate(it.date)} ${it.dateSrc==='EXIF' ? fmtTime(it.date) : ''} (${it.dateSrc})`,
-    fmtSize(it.size), it.dim || ''
+    fmtSize(it.size), it.dim || '', rotOf(it) ? `↻ ${rotOf(it)}° (nur im Export)` : ''
   ].filter(Boolean).join(' · ');
   $('pvNew').textContent = it.discard ? '' : it.final !== it.name ? '→ ' + it.final : '';
   const b = $('pvDiscard');
@@ -691,15 +973,25 @@ function updatePreviewMeta(){
 $('pvPrev').onclick = () => setFocus(S.focus - 1, true);
 $('pvNext').onclick = () => setFocus(S.focus + 1, true);
 $('pvDiscard').onclick = () => { const it = S.view[S.focus]; if (it) toggleDiscard(it); };
+$('pvRotR').onclick = () => rotate(S.view[S.focus], 90);
+$('pvRotL').onclick = () => rotate(S.view[S.focus], -90);
 $('pvImgWrap').onclick = openLightbox;
 
-function openLightbox(){ if (!$('pvImg').getAttribute('src')) return; $('lbImg').src = $('pvImg').src; $('lightbox').classList.add('show'); }
+function fitLightbox(){ const it = S.view[S.focus]; fitRotated($('lbImg'), innerWidth * 0.98, innerHeight * 0.96, it ? rotOf(it) : 0); }
+function openLightbox(){
+  if (!$('pvImg').getAttribute('src')) return;
+  const lb = $('lbImg'); lb.style.cssText = ''; lb.onload = fitLightbox; lb.src = $('pvImg').src;
+  $('lightbox').classList.add('show'); if (lb.complete) fitLightbox();
+}
 $('lightbox').onclick = () => $('lightbox').classList.remove('show');
 
 function onKey(e){
   const i = S.focus;
   if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'ArrowDown'){ e.preventDefault(); setFocus(i + 1, true); }
   else if ((e.key === 'Enter' && e.shiftKey) || e.key === 'ArrowUp'){ e.preventDefault(); setFocus(i - 1, true); }
+  else if (e.altKey && e.code === 'KeyR'){
+    e.preventDefault(); rotate(S.view[i], e.shiftKey ? -90 : 90);
+  }
   else if (e.altKey && e.code === 'KeyX'){
     e.preventDefault();
     const it = S.view[i]; if (it) toggleDiscard(it);
@@ -707,7 +999,11 @@ function onKey(e){
   else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd'){
     e.preventDefault();
     const it = S.view[i], prev = S.view[i - 1];
-    if (it && prev && !it.discard && !prev.discard){ it.desc = prev.desc; e.target.value = prev.desc; recompute(); saveDrafts(); }
+    const key = e.target.classList.contains('sec') ? 'sec' : e.target.classList.contains('probe') ? 'probe' : 'desc';
+    if (it && prev && !it.discard && !prev.discard){
+      it[key] = key === 'sec' ? prev.secEff : prev[key]; e.target.value = it[key];
+      recompute(); key === 'desc' ? saveDrafts() : saveExtra();
+    }
   }
 }
 document.addEventListener('keydown', e => {
@@ -831,13 +1127,15 @@ $('btnRename').onclick = () => {
 };
 
 async function doRename(pairs, moves){
+  flushDrafts(); saveExtra();
+  const itemsBefore = S.items.slice();
   S.busy = true; usedCopy = false;
   const total = pairs.length * 2 + moves.length; let done = 0;
   const step = () => { $('prog').value = ++done; };
   showDialog(`<h3>Führe aus …</h3><progress id="prog" max="${total}" value="0"></progress>`);
   const fmtD = it => it.date ? `${fmtDate(it.date)} ${it.dateSrc==='EXIF' ? fmtTime(it.date) : ''}`.trim() : '';
   const snapshot = S.view.filter(it => !it.discard).map(it => ({
-    nr: it.nr ?? '', from: it.name, to: it.final, desc: it.desc.trim(), date: fmtD(it)
+    nr: it.nr ?? '', from: it.name, to: it.final, desc: it.desc.trim(), date: fmtD(it), sec: it.secEff, probe: it.probe.trim(), orig: it.orig || it.name
   }));
   const discardRows = S.view.filter(it => it.discard).map(it => ({ from: it.name, date: fmtD(it) }));
   let movesDone = false;
@@ -862,13 +1160,25 @@ async function doRename(pairs, moves){
     closeDialog();
     S.lastRun = { rows: snapshot, pairs, moves, discardRows, when: new Date() };
     saveOrder(snapshot.map(r => r.to).concat(moves.length ? [] : discardRows.map(r => r.from)));
-    const drafts = store.get('bu-drafts:' + S.dir.name, {});
-    pairs.forEach(p => delete drafts[p.from]);
-    store.set('bu-drafts:' + S.dir.name, drafts);
+    remapKeys('drafts', pairs);       // descriptions stay with the renamed file
+    remapKeys('extra', pairs);
+    remapKeys('hash', pairs);
+    moveRotKeys(pairs);
+    // remember the very first file name and the capture date (it may only have been in the old name)
+    const og = projGet('orig', {}), og2 = Object.assign({}, og);
+    const byName = new Map(itemsBefore.map(it => [it.name, it]));
+    for (const p of pairs) delete og2[p.from];
+    for (const p of pairs){
+      const it = byName.get(p.from);
+      og2[p.to] = og[p.from] && typeof og[p.from] === 'object' ? og[p.from]
+        : { o: (typeof og[p.from] === 'string' && og[p.from]) || p.from, d: it && it.date ? it.date.toISOString() : '', s: it ? it.dateSrc : '' };
+    }
+    projSet('orig', og2);
     if (moves.length){
       const moved = new Set(moves.map(m => m.from));
-      store.set('bu-discard:' + S.dir.name, store.get('bu-discard:' + S.dir.name, []).filter(n => !moved.has(n)));
+      projSet('discard', projGet('discard', []).filter(n => !moved.has(n)));
     }
+    await flushProject();                     // project file now matches the renamed files
     S.busy = false;
     await loadItems();
     const msg = [];
@@ -899,13 +1209,22 @@ async function undo(){
     await runPairs(rev, () => { $('prog').value = ++done; });
     if (run.moves.length) await undoMoves(run.moves);
     closeDialog();
-    const drafts = store.get('bu-drafts:' + S.dir.name, {});
+    const back = run.pairs.map(p => ({ from: p.to, to: p.from }));
+    flushDrafts(); saveExtra();
+    const drafts = remapKeys('drafts', back);
     run.rows.forEach(r => { if (r.desc) drafts[r.from] = r.desc; });
-    store.set('bu-drafts:' + S.dir.name, drafts);
-    const disc = new Set(store.get('bu-discard:' + S.dir.name, []));
+    projSet('drafts', drafts);
+    remapKeys('extra', back);
+    remapKeys('hash', back);
+    moveRotKeys(back);
+    const og = projGet('orig', {});
+    for (const p of run.pairs){ const o = og[p.to]; delete og[p.to]; const on = o && (typeof o === 'object' ? o.o : o); if (on && on !== p.from) og[p.from] = o; }
+    projSet('orig', og);
+    const disc = new Set(projGet('discard', []));
     run.moves.forEach(m => disc.add(m.from));
-    store.set('bu-discard:' + S.dir.name, [...disc]);
+    projSet('discard', [...disc]);
     saveOrder(run.rows.map(r => r.from).concat(run.discardRows.map(r => r.from)));
+    await flushProject();
     S.lastRun = null; S.busy = false;
     await loadItems();
     banner('ok', '↺ Rückgängig gemacht. Beschreibungen und Aussortierung sind wieder eingetragen.');
@@ -923,11 +1242,16 @@ async function saveCsv(){
   const w = run.when;
   const name = `Bildverzeichnis_${fmtISO(w)}_${pad(w.getHours(),2)}${pad(w.getMinutes(),2)}.csv`;
   const movedTo = new Map(run.moves.map(m => [m.from, m.to]));
-  const rows = [['Nr','Dateiname','Beschreibung','Aufnahmedatum','Ursprünglicher Dateiname','Status']]
-    .concat(run.rows.map(r => [r.nr, r.to, r.desc, r.date, r.from, 'verwendet']))
-    .concat(run.discardRows.map(r => ['',
-      movedTo.has(r.from) ? `${DISCARD_DIR}/${movedTo.get(r.from)}` : r.from,
-      '', r.date, r.from, 'aussortiert']));
+  $('bCsv').disabled = true; $('bCsv').textContent = 'Berechne Prüfsummen …';
+  const hashAt = async (dir, nm) => { try{ const f = await (await dir.getFileHandle(nm)).getFile(); return await hashOfFile(dir === S.dir ? nm : DISCARD_DIR + '/' + nm, f); }catch(e){ return ''; } };
+  const sub = run.moves.length ? await S.dir.getDirectoryHandle(DISCARD_DIR).catch(() => null) : null;
+  const rows = [['Nr','Dateiname','Beschreibung','Abschnitt','Probe-Nr.','Aufnahmedatum','Ursprünglicher Dateiname','Status','SHA-256']];
+  for (const r of run.rows) rows.push([r.nr, r.to, r.desc, r.sec || '', r.probe || '', r.date, r.orig || r.from, 'verwendet', await hashAt(S.dir, r.to)]);
+  for (const r of run.discardRows){
+    const moved = movedTo.has(r.from);
+    rows.push(['', moved ? `${DISCARD_DIR}/${movedTo.get(r.from)}` : r.from, '', '', '', r.date, r.from, 'aussortiert',
+               moved ? (sub ? await hashAt(sub, movedTo.get(r.from)) : '') : await hashAt(S.dir, r.from)]);
+  }
   try{
     const fh = await S.dir.getFileHandle(name, { create:true });
     const wr = await fh.createWritable(); await wr.write(new Blob([toCsv(rows)], { type:'text/csv' })); await wr.close();
@@ -990,6 +1314,7 @@ class ZipWriter{
 const deDate = iso => { const m = (iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? `${m[3]}.${m[2]}.${m[1]}` : (iso || ''); };
 const safeFile = s => (s || '').trim().replace(/[<>:"\/\\|?*\x00-\x1F]/g, '-').replace(/\s+/g, '_').replace(/^[.~]+|[. ]+$/g, '');
 const TXT_NAME = '00_Anweisung_Bilddokumentation.txt';
+const SUM_NAME = 'Pruefsummen.sha256';
 
 /* ---------- project data + AI instructions ---------- */
 const META_FIELDS = [
@@ -1012,7 +1337,10 @@ Inhalt und Bildunterschriften
 - Verwende ausschließlich die Bilder aus diesem Archiv, vollständig und in der Reihenfolge des Bildverzeichnisses unten.
 - Nummeriere die Bilder fortlaufend: "Bild 1", "Bild 2", … (wie im Bildverzeichnis).
 - Bildunterschrift = die Beschreibung aus dem Bildverzeichnis. Nur sprachlich glätten (z. B. Unterstriche durch Leerzeichen ersetzen, Groß-/Kleinschreibung). Keine Befunde, Bewertungen, Ursachen oder Ortsangaben ergänzen, die nicht in der Beschreibung stehen.
+- Abschnitte: Wo im Bildverzeichnis "=== Abschnitt: … ===" steht, beginnt eine Zwischenüberschrift mit diesem Namen. Ein Abschnitt darf auf einer neuen Seite beginnen, muss aber nicht.
+- Probenahmestellen: Hat ein Bild eine Probe-Nr., wird sie am Ende der Bildunterschrift genannt, z. B. "Bild 7: Küche, Deckenbereich – Probenahmestelle P2". Gibt es Proben, folgt am Ende der Dokumentation eine Tabelle "Probenahmestellen" (Probe-Nr. → Bildnummern) gemäß PROBENÜBERSICHT.
 - Unter jeder Bildunterschrift in kleiner Schrift: Dateiname und Aufnahmedatum.
+- Die SHA-256-Prüfsummen im Bildverzeichnis dienen der Nachvollziehbarkeit und werden nicht in die PDF übernommen.
 - Bilder nicht beschneiden, spiegeln oder farblich bearbeiten. EXIF-Ausrichtung beachten (Hochformat bleibt Hochformat). Seitenverhältnis immer erhalten.
 
 Layout
@@ -1041,14 +1369,16 @@ Die PROJEKTHINWEISE weiter unten haben Vorrang vor dieser Standardanweisung, fal
 function loadMeta(){
   const g = store.get('bu-global', {});
   const m = Object.assign({ proj: cfg.prefix.trim(), anlage: '', objekt: '', ereignis: '', sdatum: '', ort: '', notes: '', onlyDesc: true },
-                          store.get('bu-meta:' + S.dir.name, {}));
+                          projGet('meta', {}));
   m.sv = g.sv || '';
   m.template = g.template || DEFAULT_TEMPLATE;
   return m;
 }
 function saveMeta(m){
-  const { sv, template, ...project } = m;
-  store.set('bu-meta:' + S.dir.name, project);
+  const { sv, template, img, pdf, ...project } = m;
+  if (img) store.set('bu-zipimg', img);
+  if (pdf) store.set('bu-pdf', pdf);
+  projSet('meta', project);
   store.set('bu-global', { sv, template: template === DEFAULT_TEMPLATE ? '' : template });
 }
 const fieldValue = (m, key, type) => type === 'date' ? deDate(m[key]) : (m[key] || '').trim();
@@ -1065,7 +1395,8 @@ function zipSelection(onlyDesc){
 function zipFileName(m){
   return `${safeFile(m.proj) || safeFile(S.dir.name) || 'Bilder'}_Bilddokumentation${m.ort ? '_' + m.ort : ''}.zip`;
 }
-function buildTxt(m, items, now){
+function buildTxt(m, items, now, exp){
+  const img = m.img || loadImgOpt();
   const L = [];
   const dateOf = it => it.date ? `${fmtDate(it.date)}${it.dateSrc === 'EXIF' ? ' ' + fmtTime(it.date) : ''} (lt. ${it.dateSrc})` : '–';
   L.push('Diese Datei enthält die vollständige Anweisung für die Bilddokumentation sowie alle Projektdaten und das Bildverzeichnis.', '');
@@ -1077,17 +1408,44 @@ function buildTxt(m, items, now){
   L.push(`${'Anzahl Bilder:'.padEnd(w)} ${items.length}`);
   L.push(`${'Erstellt am:'.padEnd(w)} ${fmtDate(now)} ${fmtTime(now)}`);
   L.push(`${'Quellordner:'.padEnd(w)} ${S.dir.name}`);
+  L.push(`${'Erstellt mit:'.padEnd(w)} Bildumbenenner ${APP_VERSION}`);
   const gone = S.view.filter(it => it.discard).length;
   if (gone) L.push(`${'Aussortiert:'.padEnd(w)} ${gone} Bild(er), nicht im Archiv`);
+  L.push(`${'Bildaufbereitung:'.padEnd(w)} ${img.shrink ? `Bilder im Archiv auf max. ${img.edge} px (lange Kante) verkleinert, JPEG-Qualität ${img.q} %.` : 'Bilder im Archiv in Originalgröße.'}`);
+  L.push(`${''.padEnd(w)} ${img.shrink ? 'Ausrichtung ist bereits korrigiert (EXIF und manuelle Drehungen angewendet) – Bilder nicht erneut drehen.' : 'Manuelle Drehungen sind bereits angewendet; bei den übrigen Bildern EXIF-Ausrichtung beachten.'}`);
+  if (img.shrink) L.push(`${''.padEnd(w)} Weiter verkleinern nur, falls für die 14-MB-Grenze nötig.`);
+  if (exp) L.push(`${'Prüfsummen:'.padEnd(w)} SHA-256 je Bild im Bildverzeichnis ("Orig." = Originaldatei im Projektordner,`,
+                  `${''.padEnd(w)} "Archiv" = aufbereitete Kopie in diesem ZIP); Liste der Archivdateien in ${SUM_NAME}.`);
   L.push('', '#'.repeat(70), '', 'BILDVERZEICHNIS (Reihenfolge = Reihenfolge in der Dokumentation)', '');
+  const hasSec = items.some(it => it.secEff);
+  if (hasSec) L.push('Zeilen "=== Abschnitt: … ===" markieren Zwischenüberschriften in der Dokumentation.', '');
+  let lastSec = null;
+  const probes = new Map();
   items.forEach((it, i) => {
+    if (hasSec && it.secEff !== lastSec){ L.push(`=== Abschnitt: ${it.secEff || '(ohne Abschnitt)'} ===`, ''); lastSec = it.secEff; }
+    for (const pn of it.probe.split(/[,;\/]+/).map(x => x.trim()).filter(Boolean)){ if (!probes.has(pn)) probes.set(pn, []); probes.get(pn).push(i + 1); }
     L.push(`Bild ${i + 1}`);
-    L.push(`    Datei:         ${it.final}`);
+    const ex = exp && exp.get(it);
+    L.push(`    Datei:         ${ex ? ex.name : it.final}`);
     L.push(`    Beschreibung:  ${it.desc.trim() || '(keine Beschreibung)'}`);
+    if (it.probe.trim()) L.push(`    Probe-Nr.:     ${it.probe.trim()} (Probenahmestelle)`);
     L.push(`    Aufnahme:      ${dateOf(it)}`);
-    if (it.final !== it.name) L.push(`    Original:      ${it.name}`);
+    if (rotOf(it)) L.push(`    Drehung:       ${rotOf(it)}° im Uhrzeigersinn (bereits angewendet)`);
+    if (ex && ex.hOrig){
+      L.push(`    SHA-256 Orig.: ${ex.hOrig}`);
+      if (ex.hZip !== ex.hOrig) L.push(`    SHA-256 Archiv:${' '}${ex.hZip}`);
+    }
+    if (ex && ex.processed) L.push(`    Bildgröße:     ${ex.w} × ${ex.h} px`);
+    const orig = it.orig || it.name;
+    if (orig !== (ex ? ex.name : it.final)) L.push(`    Original:      ${orig}`);
     L.push('');
   });
+  if (probes.size){
+    L.push('#'.repeat(70), '', 'PROBENÜBERSICHT (Probe-Nr. → Bilder)', '');
+    [...probes.keys()].sort((a, b) => a.localeCompare(b, 'de', { numeric: true }))
+      .forEach(pn => L.push(`${pn.padEnd(10)} Bild ${probes.get(pn).join(', ')}`));
+    L.push('');
+  }
   return '﻿' + L.join('\r\n');
 }
 
@@ -1099,8 +1457,11 @@ function wireRunButtons(){
   if ($('bUndo')) $('bUndo').onclick = undo;
 }
 
-/* One dialog for both: editing project data, and (forZip) exporting. */
-function openMetaDialog(forZip){
+/* One dialog for: editing project data ('meta'), ZIP export ('zip'), PDF annex ('pdf'). */
+function openMetaDialog(mode){
+  if (mode === true) mode = 'zip';
+  if (!mode) mode = 'meta';
+  const forZip = mode === 'zip', forPdf = mode === 'pdf', forExp = forZip || forPdf;
   recompute();
   const m = loadMeta();
   const active = S.view.filter(it => !it.discard);
@@ -1108,34 +1469,48 @@ function openMetaDialog(forZip){
   const fields = META_FIELDS.map(([key, label, ph, type, scope, hint]) =>
     `<label${key === 'objekt' || key === 'ereignis' ? ' class="wide"' : ''}>${label}${scope === 'global' ? ' <small>(für alle Projekte)</small>' : ''}
        <input type="${type}" id="m_${key}" placeholder="${esc(hint)}"></label>`).join('');
-  showDialog(`<h3>${forZip ? 'ZIP für Bilddokumentation exportieren' : 'Projektdaten'}</h3>
+  const sel = (id, vals) => `<select id="${id}">${vals.map(v => `<option value="${v}">${v}</option>`).join('')}</select>`;
+  showDialog(`<h3>${forZip ? 'ZIP für Bilddokumentation exportieren' : forPdf ? 'Bilddokumentation als PDF erstellen' : 'Projektdaten'}</h3>
     <div class="body">
       <div class="form">${fields}</div>
-      <label class="block">Projekthinweise für die KI <small>(nur dieses Projekt, haben Vorrang vor der Standardanweisung)</small>
+      ${forPdf ? '' : `<label class="block">Projekthinweise für die KI <small>(nur dieses Projekt, haben Vorrang vor der Standardanweisung)</small>
         <textarea id="m_notes" rows="3" placeholder="z. B. Bilder 5–8 als Detailaufnahmen kennzeichnen · Raumbezeichnungen wie im Grundriss (Anlage 2) verwenden"></textarea></label>
       <details id="m_tplBox"><summary>Standardanweisung bearbeiten <small>(gilt für alle Projekte)</small></summary>
         <div class="m">Platzhalter: ${META_FIELDS.map(f => `<code>{${f[2]}}</code>`).join(' ')}</div>
         <textarea id="m_template" rows="14" spellcheck="false"></textarea>
         <div class="btns left"><button id="m_tplReset">Auf Standard zurücksetzen</button></div>
-      </details>
-      ${forZip ? `<label class="chk"><input type="checkbox" id="zOnly"> nur Bilder mit Beschreibung</label>` : ''}
+      </details>`}
+      ${forExp ? `<label class="chk"><input type="checkbox" id="zOnly"> nur Bilder mit Beschreibung</label>
+      <div class="imgopts"><label class="chk"><input type="checkbox" id="zShrink"> Bilder verkleinern auf</label>
+        ${sel('zEdge', [1600, 2000, 2500, 3000])} px (lange Kante), JPEG-Qualität ${sel('zQ', [70, 80, 90])} %
+        <small>– Originale im Ordner bleiben unverändert</small></div>` : ''}
+      ${forZip ? `<label class="chk" title="Datei Pruefsummen_Originale_….sha256 mit SHA-256 aller Bilder im Projektordner"><input type="checkbox" id="zRecord"> Prüfprotokoll (SHA-256) der Originale im Projektordner ablegen</label>` : ''}
+      ${forPdf ? `<div class="imgopts">Bilder pro Seite ${sel('pPer', [2, 1])}
+        · max. Dateigröße <input type="number" id="pMax" min="1" max="200" step="0.5" style="width:64px"> MB
+        · <label class="chk"><input type="checkbox" id="pSecPage"> neuer Abschnitt beginnt auf neuer Seite</label></div>` : ''}
       <div class="m" id="zInfo"></div>
       <pre id="m_preview" hidden></pre>
     </div>
-    <div class="btns"><button id="m_prev">Textdatei-Vorschau</button><span class="spacer"></span>
-      <button id="zCancel">${forZip ? 'Abbrechen' : 'Schließen'}</button>
-      ${forZip ? '<button class="primary" id="zOk">ZIP speichern …</button>' : ''}</div>`);
+    <div class="btns">${forPdf ? '' : '<button id="m_prev">Textdatei-Vorschau</button>'}<span class="spacer"></span>
+      <button id="zCancel">${forExp ? 'Abbrechen' : 'Schließen'}</button>
+      ${forZip ? '<button class="primary" id="zOk">ZIP speichern …</button>' : forPdf ? '<button class="primary" id="zOk">PDF erstellen</button>' : ''}</div>`);
   $('dialog').classList.add('wide');
   for (const [key] of META_FIELDS) $('m_' + key).value = m[key] || '';
-  $('m_notes').value = m.notes || '';
-  $('m_template').value = m.template;
-  if (forZip){
+  if (!forPdf){ $('m_notes').value = m.notes || ''; $('m_template').value = m.template; }
+  const io0 = loadImgOpt(), po0 = loadPdfOpt();
+  if (forExp){
     $('zOnly').checked = withDesc > 0 && m.onlyDesc !== false;
     $('zOnly').disabled = withDesc === 0 || withDesc === active.length;
+    $('zShrink').checked = io0.shrink; $('zEdge').value = String(io0.edge); $('zQ').value = String(io0.q);
   }
+  if (forZip) $('zRecord').checked = io0.record !== false;
+  if (forPdf){ $('pPer').value = String(po0.perPage); $('pMax').value = String(po0.maxMB); $('pSecPage').checked = !!po0.secPage; }
   const read = () => {
-    const r = { template: $('m_template').value.trim() ? $('m_template').value : DEFAULT_TEMPLATE, notes: $('m_notes').value,
-                onlyDesc: forZip ? $('zOnly').checked : m.onlyDesc };
+    const r = { template: forPdf ? m.template : ($('m_template').value.trim() ? $('m_template').value : DEFAULT_TEMPLATE),
+                notes: forPdf ? m.notes : $('m_notes').value,
+                onlyDesc: forExp ? $('zOnly').checked : m.onlyDesc,
+                img: forExp ? { shrink: $('zShrink').checked, edge: +$('zEdge').value, q: +$('zQ').value, record: forZip ? $('zRecord').checked : io0.record } : io0,
+                pdf: forPdf ? { perPage: +$('pPer').value, maxMB: Math.min(200, Math.max(1, +$('pMax').value || 14)), secPage: $('pSecPage').checked } : po0 };
     for (const [key] of META_FIELDS) r[key] = $('m_' + key).value.trim();
     return r;
   };
@@ -1143,32 +1518,118 @@ function openMetaDialog(forZip){
     const r = read(); saveMeta(r);
     const items = zipSelection(r.onlyDesc);
     const missing = META_FIELDS.filter(([key]) => !r[key]).map(f => f[1]);
-    let html = missing.length ? `<span class="warn">Noch leer: ${missing.join(', ')}</span> – in der Anweisung steht dann „[… fehlt]“.<br>` : '✓ Alle Projektdaten ausgefüllt.<br>';
-    if (forZip){
+    let html = missing.length
+      ? `<span class="warn">Noch leer: ${missing.join(', ')}</span> – ${forPdf ? 'leere Felder werden im PDF weggelassen.' : 'in der Anweisung steht dann „[… fehlt]“.'}<br>`
+      : '✓ Alle Projektdaten ausgefüllt.<br>';
+    if (forExp){
       const bytes = items.reduce((a, it) => a + it.size, 0);
-      html += `Inhalt: <b>${items.length}</b> Bilder (${fmtSize(bytes)}) + <b>${TXT_NAME}</b>` +
-        (active.length - items.length ? ` · ${active.length - items.length} ohne Beschreibung nicht enthalten` : '') +
-        (S.view.length - active.length ? ' · Aussortierte nicht enthalten' : '') +
-        `<br>Dateiname: <b>${esc(zipFileName(r))}</b>` +
-        (items.some(it => it.final !== it.name) ? '<br>Die Bilder bekommen im ZIP die neuen Namen – die Dateien im Ordner bleiben unverändert.' : '');
+      const qf = { 70: 0.75, 80: 1, 90: 1.6 }[r.img.q] || 1;
+      const est = items.reduce((a, it) => a + (canRotate(it) ? (r.img.shrink ? Math.min(it.size, 850000 * Math.pow(r.img.edge / 2000, 2) * qf) : it.size) : (forPdf ? 0 : it.size)), 0);
+      const nRot = items.filter(it => rotOf(it)).length;
+      $('zEdge').disabled = $('zQ').disabled = !r.img.shrink;
+      const notIn = (active.length - items.length ? ` · ${active.length - items.length} ohne Beschreibung nicht enthalten` : '') + (S.view.length - active.length ? ' · Aussortierte nicht enthalten' : '');
+      if (forZip){
+        html += `Inhalt: <b>${items.length}</b> Bilder (${r.img.shrink ? `Original ${fmtSize(bytes)} → ca. <b>${fmtSize(est)}</b> geschätzt` : fmtSize(bytes)}) + <b>${TXT_NAME}</b>` +
+          (nRot ? ` · ${nRot} gedrehte(s) Bild(er) werden ausgerichtet` : '') + ` + <b>${SUM_NAME}</b>` + notIn +
+          `<br>Dateiname: <b>${esc(zipFileName(r))}</b>` +
+          (items.some(it => it.final !== it.name) ? '<br>Die Bilder bekommen im ZIP die neuen Namen – die Dateien im Ordner bleiben unverändert.' : '');
+      } else {
+        const nParts = Math.max(1, Math.ceil(est / (r.pdf.maxMB * 1e6 * 0.97)));
+        const bad = items.filter(it => !canRotate(it) && !/^(gif)$/i.test(it.ext.slice(1)));
+        const base = pdfBaseName(r);
+        html += `Inhalt: Deckblatt + <b>${items.length}</b> Bilder (${r.pdf.perPage} pro Seite)` + notIn +
+          `<br>Geschätzte Größe: ca. <b>${fmtSize(est)}</b> → voraussichtlich <b>${nParts}</b> Datei${nParts > 1 ? 'en' : ''} à max. ${String(r.pdf.maxMB).replace('.', ',')} MB (wird beim Erstellen exakt geprüft)` +
+          `<br>Speicherort: Projektordner „${esc(S.dir.name)}“ · Dateiname: <b>${esc(nParts > 1 ? `${base}_Teil_1_von_${nParts}.pdf …` : `${base}.pdf`)}</b>` +
+          (bad.length ? `<br><span class="warn">${bad.length} Bild(er) im Format ${[...new Set(bad.map(it => it.ext.slice(1).toUpperCase()))].join('/')} kann Chrome nicht lesen – sie erscheinen als Platzhalter.</span>` : '');
+      }
       $('zOk').disabled = !items.length;
     }
     $('zInfo').innerHTML = html;
-    if (!$('m_preview').hidden) $('m_preview').textContent = buildTxt(r, items, new Date()).replace(/^﻿/, '');
+    if (!forPdf && !$('m_preview').hidden) $('m_preview').textContent = buildTxt(r, items, new Date()).replace(/^﻿/, '');
   };
-  $('dialog').querySelectorAll('input,textarea').forEach(el => el.addEventListener('input', update));
-  $('m_tplReset').onclick = () => { $('m_template').value = DEFAULT_TEMPLATE; update(); };
-  $('m_prev').onclick = () => {
-    const p = $('m_preview'); p.hidden = !p.hidden;
-    $('m_prev').textContent = p.hidden ? 'Textdatei-Vorschau' : 'Vorschau ausblenden';
-    update(); if (!p.hidden) p.scrollIntoView({ block: 'nearest' });
-  };
+  $('dialog').querySelectorAll('input,textarea,select').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', update));
+  if (!forPdf){
+    $('m_tplReset').onclick = () => { $('m_template').value = DEFAULT_TEMPLATE; update(); };
+    $('m_prev').onclick = () => {
+      const p = $('m_preview'); p.hidden = !p.hidden;
+      $('m_prev').textContent = p.hidden ? 'Textdatei-Vorschau' : 'Vorschau ausblenden';
+      update(); if (!p.hidden) p.scrollIntoView({ block: 'nearest' });
+    };
+  }
   update();
   $('zCancel').onclick = closeDialog;
   if (forZip) $('zOk').onclick = () => doZip(read());
+  if (forPdf) $('zOk').onclick = () => doPdf(read());
   setTimeout(() => $(m.proj ? 'm_anlage' : 'm_proj').focus(), 0);
 }
-const openZipDialog = () => openMetaDialog(true);
+const openZipDialog = () => openMetaDialog('zip');
+const openPdfDialog = () => openMetaDialog('pdf');
+
+/* ---------- SHA-256 checksums (chain of custody) ---------- */
+const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+const sha256 = async data => hex(await crypto.subtle.digest('SHA-256', data));
+let HASH = {};   // name -> { h, s: size, m: lastModified }; content does not change on rename, so the cache moves along
+function cachedHash(name, f){ const c = HASH[name]; return c && c.s === f.size && c.m === f.lastModified ? c.h : null; }
+function rememberHash(name, f, h){ HASH[name] = { h, s: f.size, m: f.lastModified }; projSet('hash', HASH); }
+async function hashOfFile(name, f, buf){
+  const c = cachedHash(name, f); if (c) return c;
+  const h = await sha256(buf || await f.arrayBuffer()); rememberHash(name, f, h); return h;
+}
+async function writeChecksumRecord(onStep){
+  const now = new Date(), lines = [];
+  for (const it of S.items){
+    const f = await it.handle.getFile();
+    lines.push(`${await hashOfFile(it.name, f)} *${it.name}`);
+    onStep && onStep(it);
+  }
+  const name = `Pruefsummen_Originale_${fmtISO(now)}_${pad(now.getHours(), 2)}${pad(now.getMinutes(), 2)}.sha256`;
+  const fh = await S.dir.getFileHandle(name, { create: true });
+  const w = await fh.createWritable(); await w.write(lines.join('\n') + '\n'); await w.close();
+  S.otherNames.add(name.toLowerCase());
+  return { name, count: lines.length };
+}
+
+const IMG_DEFAULTS = { shrink: true, edge: 2000, q: 80, record: true };
+const loadImgOpt = () => Object.assign({}, IMG_DEFAULTS, store.get('bu-zipimg', {}));
+/* ---------- image processing (shared by ZIP export and PDF) ----------
+   decode → apply EXIF orientation + manual rotation → optionally scale → baseline JPEG.
+   PDF viewers ignore EXIF, so for the PDF the orientation is always baked in. */
+async function decodeOriented(f){
+  try{ return await createImageBitmap(f, { imageOrientation: 'from-image' }); }catch(e){ return null; }
+}
+async function encodeJpeg(bmp, rot, maxEdge, q){
+  const long = Math.max(bmp.width, bmp.height), sc = maxEdge && long > maxEdge ? maxEdge / long : 1;
+  const w = Math.max(1, Math.round(bmp.width * sc)), h = Math.max(1, Math.round(bmp.height * sc));
+  let src = bmp;
+  if (sc < 1){ try{ src = await createImageBitmap(bmp, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' }); }catch(e){ src = bmp; } }
+  const swap = rot % 180 !== 0;
+  const c = document.createElement('canvas'); c.width = swap ? h : w; c.height = swap ? w : h;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.imageSmoothingQuality = 'high';
+  g.translate(c.width / 2, c.height / 2); g.rotate(rot * Math.PI / 180); g.drawImage(src, -w / 2, -h / 2, w, h);
+  if (src !== bmp && src.close) src.close(); bmp.close && bmp.close();
+  const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', q));
+  const out = blob ? { data: new Uint8Array(await blob.arrayBuffer()), w: c.width, h: c.height, scaled: sc < 1 } : null;
+  c.width = c.height = 0;
+  return out;
+}
+async function renderJpeg(f, rot, maxEdge, q){
+  const bmp = await decodeOriented(f);
+  return bmp ? encodeJpeg(bmp, rot, maxEdge, q) : null;
+}
+/* ZIP: keep the original bytes unless rotation or downscaling is actually needed */
+async function exportImage(it, f, opt, buf){
+  const raw = async () => ({ data: buf || new Uint8Array(await f.arrayBuffer()), name: it.final, processed: false });
+  const rot = rotOf(it);
+  if (!canRotate(it) || (!rot && !opt.shrink)) return raw();
+  const bmp = await decodeOriented(f);
+  if (!bmp) return raw();
+  if (!rot && Math.max(bmp.width, bmp.height) <= opt.edge){ bmp.close && bmp.close(); return raw(); }
+  const r = await encodeJpeg(bmp, rot, opt.shrink ? opt.edge : null, opt.shrink ? opt.q / 100 : 0.92);
+  if (!r) return raw();
+  const name = /\.jpe?g$/i.test(it.final) ? it.final : it.final.replace(/\.[^.]+$/, '') + '.jpg';
+  return { data: r.data, name, processed: true, w: r.w, h: r.h, scaled: r.scaled };
+}
 
 async function doZip(meta){
   const items = zipSelection(meta.onlyDesc);
@@ -1192,14 +1653,26 @@ async function doZip(meta){
     writable = handle ? await handle.createWritable() : null;
     const zw = new ZipWriter(writable ? { write: d => writable.write(d) } : { write: async d => { parts.push(d); } });
     let n = 0;
+    const exp = new Map(), used = new Set([TXT_NAME.toLowerCase(), SUM_NAME.toLowerCase()]), sums = [];
     for (const it of items){
-      $('zStep').textContent = it.final;
+      $('zStep').textContent = it.final + (rotOf(it) || meta.img.shrink ? ' – wird aufbereitet …' : '');
       const f = await it.handle.getFile();
-      await zw.add(it.final, new Uint8Array(await f.arrayBuffer()), new Date(f.lastModified));
+      const buf = new Uint8Array(await f.arrayBuffer());
+      const hOrig = await hashOfFile(it.name, f, buf);
+      const out = await exportImage(it, f, meta.img, buf);
+      out.hOrig = hOrig;
+      out.hZip = out.processed ? await sha256(out.data) : hOrig;
+      let nm = out.name;
+      if (used.has(nm.toLowerCase())){ const e = extOf(nm), b0 = nm.slice(0, nm.length - e.length); let k = 2; while (used.has(`${b0}_${k}${e}`.toLowerCase())) k++; nm = `${b0}_${k}${e}`; }
+      used.add(nm.toLowerCase()); out.name = nm;
+      await zw.add(nm, out.data, new Date(f.lastModified));
+      out.data = null; exp.set(it, out);
+      sums.push(`${out.hZip} *${nm}`);
       $('prog').value = ++n;
     }
     const now = new Date();
-    await zw.add(TXT_NAME, new TextEncoder().encode(buildTxt(meta, items, now)), now);
+    await zw.add(TXT_NAME, new TextEncoder().encode(buildTxt(meta, items, now, exp)), now);
+    await zw.add(SUM_NAME, new TextEncoder().encode(sums.join('\n') + '\n'), now);
     await zw.finish();
     let where;
     if (writable){
@@ -1214,8 +1687,14 @@ async function doZip(meta){
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       where = `„${esc(name)}“ (Download-Ordner)`;
     }
+    let rec = '';
+    if (meta.img.record){
+      $('prog').max = S.items.length; $('prog').value = 0; let k = 0;
+      const r = await writeChecksumRecord(it => { $('zStep').textContent = 'Prüfsumme: ' + it.name; $('prog').value = ++k; });
+      rec = ` Prüfprotokoll „${esc(r.name)}“ (${r.count} Originale) im Projektordner abgelegt.`;
+    }
     closeDialog(); S.busy = false; recompute();
-    banner('ok', `✓ ZIP gespeichert: ${where} – ${items.length} Bilder + Anweisung, ${fmtSize(zw.total)}.<span class="spacer"></span>${runButtonsHtml()}`);
+    banner('ok', `✓ ZIP gespeichert: ${where} – ${items.length} Bilder + Anweisung, ${fmtSize(zw.total)}.${rec}<span class="spacer"></span>${runButtonsHtml()}`);
     wireRunButtons();
   }catch(e){
     if (writable){ try{ await writable.abort(); }catch(_){} }
@@ -1224,16 +1703,390 @@ async function doZip(meta){
   }
 }
 
+/* ---------- PDF annex: written directly in the browser, no libraries ---------- */
+const PDF_W = 595.28, PDF_H = 841.89, PDF_M = 56.69, PDF_CW = PDF_W - 2 * PDF_M;
+const HELV = { R: [278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584,350,556,350,222,556,333,1000,556,556,333,1000,667,333,1000,350,611,350,350,222,222,333,333,350,556,1000,333,1000,500,333,944,350,500,667,278,333,556,556,556,556,260,556,333,737,370,556,584,333,737,333,400,584,333,333,333,556,537,278,333,333,365,556,834,834,834,611,667,667,667,667,667,667,1000,722,667,667,667,667,278,278,278,278,722,722,778,778,778,778,778,584,778,722,722,722,722,667,667,611,556,556,556,556,556,556,889,500,556,556,556,556,278,278,278,278,556,556,556,556,556,556,556,584,611,556,556,556,556,500,556,500], B: [278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,333,333,584,584,584,611,975,722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611,333,278,333,584,556,333,556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500,389,280,389,584,350,556,350,278,556,500,1000,556,556,333,1000,667,333,1000,350,611,350,350,278,278,500,500,350,556,1000,333,1000,556,333,944,350,500,667,278,333,556,556,556,556,280,556,333,737,370,556,584,333,737,333,400,584,333,333,333,611,556,278,333,333,365,556,834,834,834,611,722,722,722,722,722,722,1000,722,667,667,667,667,278,278,278,278,722,722,778,778,778,778,778,584,778,722,722,722,722,667,667,611,556,556,556,556,556,556,889,556,556,556,556,556,278,278,278,278,611,611,611,611,611,611,611,584,611,611,611,611,611,556,611,556] };   // Helvetica / Helvetica-Bold widths for WinAnsi codes 32–255 (1/1000 em)
+const CP1252 = { 0x20AC:0x80, 0x201A:0x82, 0x0192:0x83, 0x201E:0x84, 0x2026:0x85, 0x2020:0x86, 0x2021:0x87, 0x02C6:0x88, 0x2030:0x89, 0x0160:0x8A, 0x2039:0x8B, 0x0152:0x8C, 0x017D:0x8E,
+  0x2018:0x91, 0x2019:0x92, 0x201C:0x93, 0x201D:0x94, 0x2022:0x95, 0x2013:0x96, 0x2014:0x97, 0x02DC:0x98, 0x2122:0x99, 0x0161:0x9A, 0x203A:0x9B, 0x0153:0x9C, 0x017E:0x9E, 0x0178:0x9F };
+const PDF_FALLBACK = { '→':'->', '←':'<-', '↔':'<->', '≥':'>=', '≤':'<=', '≈':'~', '≠':'!=', '−':'-', '‑':'-', '₀':'0', '₁':'1', '₂':'2', '₃':'3', '₄':'4', '₅':'5', '₆':'6', '⁴':'4', ' ':' ', ' ':' ', '​':'' };
+function toWin(str){
+  const out = [];
+  for (const ch of String(str ?? '').normalize('NFC')){
+    const c = ch.codePointAt(0);
+    if ((c >= 32 && c < 127) || (c >= 0xA0 && c <= 0xFF)) out.push(c === 0xA0 ? 32 : c);
+    else if (CP1252[c]) out.push(CP1252[c]);
+    else if (ch in PDF_FALLBACK) for (const x of PDF_FALLBACK[ch]) out.push(x.charCodeAt(0));
+    else if (c === 9 || c === 10 || c === 13) out.push(32);
+    else out.push(63);   // '?'
+  }
+  return out;
+}
+const pdfNum = v => String(Math.round(v * 100) / 100);
+const codesWidth = (codes, f, size) => codes.reduce((a, c) => a + (HELV[f][c - 32] || 556), 0) * size / 1000;
+const strWidth = (s, f, size) => codesWidth(toWin(s), f, size);
+const pdfStr = codes => '(' + codes.map(c => c === 40 || c === 41 || c === 92 ? '\\' + String.fromCharCode(c) : c < 127 ? String.fromCharCode(c) : '\\' + c.toString(8).padStart(3, '0')).join('') + ')';
+const words = (s, f) => String(s || '').split(/\s+/).filter(Boolean).map(w => ({ s: w, f }));
+
+// greedy line breaking over words with mixed fonts; over-long words are split
+function wrapWords(ws, size, maxW){
+  const sp = codesWidth([32], 'R', size), lines = [];
+  let line = [], lw = 0;
+  const flush = () => { if (line.length) lines.push(line); line = []; lw = 0; };
+  for (const wd of ws){
+    let codes = toWin(wd.s), w = codesWidth(codes, wd.f, size);
+    if (!codes.length) continue;
+    if (w > maxW){
+      flush();
+      while (w > maxW && codes.length > 1){
+        let k = codes.length - 1;
+        while (k > 1 && codesWidth(codes.slice(0, k), wd.f, size) > maxW) k--;
+        const part = codes.slice(0, k);
+        lines.push([{ codes: part, f: wd.f, w: codesWidth(part, wd.f, size) }]);
+        codes = codes.slice(k); w = codesWidth(codes, wd.f, size);
+      }
+    }
+    if (line.length && lw + sp + w > maxW) flush();
+    lw += (line.length ? sp : 0) + w;
+    line.push({ codes, f: wd.f, w });
+  }
+  flush();
+  return lines;
+}
+
+class PdfPage{
+  constructor(){ this.ops = []; this.imgs = []; }
+  text(x, y, s, f = 'R', size = 10, gray = 0){
+    this.codes(x, y, toWin(s), f, size, gray);
+  }
+  codes(x, y, codes, f, size, gray = 0){
+    if (!codes.length) return;
+    this.ops.push(`${pdfNum(gray)} g BT /${f === 'B' ? 'F2' : 'F1'} ${pdfNum(size)} Tf ${pdfNum(x)} ${pdfNum(y)} Td ${pdfStr(codes)} Tj ET`);
+  }
+  textRight(xr, y, s, f = 'R', size = 10, gray = 0){ this.text(xr - strWidth(s, f, size), y, s, f, size, gray); }
+  wrapped(x, y, line, size, gray = 0){
+    // merge words of the same font into one run with real spaces, so copy/search in PDF viewers works
+    const sp = codesWidth([32], 'R', size);
+    let run = null;
+    const flush = () => { if (run){ this.codes(run.x, y, run.codes, run.f, size, gray); run = null; } };
+    for (let k = 0; k < line.length; k++){
+      const seg = line[k];
+      if (run && run.f === seg.f){ run.codes.push(32, ...seg.codes); }
+      else {
+        if (run){ run.codes.push(32); flush(); }      // trailing space keeps the word gap for text extraction
+        run = { x, f: seg.f, codes: [...seg.codes] };
+      }
+      x += seg.w + sp;
+    }
+    flush();
+  }
+  line(x1, y1, x2, y2, w = 0.5, gray = 0.6){ this.ops.push(`${pdfNum(gray)} G ${pdfNum(w)} w ${pdfNum(x1)} ${pdfNum(y1)} m ${pdfNum(x2)} ${pdfNum(y2)} l S`); }
+  rect(x, y, w, h, stroke = 0.75, fill = null){
+    this.ops.push(fill != null ? `${pdfNum(fill)} g ${pdfNum(x)} ${pdfNum(y)} ${pdfNum(w)} ${pdfNum(h)} re f` : `${pdfNum(stroke)} G 0.5 w ${pdfNum(x)} ${pdfNum(y)} ${pdfNum(w)} ${pdfNum(h)} re S`);
+  }
+  image(key, x, y, w, h){ this.imgs.push(key); this.ops.push(`q ${pdfNum(w)} 0 0 ${pdfNum(h)} ${pdfNum(x)} ${pdfNum(y)} cm /Im${key} Do Q`); }
+}
+
+const utf16hex = s => '<FEFF' + [...String(s)].map(ch => { const c = ch.codePointAt(0); if (c < 0x10000) return c.toString(16).padStart(4, '0'); const v = c - 0x10000; return ((v >> 10) + 0xD800).toString(16) + ((v & 0x3FF) + 0xDC00).toString(16); }).join('').toUpperCase() + '>';
+
+// assemble a complete PDF file from pages + JPEG images (embedded unchanged via DCTDecode)
+function writePdf(pages, images, info){
+  const chunks = []; let len = 0; const offs = [];
+  const put = x => { const b = typeof x === 'string' ? new TextEncoder().encode(x) : x; chunks.push(b); len += b.length; };
+  put('%PDF-1.4\n'); put(new Uint8Array([0x25, 0xE2, 0xE3, 0xCF, 0xD3, 0x0A]));
+  const used = [...new Set(pages.flatMap(p => p.imgs))];
+  let next = 6;
+  const imgObj = new Map(used.map(k => [k, next++]));
+  const pageObj = pages.map(() => { const o = next; next += 2; return o; });
+  const open = num => { offs[num] = len; put(`${num} 0 obj\n`); };
+  open(1); put('<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+  open(2); put(`<< /Type /Pages /Kids [${pageObj.map(o => `${o} 0 R`).join(' ')}] /Count ${pages.length} >>\nendobj\n`);
+  open(3); put('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n');
+  open(4); put('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n');
+  const d = info.date, p2 = v => String(v).padStart(2, '0');
+  const tz = -d.getTimezoneOffset(), tzs = `${tz >= 0 ? '+' : '-'}${p2(Math.floor(Math.abs(tz) / 60))}'${p2(Math.abs(tz) % 60)}'`;
+  const pdfDate = `D:${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}${tzs}`;
+  open(5); put(`<< /Title ${utf16hex(info.title)}${info.author ? ` /Author ${utf16hex(info.author)}` : ''} /Subject ${utf16hex(info.subject || '')} /Creator (Bildumbenenner ${APP_VERSION}) /Producer (Bildumbenenner ${APP_VERSION}) /CreationDate (${pdfDate}) >>\nendobj\n`);
+  for (const k of used){
+    const im = images.get(k);
+    open(imgObj.get(k));
+    put(`<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.data.length} >>\nstream\n`);
+    put(im.data); put('\nendstream\nendobj\n');
+  }
+  pages.forEach((pg, i) => {
+    const o = pageObj[i];
+    const xo = [...new Set(pg.imgs)].map(k => `/Im${k} ${imgObj.get(k)} 0 R`).join(' ');
+    open(o);
+    put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PDF_W} ${PDF_H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >>${xo ? ` /XObject << ${xo} >>` : ''} /ProcSet [/PDF /Text /ImageC] >> /Contents ${o + 1} 0 R >>\nendobj\n`);
+    const content = new TextEncoder().encode(pg.ops.join('\n'));
+    open(o + 1); put(`<< /Length ${content.length} >>\nstream\n`); put(content); put('\nendstream\nendobj\n');
+  });
+  const xref = len;
+  put(`xref\n0 ${next}\n0000000000 65535 f \n`);
+  for (let i = 1; i < next; i++) put(`${String(offs[i]).padStart(10, '0')} 00000 n \n`);
+  put(`trailer\n<< /Size ${next} /Root 1 0 R /Info 5 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return new Blob(chunks, { type: 'application/pdf' });
+}
+
+const PDF_DEFAULTS = { perPage: 2, maxMB: 14, secPage: false };
+const loadPdfOpt = () => Object.assign({}, PDF_DEFAULTS, store.get('bu-pdf', {}));
+function pdfBaseName(m){
+  return [safeFile(m.proj) || safeFile(S.dir.name) || 'Projekt', safeFile(m.anlage), 'Bilddokumentation'].filter(Boolean).join('_');
+}
+
+/* Builds all PDF parts. Returns { parts: [{ name, blob, pages, from, to }], failed: [items] }. */
+async function buildAnnex(meta, items, progress){
+  const img = meta.img, opt = meta.pdf, limit = Math.round(opt.maxMB * 1e6);
+  const now = new Date();
+  // 1) prepare images
+  const enc = new Map(), failed = [];
+  for (let i = 0; i < items.length; i++){
+    const it = items[i];
+    progress(`Bereite Bild ${i + 1} von ${items.length} auf: ${it.final}`, i, items.length);
+    const r = await renderJpeg(await it.handle.getFile(), canRotate(it) ? rotOf(it) : 0, img.shrink ? img.edge : null, img.shrink ? img.q / 100 : 0.92);
+    if (r) enc.set(i, r); else failed.push(it);
+  }
+  // 2) paginate image pages
+  const hasSec = items.some(it => it.secEff);
+  const imgPages = []; let cur = null, lastSec = null;
+  items.forEach((it, i) => {
+    const sec = it.secEff || '';
+    const heading = hasSec && sec && sec !== lastSec ? sec : null;
+    if (hasSec) lastSec = sec;
+    if (!cur || cur.length >= opt.perPage || (heading && opt.secPage && cur.length)){ cur = []; imgPages.push(cur); }
+    cur.push({ i, n: i + 1, it, heading });
+  });
+  // 3) sampling points
+  const probeRows = [];
+  items.forEach((it, i) => it.probe.split(/[,;\/]+/).map(x => x.trim()).filter(Boolean).forEach(p => probeRows.push({ p, n: i + 1, sec: it.secEff || '', desc: it.desc.trim() })));
+  probeRows.sort((a, b) => a.p.localeCompare(b.p, 'de', { numeric: true }) || a.n - b.n);
+
+  const headL = meta.anlage ? `${meta.anlage} – Bilddokumentation` : 'Bilddokumentation';
+  const headR = meta.proj ? `Projekt ${meta.proj}` : '';
+  const dateLine = it => {
+    if (!it.date) return '';
+    return `Aufnahme: ${fmtDate(it.date)}${it.dateSrc === 'EXIF' ? ' ' + fmtTime(it.date) : ` (lt. ${it.dateSrc})`}`;
+  };
+  const range = (a, b) => a === b ? `Bild ${a}` : `Bild ${a}–${b}`;
+  const partRange = pgs => { const s = pgs.flat(); return s.length ? [s[0].n, s[s.length - 1].n] : [0, 0]; };
+
+  const coverPage = (pi, plan) => {
+    const pg = new PdfPage(), N = plan.length, [a, b] = partRange(plan[pi]);
+    let y = PDF_H - PDF_M - 40;
+    for (const l of wrapWords(words('Bilddokumentation', 'B'), 26, PDF_CW)){ pg.wrapped(PDF_M, y, l, 26); y -= 32; }
+    if (meta.anlage){ for (const l of wrapWords(words(meta.anlage, 'B'), 18, PDF_CW)){ pg.wrapped(PDF_M, y, l, 18, 0.25); y -= 24; } }
+    if (meta.proj){ pg.text(PDF_M, y, `zum Gutachten ${meta.proj}`, 'R', 12, 0.35); y -= 18; }
+    if (N > 1){ y -= 4; pg.text(PDF_M, y, `Teil ${pi + 1} von ${N}  ·  ${range(a, b)}`, 'B', 13); y -= 18; }
+    y -= 14; pg.line(PDF_M, y, PDF_W - PDF_M, y, 1, 0.3); y -= 26;
+    const rows = [['Projektnummer', meta.proj], ['Objekt / Adresse', meta.objekt], ['Schadenereignis', meta.ereignis],
+      ['Schadendatum', deDate(meta.sdatum)], ['Ortstermin', deDate(meta.ort)], ['Sachverständiger', meta.sv],
+      ['Bilder', N > 1 ? `${range(a, b)} (gesamt ${items.length})` : `${items.length}`],
+      ['Erstellt am', `${fmtDate(now)}`]].filter(r => r[1]);
+    const lx = 140;
+    for (const [k, v] of rows){
+      pg.text(PDF_M, y, k, 'B', 10.5);
+      const ls = wrapWords(words(v, 'R'), 10.5, PDF_CW - lx);
+      ls.forEach((l, j) => pg.wrapped(PDF_M + lx, y - j * 14, l, 10.5));
+      y -= Math.max(1, ls.length) * 14 + 7;
+    }
+    const block = (title, lines) => {
+      if (!lines.length || y < PDF_M + 80) return;
+      y -= 18; pg.text(PDF_M, y, title, 'B', 12); y -= 6; pg.line(PDF_M, y, PDF_W - PDF_M, y, 0.5, 0.75); y -= 16;
+      for (const [l, r, bold] of lines){
+        if (y < PDF_M + 24){ pg.text(PDF_M, y, '…', 'R', 10); y -= 14; break; }
+        const ls = wrapWords(words(l, bold ? 'B' : 'R'), 10, PDF_CW - 110);
+        ls.forEach((x, j) => pg.wrapped(PDF_M, y - j * 13, x, 10));
+        pg.textRight(PDF_W - PDF_M, y, r, bold ? 'B' : 'R', 10);
+        y -= ls.length * 13 + 4;
+      }
+    };
+    if (hasSec){
+      const secs = []; for (const s of plan[pi].flat()){ const last = secs[secs.length - 1]; if (last && last[0] === (s.it.secEff || '')) last[2] = s.n; else secs.push([s.it.secEff || '', s.n, s.n]); }
+      block(N > 1 ? 'Inhalt dieses Teils' : 'Inhalt', secs.map(([s, x, z]) => [s || '(ohne Abschnitt)', range(x, z)]));
+    }
+    if (N > 1) block('Teile der Bilddokumentation', plan.map((p, k) => { const [x, z] = partRange(p); return [`Teil ${k + 1} von ${N}`, range(x, z), k === pi]; }));
+    if (probeRows.length) block('Probenahmestellen', [[`Übersicht der Probenahmestellen am Ende${N > 1 ? ` von Teil ${N}` : ''}`, `${new Set(probeRows.map(r => r.p)).size} Stelle(n)`]]);
+    return pg;
+  };
+
+  const imagePage = (slots, cont) => {
+    const pg = new PdfPage(), gap = 18;
+    const top = PDF_H - PDF_M, bottom = PDF_M;
+    const slotH = (top - bottom - gap * (opt.perPage - 1)) / opt.perPage;
+    slots.forEach((sl, k) => {
+      let y = top - k * (slotH + gap);
+      const slotBottom = y - slotH;
+      const heading = sl.heading || (k === 0 ? cont : null);
+      if (heading){
+        y -= 13; pg.text(PDF_M, y, heading, 'B', 13); y -= 6;
+        pg.line(PDF_M, y, PDF_W - PDF_M, y, 0.6, 0.6); y -= 10;
+      }
+      const it = sl.it, probes = it.probe.split(/[,;\/]+/).map(x => x.trim()).filter(Boolean);
+      const cap = [{ s: `Bild ${sl.n}${it.desc.trim() || probes.length ? ':' : ''}`, f: 'B' }, ...words(it.desc.trim(), 'R'),
+        ...(probes.length ? words(`${it.desc.trim() ? '– ' : ''}Probenahmestelle${probes.length > 1 ? 'n' : ''} ${probes.join(', ')}`, 'R') : [])];
+      const capLines = wrapWords(cap, 10, PDF_CW);
+      const metaLines = wrapWords(words([it.final, dateLine(it)].filter(Boolean).join('  ·  '), 'R'), 7.5, PDF_CW);
+      const capH = 6 + capLines.length * 13 + metaLines.length * 10;
+      const boxH = Math.max(40, y - slotBottom - capH);
+      const im = enc.get(sl.i);
+      let yImgBottom;
+      if (im){
+        const s = Math.min(PDF_CW / im.w, boxH / im.h);
+        const w = im.w * s, h = im.h * s, x = PDF_M + (PDF_CW - w) / 2;
+        yImgBottom = y - h;
+        pg.image(sl.i, x, yImgBottom, w, h);
+        pg.rect(x, yImgBottom, w, h, 0.8);
+      } else {
+        const h = Math.min(boxH, 120);
+        yImgBottom = y - h;
+        pg.rect(PDF_M, yImgBottom, PDF_CW, h, null, 0.94);
+        const pl = wrapWords(words(`Bilddatei kann nicht eingebunden werden (Format ${it.ext.slice(1).toUpperCase()}): ${it.final}`, 'R'), 9, PDF_CW - 28);
+        pl.forEach((l, j) => pg.wrapped(PDF_M + 14, yImgBottom + h / 2 + (pl.length - 1) * 6 - j * 12, l, 9, 0.35));
+      }
+      let cy = yImgBottom - 6 - 10;
+      for (const l of capLines){ pg.wrapped(PDF_M, cy, l, 10); cy -= 13; }
+      cy += 2;
+      for (const l of metaLines){ pg.wrapped(PDF_M, cy, l, 7.5, 0.4); cy -= 10; }
+    });
+    return pg;
+  };
+
+  const probePages = () => {
+    if (!probeRows.length) return [];
+    const out = []; let pg = null, y = 0;
+    const cols = [[PDF_M, 62, 'Probe-Nr.'], [PDF_M + 62, 52, 'Bild'], [PDF_M + 114, 120, 'Abschnitt'], [PDF_M + 234, PDF_CW - 234, 'Beschreibung']];
+    const newPage = first => {
+      pg = new PdfPage(); out.push(pg); y = PDF_H - PDF_M - 16;
+      pg.text(PDF_M, y, first ? 'Probenahmestellen' : 'Probenahmestellen (Fortsetzung)', 'B', 15); y -= 26;
+      cols.forEach(([x, , t]) => pg.text(x, y, t, 'B', 9.5)); y -= 6;
+      pg.line(PDF_M, y, PDF_W - PDF_M, y, 0.8, 0.3); y -= 14;
+    };
+    newPage(true);
+    for (const r of probeRows){
+      const cells = [[r.p, 'B'], [`Bild ${r.n}`, 'R'], [r.sec || '–', 'R'], [r.desc || '–', 'R']].map(([t, f], j) => wrapWords(words(t, f), 9.5, cols[j][1] - 8));
+      const h = Math.max(...cells.map(c => c.length)) * 12;
+      if (y - h < PDF_M + 10) newPage(false);
+      cells.forEach((ls, j) => ls.forEach((l, k) => pg.wrapped(cols[j][0], y - k * 12, l, 9.5)));
+      y -= h; pg.line(PDF_M, y + 3, PDF_W - PDF_M, y + 3, 0.4, 0.8); y -= 9;
+    }
+    return out;
+  };
+
+  const decorate = (pages, pi, N) => pages.forEach((pg, k) => {
+    if (k > 0){
+      pg.text(PDF_M, PDF_H - 36, headL, 'R', 8.5, 0.35);
+      if (headR) pg.textRight(PDF_W - PDF_M, PDF_H - 36, headR, 'R', 8.5, 0.35);
+      pg.line(PDF_M, PDF_H - 42, PDF_W - PDF_M, PDF_H - 42, 0.5, 0.7);
+    }
+    pg.line(PDF_M, 46, PDF_W - PDF_M, 46, 0.5, 0.7);
+    if (meta.sv) pg.text(PDF_M, 33, meta.sv, 'R', 8.5, 0.35);
+    pg.textRight(PDF_W - PDF_M, 33, `${N > 1 ? `Teil ${pi + 1} von ${N}  ·  ` : ''}Seite ${k + 1} von ${pages.length}`, 'R', 8.5, 0.35);
+  });
+
+  const renderPart = (pi, plan) => {
+    const N = plan.length;
+    const contOf = (p, k) => k === 0 && pi > 0 && hasSec && !p[0].heading && p[0].it.secEff ? `${p[0].it.secEff} (Fortsetzung)` : null;
+    const pages = [coverPage(pi, plan), ...plan[pi].map((p, k) => imagePage(p, contOf(p, k))), ...(pi === N - 1 ? probePages() : [])];
+    decorate(pages, pi, N);
+    const [a, b] = partRange(plan[pi]);
+    const blob = writePdf(pages, enc, { date: now, author: meta.sv,
+      title: `Bilddokumentation${meta.anlage ? ' – ' + meta.anlage : ''}${meta.proj ? ' – ' + meta.proj : ''}${N > 1 ? ` (Teil ${pi + 1} von ${N})` : ''}`,
+      subject: meta.objekt || '' });
+    const base = pdfBaseName(meta);
+    return { blob, pages: pages.length, from: a, to: b, name: N > 1 ? `${base}_Teil_${pi + 1}_von_${N}.pdf` : `${base}.pdf` };
+  };
+
+  // 4) split into parts by size – estimate first, then verify against the real file size
+  progress('Plane Aufteilung …', items.length, items.length);
+  const pageBytes = p => p.reduce((a, s) => a + (enc.get(s.i) ? enc.get(s.i).data.length : 0), 0) + 3000;
+  const plan = []; let est = Infinity;
+  for (const p of imgPages){
+    const pb = pageBytes(p);
+    if (est + pb > limit * 0.98){ plan.push([]); est = 40000; }
+    plan[plan.length - 1].push(p); est += pb;
+  }
+  for (let guard = 0; guard < 500; guard++){
+    let moved = false; const out = [];
+    for (let pi = 0; pi < plan.length; pi++){
+      const r = renderPart(pi, plan);
+      if (r.blob.size > limit){
+        if (plan[pi].length <= 1) throw new Error(`Eine einzelne Seite (${range(...partRange(plan[pi]))}) ist größer als ${String(opt.maxMB).replace('.', ',')} MB – bitte Bilder stärker verkleinern.`);
+        const last = plan[pi].pop();
+        if (pi === plan.length - 1) plan.push([last]); else plan[pi + 1].unshift(last);
+        moved = true; break;
+      }
+      out.push(r);
+    }
+    if (!moved) return { parts: out, failed, limit };
+  }
+  throw new Error('Aufteilung in Teile nicht möglich.');
+}
+
+async function doPdf(meta){
+  const items = zipSelection(meta.onlyDesc);
+  if (!items.length) return;
+  S.busy = true; recompute();
+  showDialog(`<h3>Erstelle PDF …</h3><progress id="prog" max="1" value="0"></progress><div class="m" id="zStep"></div>`);
+  try{
+    const res = await buildAnnex(meta, items, (t, v, max) => { $('zStep').textContent = t; $('prog').max = max || 1; $('prog').value = v; });
+    $('zStep').textContent = 'Speichere im Projektordner …';
+    for (const p of res.parts){
+      const fh = await S.dir.getFileHandle(p.name, { create: true });
+      const w = await fh.createWritable(); await w.write(p.blob); await w.close();
+      const sz = (await fh.getFile()).size;
+      if (sz !== p.blob.size) throw new Error(`„${p.name}“ unvollständig gespeichert (${sz} statt ${p.blob.size} Bytes).`);
+      S.otherNames.add(p.name.toLowerCase());
+    }
+    closeDialog(); S.busy = false; recompute();
+    S.lastPdf = res.parts;
+    const list = res.parts.map((p, k) => `<button class="pdfOpen" data-k="${k}" title="Im Browser öffnen">„${esc(p.name)}“</button> ${(p.blob.size / 1e6).toFixed(1).replace('.', ',')} MB, ${p.pages} S.`).join(' · ');
+    banner(res.failed.length ? 'err' : 'ok', `✓ PDF erstellt (${res.parts.length} Datei${res.parts.length > 1 ? 'en' : ''}, je max. ${String(meta.pdf.maxMB).replace('.', ',')} MB) im Projektordner: ${list}` +
+      (res.failed.length ? ` <b>· ${res.failed.length} Bild(er) nicht lesbar (Platzhalter eingefügt): ${res.failed.map(it => esc(it.name)).join(', ')}</b>` : '') +
+      `<span class="spacer"></span>${runButtonsHtml()}`);
+    document.querySelectorAll('.pdfOpen').forEach(b => b.onclick = () => window.open(URL.createObjectURL(S.lastPdf[+b.dataset.k].blob), '_blank'));
+    wireRunButtons();
+  }catch(e){
+    closeDialog(); S.busy = false; recompute();
+    banner('err', 'PDF-Erstellung fehlgeschlagen: ' + esc(e.message) + ` <span class="spacer"></span><small>${esc(browserVer)}</small>`);
+  }
+}
+
+/* ---------- info dialog ---------- */
+function openInfo(){
+  showDialog(`<h3>Bildumbenenner ${APP_VERSION}</h3>
+    <div class="body"><table class="info">
+      <tr><td>Version</td><td>${APP_VERSION} vom ${deDate(APP_DATE)}</td></tr>
+      <tr><td>Browser</td><td>${esc(browserVer)}${'showDirectoryPicker' in window ? '' : ' – <span class="warn">ohne Ordnerzugriff, bitte Chrome oder Edge verwenden</span>'}</td></tr>
+      <tr><td>Projektdaten</td><td>„${PROJ_FILE}“ im jeweiligen Projektordner (Beschreibungen, Abschnitte, Proben, Drehungen, Originalnamen, Prüfsummen, Projektdaten). Nicht löschen oder umbenennen.</td></tr>
+      <tr><td>Persönlich</td><td>In diesem Browser: Sachverständiger, Standardanweisung, Export-Einstellungen.</td></tr>
+      <tr><td>Originale</td><td>Werden nur umbenannt bzw. nach „${DISCARD_DIR}“ verschoben, nie verändert. Drehen und Verkleinern betrifft nur ZIP- und PDF-Kopien.</td></tr>
+      <tr><td>Grenzen</td><td>HEIC-Fotos (iPhone) kann Chrome nicht lesen – Kamera auf „Maximale Kompatibilität“ stellen. Im PDF werden Zeichen wie → oder CO₂ als „->“ bzw. „CO2“ geschrieben.</td></tr>
+    </table>
+    <div class="m"><b>Änderungen</b><br>${CHANGELOG.map(([v, d, t]) => `<b>${v}</b> (${d}): ${esc(t)}`).join('<br>')}</div></div>
+    <div class="btns"><button class="primary" id="iClose">Schließen</button></div>`);
+  $('dialog').classList.add('wide');
+  $('iClose').onclick = closeDialog;
+}
+
 /* ---------- banner ---------- */
 function banner(type, html){ const b = $('banner'); b.className = 'show ' + type; b.innerHTML = html; }
 function hideBanner(){ $('banner').className = ''; $('banner').innerHTML = ''; }
 
 /* ---------- wiring ---------- */
 $('btnOpen').onclick = pickFolder;
+$('btnInfo').onclick = openInfo;
+$('btnInfo').textContent = 'v' + APP_VERSION;
+document.title = `Bildumbenenner ${APP_VERSION}`;
 $('btnZip').onclick = openZipDialog;
+$('btnPdf').onclick = openPdfDialog;
 $('btnMeta').onclick = () => openMetaDialog(false);
 $('btnOpen2').onclick = pickFolder;
-$('btnReload').onclick = () => { S.lastRun = null; hideBanner(); loadItems(); };
+$('btnReload').onclick = async () => {
+  flushDrafts(); saveExtra(); await flushProject();
+  S.lastRun = null; hideBanner();
+  const note = await loadProject(S.dir);      // picks up changes a coworker saved meanwhile
+  await loadItems();
+  if (note) banner(P.readOnly ? 'err' : 'info', note);
+};
 $('sort').onchange = () => {
   cfg.sort = $('sort').value; store.set('bu-settings', cfg);
   if (cfg.sort !== 'manual') applySort();   // switching to manual keeps the current order
@@ -1254,7 +2107,10 @@ document.addEventListener('drop', async e => {
   }catch(err){ banner('err', 'Ordner konnte nicht geöffnet werden: ' + esc(err.message)); }
 });
 
-window.addEventListener('beforeunload', e => { if (S.busy){ e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('beforeunload', e => {
+  if (S.dir){ flushDrafts(); saveExtra(); }
+  if (S.busy || P.dirty){ flushProject(); e.preventDefault(); e.returnValue = ''; }
+});
 
 applyCfgToUI();
 updateExample();
