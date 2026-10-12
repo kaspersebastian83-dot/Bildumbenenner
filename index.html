@@ -95,7 +95,14 @@ footer{background:var(--panel);border-top:1px solid var(--line);padding:8px 16px
 #stats b{color:var(--text)}
 #stats .bad{color:var(--err)}
 .keys{color:var(--muted);font-size:12px;flex:1 1 auto;min-width:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#btnRename{flex:0 0 auto;white-space:nowrap}
+#btnRename,#btnZip{flex:0 0 auto;white-space:nowrap}
+.dialog .form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dialog .form label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.dialog .form input{color:var(--text)}
+.dialog .chk{display:flex;align-items:center;gap:6px;font-size:13px}
+.dialog .m{font-size:13px;color:var(--muted);line-height:1.5}
+.dialog .m b{color:var(--text)}
+@media (max-width:560px){.dialog .form{grid-template-columns:1fr}}
 kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 4px;background:var(--panel2)}
 
 #banner{display:none;padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px;gap:10px;align-items:center;flex-wrap:wrap}
@@ -120,7 +127,7 @@ progress{width:100%}
 
 @media (max-width:1100px){
   .keys{display:none}
-  #btnRename{margin-left:auto}
+  #btnZip{margin-left:auto}
 }
 @media (max-width:860px){
   main{flex-direction:column}
@@ -198,6 +205,7 @@ progress{width:100%}
 <footer id="foot" style="display:none">
   <span id="stats"></span>
   <span class="keys" title="Enter / ↓: nächstes Bild · Shift+Enter / ↑: vorheriges Bild · Strg+D: Text vom vorherigen Bild übernehmen · Alt+X: aussortieren / wiederherstellen · Vorschaubild ziehen: verschieben · Esc: Vollbild schließen"><kbd>↵</kbd> nächstes · <kbd>⇧↵</kbd> vorheriges · <kbd>Strg D</kbd> übernehmen · <kbd>Alt X</kbd> aussortieren</span>
+  <button id="btnZip" disabled title="Verwendete Bilder mit neuen Namen + Metadaten.txt als ZIP speichern">ZIP exportieren …</button>
   <button id="btnRename" class="primary" disabled>Umbenennen</button>
 </footer>
 
@@ -610,6 +618,7 @@ function recompute(){
   if (tooLong) s += ` · <span class="bad">${tooLong} Namen sehr lang</span>`;
   $('stats').innerHTML = s;
   $('btnRename').disabled = !(changes || moves) || conflicts > 0 || S.busy;
+  $('btnZip').disabled = !(S.view.length - discarded) || conflicts > 0 || S.busy;
   const parts = [];
   if (changes) parts.push(`${changes} umbenennen`);
   if (moves) parts.push(`${moves} aussortieren`);
@@ -910,12 +919,195 @@ async function saveCsv(){
   }catch(e){ banner('err', 'CSV konnte nicht gespeichert werden: ' + esc(e.message)); }
 }
 
+/* ---------- ZIP export ---------- */
+// Minimal ZIP writer (method "stored": JPEGs are already compressed, so this is fast and lossless).
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++){ let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+  return t;
+})();
+function crc32(buf){
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function dosStamp(d){
+  const y = Math.min(2107, Math.max(1980, d.getFullYear()));
+  return { t: (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1),
+           d: ((y - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate() };
+}
+class ZipWriter{
+  constructor(sink){ this.sink = sink; this.offset = 0; this.entries = []; }
+  async add(name, data, date){
+    const nb = new TextEncoder().encode(name);
+    const crc = crc32(data), size = data.length, ts = dosStamp(date || new Date());
+    if (this.offset + 30 + nb.length + size > 0xFFFFFFF0) throw new Error('Das ZIP würde größer als 4 GB – bitte weniger Bilder auswählen.');
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true);   // UTF-8 names (umlauts)
+    h.setUint16(8, 0, true); h.setUint16(10, ts.t, true); h.setUint16(12, ts.d, true);
+    h.setUint32(14, crc, true); h.setUint32(18, size, true); h.setUint32(22, size, true);
+    h.setUint16(26, nb.length, true); h.setUint16(28, 0, true);
+    this.entries.push({ nb, crc, size, ts, offset: this.offset });
+    await this.sink.write(new Uint8Array(h.buffer)); await this.sink.write(nb); await this.sink.write(data);
+    this.offset += 30 + nb.length + size;
+  }
+  async finish(){
+    const cdStart = this.offset; let cdSize = 0;
+    for (const e of this.entries){
+      const c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true);
+      c.setUint16(10, 0, true); c.setUint16(12, e.ts.t, true); c.setUint16(14, e.ts.d, true);
+      c.setUint32(16, e.crc, true); c.setUint32(20, e.size, true); c.setUint32(24, e.size, true);
+      c.setUint16(28, e.nb.length, true); c.setUint32(42, e.offset, true);
+      await this.sink.write(new Uint8Array(c.buffer)); await this.sink.write(e.nb);
+      cdSize += 46 + e.nb.length;
+    }
+    const z = new DataView(new ArrayBuffer(22));
+    z.setUint32(0, 0x06054b50, true); z.setUint16(8, this.entries.length, true); z.setUint16(10, this.entries.length, true);
+    z.setUint32(12, cdSize, true); z.setUint32(16, cdStart, true);
+    await this.sink.write(new Uint8Array(z.buffer));
+    this.total = cdStart + cdSize + 22;
+  }
+}
+
+const deDate = iso => { const m = (iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? `${m[3]}.${m[2]}.${m[1]}` : (iso || ''); };
+const safeFile = s => (s || '').trim().replace(/[<>:"\/\\|?*\x00-\x1F]/g, '-').replace(/\s+/g, '_').replace(/^[.~]+|[. ]+$/g, '');
+
+function zipSelection(onlyDesc){
+  return S.view.filter(it => !it.discard && (!onlyDesc || it.nr != null));
+}
+function zipFileName(meta){
+  return `${safeFile(meta.proj) || safeFile(S.dir.name) || 'Bilder'}_Bilddokumentation${meta.ort ? '_' + meta.ort : ''}.zip`;
+}
+function metaText(meta, items, now){
+  const L = [];
+  const dateOf = it => it.date ? `${fmtDate(it.date)}${it.dateSrc === 'EXIF' ? ' ' + fmtTime(it.date) : ''} (lt. ${it.dateSrc})` : '–';
+  L.push('BILDDOKUMENTATION', '');
+  L.push(`Projektnummer:   ${meta.proj || '–'}`);
+  L.push(`Ortstermin:      ${meta.ort ? deDate(meta.ort) : '–'}`);
+  L.push(`Anzahl Bilder:   ${items.length}`);
+  L.push(`Erstellt am:     ${fmtDate(now)} ${fmtTime(now)}`);
+  L.push(`Quellordner:     ${S.dir.name}`);
+  const gone = S.view.filter(it => it.discard).length;
+  if (gone) L.push(`Aussortiert:     ${gone} Bild(er), nicht enthalten`);
+  L.push('', '', 'BILDVERZEICHNIS', '='.repeat(60), '');
+  items.forEach(it => {
+    L.push(it.final);
+    if (it.desc.trim()) L.push(`    Beschreibung:  ${it.desc.trim()}`);
+    L.push(`    Aufnahme:      ${dateOf(it)}`);
+    if (it.final !== it.name) L.push(`    Original:      ${it.name}`);
+    L.push('');
+  });
+  return '﻿' + L.join('\r\n');
+}
+
+function runButtonsHtml(){
+  return S.lastRun ? `<button id="bCsv">Bildverzeichnis (CSV) im Ordner speichern</button><button id="bUndo">Rückgängig</button>` : '';
+}
+function wireRunButtons(){
+  if ($('bCsv')) $('bCsv').onclick = saveCsv;
+  if ($('bUndo')) $('bUndo').onclick = undo;
+}
+
+function openZipDialog(){
+  recompute();
+  const key = 'bu-meta:' + S.dir.name;
+  const meta = Object.assign({ proj: cfg.prefix.trim(), ort: '', onlyDesc: true }, store.get(key, {}));
+  const active = S.view.filter(it => !it.discard);
+  const withDesc = active.filter(it => it.nr != null).length;
+  showDialog(`<h3>ZIP exportieren</h3>
+    <div class="form">
+      <label>Projektnummer <input type="text" id="zProj" placeholder="z. B. P2026-114"></label>
+      <label>Ortstermin <input type="date" id="zOrt"></label>
+    </div>
+    <label class="chk"><input type="checkbox" id="zOnly"> nur Bilder mit Beschreibung</label>
+    <div class="m" id="zInfo"></div>
+    <div class="btns"><button id="zCancel">Abbrechen</button><button class="primary" id="zOk">ZIP speichern …</button></div>`);
+  $('zProj').value = meta.proj; $('zOrt').value = meta.ort;
+  $('zOnly').checked = withDesc > 0 && meta.onlyDesc !== false;
+  $('zOnly').disabled = withDesc === 0 || withDesc === active.length;
+  const read = () => ({ proj: $('zProj').value.trim(), ort: $('zOrt').value, onlyDesc: $('zOnly').checked });
+  const update = () => {
+    const m = read(); store.set(key, m);
+    const items = zipSelection(m.onlyDesc);
+    const bytes = items.reduce((a, it) => a + it.size, 0);
+    const pending = items.some(it => it.final !== it.name);
+    $('zInfo').innerHTML =
+      `Inhalt: <b>${items.length}</b> Bilder (${fmtSize(bytes)}) + <b>Metadaten.txt</b>` +
+      (active.length - items.length ? ` · ${active.length - items.length} ohne Beschreibung nicht enthalten` : '') +
+      (S.view.length - active.length ? ` · Aussortierte nicht enthalten` : '') +
+      `<br>Dateiname: <b>${esc(zipFileName(m))}</b>` +
+      (pending ? `<br>Die Bilder bekommen im ZIP die neuen Namen – die Dateien im Ordner bleiben dabei unverändert.` : '');
+    $('zOk').disabled = !items.length;
+  };
+  ['zProj', 'zOrt', 'zOnly'].forEach(id => $(id).addEventListener('input', update));
+  update();
+  $('zCancel').onclick = closeDialog;
+  $('zOk').onclick = () => doZip(read());
+  setTimeout(() => (meta.proj ? $('zOrt') : $('zProj')).focus(), 0);
+}
+
+async function doZip(meta){
+  const items = zipSelection(meta.onlyDesc);
+  if (!items.length) return;
+  const name = zipFileName(meta);
+  // ask for the target first, while the click still counts as a user gesture
+  let handle = null;
+  if ('showSaveFilePicker' in window){
+    const opts = { suggestedName: name, types: [{ description: 'ZIP-Archiv', accept: { 'application/zip': ['.zip'] } }] };
+    try{ handle = await window.showSaveFilePicker({ ...opts, startIn: S.dir }); }
+    catch(e){
+      if (e.name === 'AbortError') return;
+      try{ handle = await window.showSaveFilePicker(opts); }catch(e2){ if (e2.name === 'AbortError') return; handle = null; }
+    }
+  }
+  S.busy = true; recompute();
+  showDialog(`<h3>Erstelle ZIP …</h3><progress id="prog" max="${items.length + 1}" value="0"></progress><div class="m" id="zStep"></div>`);
+  const parts = [];
+  let writable = null;
+  try{
+    writable = handle ? await handle.createWritable() : null;
+    const zw = new ZipWriter(writable ? { write: d => writable.write(d) } : { write: async d => { parts.push(d); } });
+    let n = 0;
+    for (const it of items){
+      $('zStep').textContent = it.final;
+      const f = await it.handle.getFile();
+      await zw.add(it.final, new Uint8Array(await f.arrayBuffer()), new Date(f.lastModified));
+      $('prog').value = ++n;
+    }
+    const now = new Date();
+    await zw.add('Metadaten.txt', new TextEncoder().encode(metaText(meta, items, now)), now);
+    await zw.finish();
+    let where;
+    if (writable){
+      await writable.close(); writable = null;
+      const out = await handle.getFile();
+      if (out.size !== zw.total) throw new Error(`ZIP unvollständig geschrieben (${out.size} statt ${zw.total} Bytes).`);
+      S.otherNames.add(handle.name.toLowerCase());
+      where = `„${esc(handle.name)}“`;
+    } else {
+      const url = URL.createObjectURL(new Blob(parts, { type: 'application/zip' }));
+      const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      where = `„${esc(name)}“ (Download-Ordner)`;
+    }
+    closeDialog(); S.busy = false; recompute();
+    banner('ok', `✓ ZIP gespeichert: ${where} – ${items.length} Bilder + Metadaten.txt, ${fmtSize(zw.total)}.<span class="spacer"></span>${runButtonsHtml()}`);
+    wireRunButtons();
+  }catch(e){
+    if (writable){ try{ await writable.abort(); }catch(_){} }
+    closeDialog(); S.busy = false; recompute();
+    banner('err', 'ZIP-Export fehlgeschlagen: ' + esc(e.message) + ` <span class="spacer"></span><small>${esc(browserVer)}</small>`);
+  }
+}
+
 /* ---------- banner ---------- */
 function banner(type, html){ const b = $('banner'); b.className = 'show ' + type; b.innerHTML = html; }
 function hideBanner(){ $('banner').className = ''; $('banner').innerHTML = ''; }
 
 /* ---------- wiring ---------- */
 $('btnOpen').onclick = pickFolder;
+$('btnZip').onclick = openZipDialog;
 $('btnOpen2').onclick = pickFolder;
 $('btnReload').onclick = () => { S.lastRun = null; hideBanner(); loadItems(); };
 $('sort').onchange = () => {
