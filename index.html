@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bildumbenenner</title>
+<style>
+:root{
+  --bg:#f4f3ef; --panel:#ffffff; --panel2:#f9f8f5; --line:#e2dfd7; --text:#1d1c1a; --muted:#6f6b63;
+  --accent:#b4471f; --accent-2:#8f3616; --ok:#2f7a46; --warn:#b07a12; --err:#b3261e;
+  --focus:#fbeee6; --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#171614; --panel:#201f1c; --panel2:#262521; --line:#36342f; --text:#ecebe6; --muted:#a09b91;
+    --accent:#e0714a; --accent-2:#f08a64; --ok:#6cc08a; --warn:#e2b34f; --err:#f07a70; --focus:#33261f; }
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.45 "Segoe UI",system-ui,sans-serif;display:flex;flex-direction:column}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 12px}
+button:hover{border-color:var(--muted)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.primary:hover{background:var(--accent-2)}
+button:disabled{opacity:.45;cursor:not-allowed}
+input[type=text],input[type=number],select{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;flex-direction:column;gap:8px}
+.bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.brand{font-weight:700;letter-spacing:.2px;margin-right:6px}
+.brand span{color:var(--accent)}
+.folder{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.spacer{flex:1}
+.opts{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font-size:13px;color:var(--muted)}
+.opts label{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.opts input[type=text]{width:130px}
+.opts input[type=number]{width:56px}
+.example{font-family:var(--mono);font-size:12.5px;color:var(--text);background:var(--panel2);border:1px solid var(--line);padding:3px 8px;border-radius:5px}
+
+main{flex:1;display:flex;min-height:0}
+#listWrap{flex:1 1 55%;overflow:auto;padding:10px 12px 40px}
+#previewPane{flex:1 1 45%;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-width:0}
+.row{display:grid;grid-template-columns:34px 96px 1fr 30px;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 8px;margin-bottom:6px}
+.row.active{background:var(--focus);border-color:var(--accent)}
+.nr{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right}
+.thumb{width:96px;height:72px;border-radius:5px;background:var(--panel2);overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);cursor:pointer}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.mid{min-width:0;display:flex;flex-direction:column;gap:4px}
+.orig{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.desc{width:100%}
+.res{font-family:var(--mono);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+.res.change{color:var(--ok)}
+.res.conflict{color:var(--err);font-weight:600}
+.ord{display:flex;flex-direction:column;gap:3px}
+.ord button{padding:0;height:22px;font-size:10px;line-height:1}
+.ord button.x{font-size:12px;color:var(--err)}
+.ord button.restore{font-size:13px;color:var(--ok)}
+.row.discarded{opacity:.55;background:var(--panel2);border-style:dashed}
+.row.discarded .thumb img{filter:grayscale(1)}
+.row.discarded .desc{text-decoration:line-through;color:var(--muted)}
+.row.discarded.active{opacity:.85}
+.res.discard{color:var(--warn)}
+.divider{display:flex;align-items:center;gap:10px;margin:16px 2px 8px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.divider::after{content:"";flex:1;height:1px;background:var(--line)}
+.dialog .list .mv{color:var(--warn)}
+.dialog .list .sec{font-family:"Segoe UI",system-ui,sans-serif;font-weight:600;background:var(--panel2)}
+#pvDiscard.on{color:var(--ok);border-color:var(--ok)}
+.row{cursor:grab}
+.row .desc{cursor:text}
+.row button{cursor:pointer}
+.nr{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.grip{font-size:16px;line-height:1;color:var(--muted);opacity:.55;user-select:none}
+.row:hover .grip{opacity:1;color:var(--accent)}
+.row.dragging{opacity:.35}
+.row.drop-before{box-shadow:0 -3px 0 0 var(--accent)}
+.row.drop-after{box-shadow:0 3px 0 0 var(--accent)}
+
+.pv-img{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:var(--panel2);cursor:zoom-in;overflow:hidden}
+.pv-img img{max-width:100%;max-height:100%;object-fit:contain}
+.pv-meta{padding:10px 14px;border-top:1px solid var(--line);font-size:13px;display:flex;flex-direction:column;gap:4px}
+.pv-meta .n{font-family:var(--mono);word-break:break-all}
+.pv-meta .m{color:var(--muted)}
+.pv-nav{display:flex;gap:8px;padding:0 14px 12px}
+
+#empty{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
+.drop{border:2px dashed var(--line);border-radius:14px;padding:44px 36px;text-align:center;max-width:560px;background:var(--panel)}
+.drop.over{border-color:var(--accent);background:var(--focus)}
+.drop h2{margin:0 0 8px;font-size:20px}
+.drop p{color:var(--muted);margin:6px 0 18px}
+.notice{color:var(--err);font-weight:600}
+
+footer{background:var(--panel);border-top:1px solid var(--line);padding:8px 16px;display:flex;gap:16px;align-items:center;flex-wrap:nowrap;font-size:13px}
+#stats{color:var(--muted);white-space:nowrap;flex:0 0 auto}
+#stats b{color:var(--text)}
+#stats .bad{color:var(--err)}
+.keys{color:var(--muted);font-size:12px;flex:1 1 auto;min-width:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#btnRename{flex:0 0 auto;white-space:nowrap}
+kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 4px;background:var(--panel2)}
+
+#banner{display:none;padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px;gap:10px;align-items:center;flex-wrap:wrap}
+#banner.show{display:flex}
+#banner.ok{background:color-mix(in srgb,var(--ok) 14%,var(--panel))}
+#banner.err{background:color-mix(in srgb,var(--err) 14%,var(--panel))}
+#banner.info{background:var(--panel2)}
+
+#lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:50;cursor:zoom-out}
+#lightbox.show{display:flex}
+#lightbox img{max-width:98vw;max-height:96vh;object-fit:contain}
+
+#overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:40}
+#overlay.show{display:flex}
+.dialog{background:var(--panel);border-radius:10px;padding:20px 22px;width:min(720px,94vw);max-height:86vh;display:flex;flex-direction:column;gap:12px;border:1px solid var(--line)}
+.dialog h3{margin:0}
+.dialog .list{overflow:auto;border:1px solid var(--line);border-radius:6px;font-family:var(--mono);font-size:12px;max-height:50vh}
+.dialog .list div{padding:4px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.dialog .list .from{color:var(--muted)}
+.dialog .btns{display:flex;justify-content:flex-end;gap:8px}
+progress{width:100%}
+
+@media (max-width:1100px){
+  .keys{display:none}
+  #btnRename{margin-left:auto}
+}
+@media (max-width:860px){
+  main{flex-direction:column}
+  #previewPane{border-left:0;border-top:1px solid var(--line);flex:0 0 42vh}
+  .row{grid-template-columns:28px 72px 1fr 28px}
+  .thumb{width:72px;height:54px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <div class="brand">Bild<span>umbenenner</span></div>
+    <button id="btnOpen" class="primary">Ordner wählen …</button>
+    <button id="btnReload" disabled>Neu einlesen</button>
+    <span class="folder" id="folderName"></span>
+    <span class="spacer"></span>
+    <label class="opts">Sortierung
+      <select id="sort">
+        <option value="name">Dateiname</option>
+        <option value="date">Aufnahmedatum</option>
+        <option value="manual">manuell</option>
+      </select>
+    </label>
+  </div>
+  <div class="opts">
+    <label>Präfix <input type="text" id="oPrefix" placeholder="z. B. P2026-114"></label>
+    <label><input type="checkbox" id="oDate"> Datum voranstellen</label>
+    <label><input type="checkbox" id="oNum"> Nummerieren</label>
+    <label>ab <input type="number" id="oStart" min="0" value="1"></label>
+    <label>Stellen <input type="number" id="oDigits" min="1" max="5" value="2"></label>
+    <label>Trenner
+      <select id="oSep"><option value="_">_</option><option value="-">-</option><option value=" ">Leerz.</option></select>
+    </label>
+    <label><input type="checkbox" id="oSpaces"> Leerzeichen → _</label>
+    <label><input type="checkbox" id="oUml"> ä → ae</label>
+    <label><input type="checkbox" id="oLower"> Endung klein</label>
+    <label>Aussortierte
+      <select id="oDiscard"><option value="move">→ Unterordner _aussortiert</option><option value="keep">im Ordner lassen</option></select>
+    </label>
+    <span class="example" id="example"></span>
+  </div>
+</header>
+
+<div id="banner"></div>
+
+<div id="empty">
+  <div class="drop" id="drop">
+    <h2>Projektordner öffnen</h2>
+    <p>Ordner wählen oder hierher ziehen. Die Bilder werden direkt im Ordner umbenannt – nichts wird hochgeladen.</p>
+    <button class="primary" id="btnOpen2">Ordner wählen …</button>
+    <p id="support" class="notice" style="display:none;margin-top:18px">Dieser Browser unterstützt keinen Ordnerzugriff. Bitte die Datei in Chrome oder Edge öffnen.</p>
+  </div>
+</div>
+
+<main id="app" style="display:none">
+  <div id="listWrap"><div id="list"></div></div>
+  <aside id="previewPane">
+    <div class="pv-img" id="pvImgWrap" title="Klick: Vollbild"><img id="pvImg" alt=""></div>
+    <div class="pv-meta">
+      <div class="n" id="pvName">–</div>
+      <div class="m" id="pvInfo"></div>
+      <div class="n" id="pvNew" style="color:var(--ok)"></div>
+    </div>
+    <div class="pv-nav">
+      <button id="pvPrev">◀ vorheriges</button>
+      <button id="pvNext">nächstes ▶</button>
+      <span class="spacer"></span>
+      <button id="pvDiscard" title="Alt+X">✕ Aussortieren</button>
+    </div>
+  </aside>
+</main>
+
+<footer id="foot" style="display:none">
+  <span id="stats"></span>
+  <span class="keys" title="Enter / ↓: nächstes Bild · Shift+Enter / ↑: vorheriges Bild · Strg+D: Text vom vorherigen Bild übernehmen · Alt+X: aussortieren / wiederherstellen · Vorschaubild ziehen: verschieben · Esc: Vollbild schließen"><kbd>↵</kbd> nächstes · <kbd>⇧↵</kbd> vorheriges · <kbd>Strg D</kbd> übernehmen · <kbd>Alt X</kbd> aussortieren</span>
+  <button id="btnRename" class="primary" disabled>Umbenennen</button>
+</footer>
+
+<div id="lightbox"><img id="lbImg" alt=""></div>
+<div id="overlay"><div class="dialog" id="dialog"></div></div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const IMG_EXT = ['jpg','jpeg','png','webp','gif','bmp','tif','tiff','heic','heif'];
+const PREVIEWABLE = ['jpg','jpeg','png','webp','gif','bmp'];
+const S = { dir:null, items:[], view:[], otherNames:new Set(), focus:-1, lastRun:null, busy:false, pvToken:0, pvUrl:null };
+const DISCARD_DIR = '_aussortiert';
+const TMP_PREFIX = 'umb-tmp_';
+
+/* ---------- storage (optional) ---------- */
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+
+/* ---------- settings ---------- */
+const OPT = { prefix:'oPrefix', date:'oDate', num:'oNum', start:'oStart', digits:'oDigits', sep:'oSep', spaces:'oSpaces', uml:'oUml', lower:'oLower', discard:'oDiscard' };
+const defaults = { prefix:'', date:false, num:true, start:1, digits:2, sep:'_', spaces:true, uml:false, lower:true, discard:'move', sort:'name' };
+let cfg = Object.assign({}, defaults, store.get('bu-settings', {}));
+function applyCfgToUI(){
+  for (const [k,id] of Object.entries(OPT)){
+    const el = $(id);
+    if (el.type === 'checkbox') el.checked = !!cfg[k]; else el.value = cfg[k];
+  }
+  $('sort').value = cfg.sort;
+}
+function readCfgFromUI(){
+  for (const [k,id] of Object.entries(OPT)){
+    const el = $(id);
+    if (el.type === 'checkbox') cfg[k] = el.checked;
+    else if (el.type === 'number') cfg[k] = Math.max(0, parseInt(el.value,10) || 0);
+    else cfg[k] = el.value;
+  }
+  cfg.digits = Math.min(5, Math.max(1, cfg.digits || 1));
+  store.set('bu-settings', cfg);
+}
+
+/* ---------- helpers ---------- */
+const extOf = n => { const i = n.lastIndexOf('.'); return i > 0 ? n.slice(i) : ''; };
+const pad = (n, d) => String(n).padStart(d, '0');
+const fmtDate = d => d ? `${pad(d.getDate(),2)}.${pad(d.getMonth()+1,2)}.${d.getFullYear()}` : '';
+const fmtTime = d => d ? `${pad(d.getHours(),2)}:${pad(d.getMinutes(),2)}` : '';
+const fmtISO = d => `${d.getFullYear()}-${pad(d.getMonth()+1,2)}-${pad(d.getDate(),2)}`;
+const fmtSize = b => b > 1048576 ? (b/1048576).toFixed(1).replace('.',',')+' MB' : Math.round(b/1024)+' KB';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function sanitize(s){
+  s = (s || '').trim();
+  if (cfg.uml) s = s.replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/Ä/g,'Ae').replace(/Ö/g,'Oe').replace(/Ü/g,'Ue').replace(/ß/g,'ss');
+  s = s.replace(/[<>:"\/\\|?*\x00-\x1F]/g, '-');
+  s = cfg.spaces ? s.replace(/\s+/g, '_') : s.replace(/\s+/g, ' ');
+  s = s.replace(/[. ]+$/, '');
+  s = s.replace(/^[.~\s]+/, '');     // Chrome rejects names starting with "." or "~" on real disks
+  return s;
+}
+
+/* ---------- EXIF date ---------- */
+async function readExifDate(file){
+  try{
+    const buf = await file.slice(0, 256*1024).arrayBuffer();
+    const v = new DataView(buf);
+    if (v.byteLength < 4 || v.getUint16(0) !== 0xFFD8) return null;
+    let off = 2;
+    while (off + 4 < v.byteLength){
+      const marker = v.getUint16(off); off += 2;
+      if ((marker & 0xFF00) !== 0xFF00) return null;
+      const len = v.getUint16(off);
+      if (marker === 0xFFE1 && off + 8 < v.byteLength && v.getUint32(off+2) === 0x45786966) return parseTiff(v, off + 8);
+      if (marker === 0xFFDA) return null;
+      off += len;
+    }
+  }catch(e){}
+  return null;
+}
+function parseTiff(v, t){
+  const le = v.getUint16(t) === 0x4949;
+  const u16 = o => v.getUint16(t+o, le), u32 = o => v.getUint32(t+o, le);
+  const readIFD = o => { const n = u16(o), tags = {}; for (let i=0;i<n;i++){ const e = o+2+i*12; tags[u16(e)] = { cnt:u32(e+4), valOff:e+8 }; } return tags; };
+  const str = ent => { const o = ent.cnt > 4 ? u32(ent.valOff) : ent.valOff; let s=''; for (let i=0;i<ent.cnt-1;i++) s += String.fromCharCode(v.getUint8(t+o+i)); return s; };
+  const ifd0 = readIFD(u32(4));
+  let dt = null;
+  if (ifd0[0x8769]){
+    const ex = readIFD(u32(ifd0[0x8769].valOff));
+    if (ex[0x9003]) dt = str(ex[0x9003]); else if (ex[0x9004]) dt = str(ex[0x9004]);
+  }
+  if (!dt && ifd0[0x0132]) dt = str(ifd0[0x0132]);
+  const m = dt && dt.match(/(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+  return m ? new Date(+m[1], m[2]-1, +m[3], +m[4], +m[5], +m[6]) : null;
+}
+function dateFromName(n){
+  const m = n.match(/(20\d{2})[-_]?(\d{2})[-_]?(\d{2})/);
+  if (!m) return null;
+  const d = new Date(+m[1], m[2]-1, +m[3]);
+  return (d.getMonth() === m[2]-1) ? d : null;
+}
+
+/* ---------- open folder ---------- */
+const supported = 'showDirectoryPicker' in window;
+if (!supported){ $('support').style.display = 'block'; $('btnOpen').disabled = true; $('btnOpen2').disabled = true; }
+
+async function pickFolder(){
+  try{
+    const dir = await window.showDirectoryPicker({ mode:'readwrite', id:'bildumbenenner' });
+    await openDir(dir);
+  }catch(e){ if (e.name !== 'AbortError') banner('err', 'Ordner konnte nicht geöffnet werden: ' + esc(e.message)); }
+}
+async function ensurePerm(dir){
+  const o = { mode:'readwrite' };
+  if ((await dir.queryPermission(o)) === 'granted') return true;
+  return (await dir.requestPermission(o)) === 'granted';
+}
+async function openDir(dir){
+  if (!(await ensurePerm(dir))){ banner('err','Ohne Schreibrecht kann nicht umbenannt werden.'); return; }
+  S.dir = dir; S.lastRun = null;
+  $('folderName').textContent = '📁 ' + dir.name;
+  $('btnReload').disabled = false;
+  hideBanner();
+  await loadItems();
+}
+
+async function loadItems(){
+  const dir = S.dir; if (!dir) return;
+  S.items.forEach(it => it.thumbUrl && URL.revokeObjectURL(it.thumbUrl));
+  S.items = []; S.otherNames = new Set(); S.focus = -1;
+  $('list').innerHTML = '';
+  banner('info', 'Lese Ordner …');
+  const drafts = store.get('bu-drafts:' + dir.name, {});
+  const discards = new Set(store.get('bu-discard:' + dir.name, []));
+  const handles = [];
+  for await (const h of dir.values()){
+    if (h.kind !== 'file') continue;
+    const ext = extOf(h.name).slice(1).toLowerCase();
+    if (IMG_EXT.includes(ext) && !h.name.startsWith(TMP_PREFIX) && !h.name.startsWith('~umb_')) handles.push(h);
+    else S.otherNames.add(h.name.toLowerCase());
+  }
+  let n = 0;
+  for (const h of handles){
+    const f = await h.getFile();
+    const exif = /^jpe?g$/.test(extOf(h.name).slice(1).toLowerCase()) ? await readExifDate(f) : null;
+    const fromName = exif ? null : dateFromName(h.name);
+    const date = exif || fromName || new Date(f.lastModified);
+    S.items.push({
+      handle:h, name:h.name, ext:extOf(h.name), size:f.size,
+      date, dateSrc: exif ? 'EXIF' : fromName ? 'Dateiname' : 'Dateidatum',
+      desc: drafts[h.name] || '', discard: discards.has(h.name),
+      thumbUrl:null, thumbState:0, el:null, final:h.name, conflict:false
+    });
+    if (++n % 20 === 0) banner('info', `Lese Ordner … ${n} / ${handles.length}`);
+  }
+  hideBanner();
+  if (!S.items.length){
+    banner('info', 'Keine Bilddateien in diesem Ordner gefunden.');
+  }
+  $('empty').style.display = 'none';
+  $('app').style.display = 'flex';
+  $('foot').style.display = 'flex';
+  applySort();
+  buildRows();
+  recompute();
+  if (S.items.length) setFocus(0, false);
+}
+
+/* ---------- sorting ---------- */
+function applySort(){
+  const byName = (a,b) => a.name.localeCompare(b.name, 'de', { numeric:true });
+  if (cfg.sort === 'name') S.items.sort(byName);
+  else if (cfg.sort === 'date') S.items.sort((a,b) => (a.date - b.date) || byName(a,b));
+  else {
+    // manual: restore the saved order, new files go to the end
+    const ord = new Map(store.get('bu-order:' + (S.dir ? S.dir.name : ''), []).map((n, i) => [n, i]));
+    const pos = it => ord.has(it.name) ? ord.get(it.name) : Infinity;
+    S.items.sort((a,b) => (pos(a) - pos(b)) || byName(a,b));
+  }
+}
+function saveOrder(names){
+  if (S.dir) store.set('bu-order:' + S.dir.name, names || S.view.map(it => it.name));
+}
+
+/* ---------- rows ---------- */
+const io = new IntersectionObserver(entries => {
+  for (const e of entries) if (e.isIntersecting){ const it = e.target._item; io.unobserve(e.target); queueThumb(it); }
+}, { root: $('listWrap'), rootMargin:'300px' });
+
+function buildRows(){
+  const list = $('list'); list.innerHTML = '';
+  const active = S.items.filter(it => !it.discard), gone = S.items.filter(it => it.discard);
+  S.view = active.concat(gone);
+  S.view.forEach((it, idx) => {
+    if (idx === active.length){
+      const d = document.createElement('div'); d.className = 'divider';
+      d.textContent = `Aussortiert (${gone.length})`;
+      list.appendChild(d);
+    }
+    if (!it.el){
+      const r = document.createElement('div');
+      r.className = 'row';
+      r.innerHTML = `<div class="nr"><span class="grip" title="Ziehen zum Verschieben">⠿</span><span class="n"></span></div>
+        <div class="thumb">…</div>
+        <div class="mid">
+          <div class="orig"></div>
+          <input class="desc" type="text" spellcheck="true" placeholder="Beschreibung eingeben …">
+          <div class="res"></div>
+        </div>
+        <div class="ord"><button class="up" title="nach oben">▲</button><button class="x" title="Aussortieren (Alt+X)">✕</button><button class="down" title="nach unten">▼</button></div>`;
+      it.el = r;
+      const thumb = r.querySelector('.thumb'); thumb._item = it;
+      r.querySelector('.orig').textContent = `${it.name} · ${fmtDate(it.date)} ${it.dateSrc==='EXIF' ? fmtTime(it.date) : ''}`;
+      r.querySelector('.orig').title = `${it.name} – Datum aus ${it.dateSrc}`;
+      const inp = r.querySelector('.desc');
+      inp.value = it.desc;
+      inp.addEventListener('input', () => { if (it.discard) return; it.desc = inp.value; recompute(); saveDrafts(); });
+      inp.addEventListener('focus', () => setFocus(S.view.indexOf(it), false));
+      inp.addEventListener('keydown', onKey);
+      thumb.addEventListener('click', () => { setFocus(S.view.indexOf(it), true); });
+      thumb.addEventListener('dblclick', openLightbox);
+      r.querySelector('.up').addEventListener('click', () => move(it, -1));
+      r.querySelector('.down').addEventListener('click', () => move(it, 1));
+      r.querySelector('.x').addEventListener('click', () => toggleDiscard(it));
+      // drag & drop: grab the row anywhere except the text field / buttons
+      thumb.title = 'Ziehen zum Verschieben · Doppelklick: Vollbild';
+      r.addEventListener('mousedown', e => { r.draggable = !e.target.closest('input,button'); });
+      r.addEventListener('mouseup', () => { r.draggable = false; });
+      r.addEventListener('dragstart', e => {
+        if (e.target !== r) return;
+        S.drag = it; e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', it.name);
+        try{ e.dataTransfer.setDragImage(r, 40, 20); }catch(_){}
+        requestAnimationFrame(() => r.classList.add('dragging'));
+      });
+      r.addEventListener('dragend', () => { r.draggable = false; S.drag = null; r.classList.remove('dragging'); clearDropMarks(); });
+      r.addEventListener('dragover', e => {
+        if (!S.drag) return;
+        e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+        const rect = r.getBoundingClientRect();
+        const after = e.clientY > rect.top + rect.height / 2;
+        if (S.dropTarget && S.dropTarget.it === it && S.dropTarget.after === after) return;
+        clearDropMarks();
+        if (S.drag !== it) r.classList.add(after ? 'drop-after' : 'drop-before');
+        S.dropTarget = { it, after };
+      });
+      r.addEventListener('drop', e => {
+        if (!S.drag) return;
+        e.preventDefault(); e.stopPropagation();
+        const t = S.dropTarget; if (t) dropOn(t.it, t.after);
+      });
+      io.observe(thumb);
+    }
+    const r = it.el;
+    r.classList.toggle('discarded', it.discard);
+    r.querySelector('.desc').readOnly = it.discard;
+    r.querySelector('.up').style.visibility = it.discard ? 'hidden' : '';
+    r.querySelector('.down').style.visibility = it.discard ? 'hidden' : '';
+    const x = r.querySelector('.x');
+    x.textContent = it.discard ? '↺' : '✕';
+    x.className = it.discard ? 'x restore' : 'x';
+    x.title = it.discard ? 'Wiederherstellen (Alt+X)' : 'Aussortieren (Alt+X)';
+    list.appendChild(r);
+  });
+}
+
+function clearDropMarks(){
+  S.dropTarget = null;
+  document.querySelectorAll('.drop-before,.drop-after').forEach(el => el.classList.remove('drop-before','drop-after'));
+}
+function dropOn(target, after){
+  const it = S.drag;
+  clearDropMarks();
+  if (!it || it === target) return;
+  // dropping into the other section restores / discards the image
+  const statusChanged = it.discard !== target.discard;
+  it.discard = target.discard;
+  S.items.splice(S.items.indexOf(it), 1);
+  S.items.splice(S.items.indexOf(target) + (after ? 1 : 0), 0, it);
+  cfg.sort = 'manual'; $('sort').value = 'manual'; store.set('bu-settings', cfg);
+  if (statusChanged) saveDiscards();
+  buildRows(); recompute(); saveOrder();
+  setFocus(S.view.indexOf(it), false);
+}
+// auto-scroll the list while dragging near its top or bottom edge
+$('listWrap').addEventListener('dragover', e => {
+  if (!S.drag) return;
+  const w = $('listWrap'), r = w.getBoundingClientRect(), edge = 70;
+  if (e.clientY < r.top + edge) w.scrollTop -= Math.ceil((r.top + edge - e.clientY) / 3);
+  else if (e.clientY > r.bottom - edge) w.scrollTop += Math.ceil((e.clientY - (r.bottom - edge)) / 3);
+}, true);
+
+function toggleDiscard(it){
+  const cur = S.view[S.focus];
+  const pos = S.view.indexOf(it);
+  it.discard = !it.discard;
+  saveDiscards();
+  buildRows(); recompute(); saveOrder();
+  if (cur === it){
+    if (it.discard){
+      // carry on with the next image still in use
+      const activeCount = S.view.filter(x => !x.discard).length;
+      setFocus(pos < activeCount ? pos : Math.max(0, activeCount - 1), true);
+    } else setFocus(S.view.indexOf(it), true);
+  } else if (cur) setFocus(S.view.indexOf(cur), false);
+}
+
+function move(it, dir){
+  const v = S.view, i = v.indexOf(it), j = i + dir;
+  if (it.discard || j < 0 || j >= v.length || v[j].discard) return;
+  const a = S.items.indexOf(it), b = S.items.indexOf(v[j]);
+  [S.items[a], S.items[b]] = [S.items[b], S.items[a]];
+  cfg.sort = 'manual'; $('sort').value = 'manual'; store.set('bu-settings', cfg);
+  buildRows(); recompute(); saveOrder(); setFocus(j, false);
+  it.el.querySelector('.desc').focus();
+}
+
+let draftTimer;
+function saveDrafts(){
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => {
+    if (!S.dir) return;
+    const d = {}; S.items.forEach(it => { if (it.desc.trim()) d[it.name] = it.desc; });
+    store.set('bu-drafts:' + S.dir.name, d);
+  }, 400);
+}
+function saveDiscards(){
+  if (S.dir) store.set('bu-discard:' + S.dir.name, S.items.filter(it => it.discard).map(it => it.name));
+}
+
+let thumbQueue = [], thumbActive = 0;
+function queueThumb(it){ if (it.thumbState) return; it.thumbState = 1; thumbQueue.push(it); pumpThumbs(); }
+async function pumpThumbs(){
+  while (thumbActive < 3 && thumbQueue.length){
+    const it = thumbQueue.shift(); thumbActive++;
+    makeThumb(it).finally(() => { thumbActive--; pumpThumbs(); });
+  }
+}
+async function makeThumb(it){
+  const box = it.el.querySelector('.thumb');
+  const ext = it.ext.slice(1).toLowerCase();
+  if (!PREVIEWABLE.includes(ext)){ box.textContent = ext.toUpperCase(); return; }
+  try{
+    const f = await it.handle.getFile();
+    let url;
+    try{
+      const bmp = await createImageBitmap(f, { resizeWidth: 220, resizeQuality: 'medium', imageOrientation: 'from-image' });
+      const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+      c.getContext('2d').drawImage(bmp, 0, 0); bmp.close && bmp.close();
+      const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.8));
+      url = URL.createObjectURL(blob);
+    }catch(e){ url = URL.createObjectURL(f); }
+    it.thumbUrl = url;
+    box.innerHTML = ''; const img = new Image(); img.src = url; img.alt = ''; img.draggable = false; box.appendChild(img);
+  }catch(e){ box.textContent = '⚠'; }
+}
+
+/* ---------- name computation ---------- */
+function buildName(it, nr){
+  const parts = [];
+  if (cfg.prefix.trim()) parts.push(sanitize(cfg.prefix));
+  if (cfg.date && it.date) parts.push(fmtISO(it.date));
+  if (cfg.num) parts.push(pad(nr, cfg.digits));
+  parts.push(sanitize(it.desc));
+  const ext = cfg.lower ? it.ext.toLowerCase() : it.ext;
+  let base = parts.filter(Boolean).join(cfg.sep);
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(base)) base += '_';   // reserved Windows names
+  return base + ext;
+}
+function recompute(){
+  readCfgFromUI();
+  const moving = cfg.discard === 'move';
+  let nr = cfg.start;
+  S.view.forEach(it => {
+    it.nr = null;
+    if (!it.discard && sanitize(it.desc)){ it.nr = nr++; it.final = buildName(it, it.nr); }
+    else it.final = it.name;
+  });
+  // names that will occupy the folder afterwards
+  const staying = S.view.filter(it => !(it.discard && moving));
+  const count = new Map();
+  staying.forEach(it => { const k = it.final.toLowerCase(); count.set(k, (count.get(k)||0) + 1); });
+  let changes = 0, conflicts = 0, tooLong = 0, discarded = 0;
+  S.view.forEach((it, i) => {
+    const k = it.final.toLowerCase();
+    const gone = it.discard && moving;
+    it.conflict = !gone && (count.get(k) > 1 || (it.final !== it.name && S.otherNames.has(k)));
+    const changed = it.final !== it.name;
+    if (changed) changes++;
+    if (it.discard) discarded++;
+    if (it.conflict) conflicts++;
+    if (it.final.length > 180) tooLong++;
+    if (!it.el) return;
+    it.el.querySelector('.nr .n').textContent = it.discard ? '–' : i + 1;
+    const res = it.el.querySelector('.res');
+    if (it.discard){
+      res.className = 'res discard';
+      res.textContent = moving ? `✕ wird nach ${DISCARD_DIR}/ verschoben` : '✕ aussortiert – bleibt unverändert im Ordner';
+    } else {
+      res.className = 'res' + (it.conflict ? ' conflict' : changed ? ' change' : '');
+      res.textContent = it.conflict ? '⚠ ' + it.final + ' (Name doppelt / existiert)' : changed ? '→ ' + it.final : 'bleibt unverändert';
+    }
+    res.title = it.final;
+  });
+  const moves = moving ? discarded : 0;
+  let s = `<b>${S.view.length - discarded}</b> Bilder · <b>${changes}</b> werden umbenannt`;
+  if (discarded) s += ` · <b>${discarded}</b> aussortiert`;
+  if (conflicts) s += ` · <span class="bad">${conflicts} Konflikte</span>`;
+  if (tooLong) s += ` · <span class="bad">${tooLong} Namen sehr lang</span>`;
+  $('stats').innerHTML = s;
+  $('btnRename').disabled = !(changes || moves) || conflicts > 0 || S.busy;
+  const parts = [];
+  if (changes) parts.push(`${changes} umbenennen`);
+  if (moves) parts.push(`${moves} aussortieren`);
+  $('btnRename').textContent = parts.length ? 'Ausführen: ' + parts.join(', ') : 'Umbenennen';
+  updateExample();
+  if (S.focus >= 0) updatePreviewMeta();
+}
+function updateExample(){
+  const fake = { desc:'Küche Deckenbereich Rußniederschlag', date:new Date(), ext:'.JPG' };
+  $('example').textContent = 'Beispiel: ' + buildName(fake, cfg.start);
+}
+
+/* ---------- focus + preview ---------- */
+function setFocus(i, focusInput){
+  if (i < 0 || i >= S.view.length) return;
+  document.querySelectorAll('.row.active').forEach(r => r.classList.remove('active'));
+  S.focus = i;
+  const it = S.view[i];
+  it.el.classList.add('active');
+  it.el.scrollIntoView({ block:'nearest' });
+  if (focusInput) it.el.querySelector('.desc').focus();
+  loadPreview(it);
+}
+async function loadPreview(it){
+  const tok = ++S.pvToken;
+  updatePreviewMeta();
+  const img = $('pvImg');
+  const ext = it.ext.slice(1).toLowerCase();
+  if (!PREVIEWABLE.includes(ext)){ img.removeAttribute('src'); img.alt = 'Keine Vorschau für ' + ext.toUpperCase(); return; }
+  try{
+    const f = await it.handle.getFile();
+    if (tok !== S.pvToken) return;
+    if (S.pvUrl) URL.revokeObjectURL(S.pvUrl);
+    S.pvUrl = URL.createObjectURL(f);
+    img.alt = ''; img.src = S.pvUrl;
+    img.onload = () => { if (tok === S.pvToken){ it.dim = `${img.naturalWidth} × ${img.naturalHeight} px`; updatePreviewMeta(); } };
+  }catch(e){ img.removeAttribute('src'); img.alt = 'Datei nicht lesbar'; }
+}
+function updatePreviewMeta(){
+  const it = S.view[S.focus]; if (!it) return;
+  const active = S.view.filter(x => !x.discard).length;
+  $('pvName').textContent = it.name;
+  $('pvInfo').textContent = [
+    it.discard ? 'aussortiert' : `Bild ${S.focus+1} von ${active}`,
+    `${fmtDate(it.date)} ${it.dateSrc==='EXIF' ? fmtTime(it.date) : ''} (${it.dateSrc})`,
+    fmtSize(it.size), it.dim || ''
+  ].filter(Boolean).join(' · ');
+  $('pvNew').textContent = it.discard ? '' : it.final !== it.name ? '→ ' + it.final : '';
+  const b = $('pvDiscard');
+  b.textContent = it.discard ? '↺ Wiederherstellen' : '✕ Aussortieren';
+  b.classList.toggle('on', it.discard);
+}
+$('pvPrev').onclick = () => setFocus(S.focus - 1, true);
+$('pvNext').onclick = () => setFocus(S.focus + 1, true);
+$('pvDiscard').onclick = () => { const it = S.view[S.focus]; if (it) toggleDiscard(it); };
+$('pvImgWrap').onclick = openLightbox;
+
+function openLightbox(){ if (!$('pvImg').getAttribute('src')) return; $('lbImg').src = $('pvImg').src; $('lightbox').classList.add('show'); }
+$('lightbox').onclick = () => $('lightbox').classList.remove('show');
+
+function onKey(e){
+  const i = S.focus;
+  if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'ArrowDown'){ e.preventDefault(); setFocus(i + 1, true); }
+  else if ((e.key === 'Enter' && e.shiftKey) || e.key === 'ArrowUp'){ e.preventDefault(); setFocus(i - 1, true); }
+  else if (e.altKey && e.code === 'KeyX'){
+    e.preventDefault();
+    const it = S.view[i]; if (it) toggleDiscard(it);
+  }
+  else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd'){
+    e.preventDefault();
+    const it = S.view[i], prev = S.view[i - 1];
+    if (it && prev && !it.discard && !prev.discard){ it.desc = prev.desc; e.target.value = prev.desc; recompute(); saveDrafts(); }
+  }
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape'){ $('lightbox').classList.remove('show'); }
+});
+
+/* ---------- renaming ---------- */
+async function exists(dir, name){ try{ await dir.getFileHandle(name); return true; }catch(e){ return false; } }
+// A lookup of an invalid name throws TypeError; a merely missing file throws NotFoundError.
+async function assertNameOk(dir, name){
+  try{ await dir.getFileHandle(name); }
+  catch(e){
+    if (e instanceof TypeError || e.name === 'TypeError')
+      throw new Error(`Der Browser lehnt den Dateinamen „${name}“ ab. Es wurde noch nichts verändert – bitte die Beschreibung anpassen.`);
+  }
+}
+let usedCopy = false, moveBroken = false;
+const browserVer = (navigator.userAgent.match(/(Edg|OPR|Chrome)\/[\d.]+/) || ['unbekannter Browser'])[0].replace('Edg/', 'Edge/');
+
+/* Moves/renames one file and VERIFIES the result on disk.
+   1st choice: native handle.move(). If the browser reports success but the disk
+   says otherwise (or move is unsupported), switch to copy + verify + delete. */
+async function transfer(src, dst, from, to){
+  if (await exists(dst, to)) throw new Error('Zieldatei existiert bereits: ' + to);
+  const h = await src.getFileHandle(from);
+  if (!moveBroken && typeof h.move === 'function'){
+    try{
+      if (src === dst) await h.move(to); else await h.move(dst, to);
+    }catch(e){
+      if (e.name === 'NotAllowedError') throw new Error('Keine Schreibberechtigung – bitte den Ordner neu wählen und „Änderungen speichern“ erlauben.');
+      moveBroken = true;
+    }
+    if (!moveBroken){
+      const hasTo = await exists(dst, to), hasFrom = await exists(src, from);
+      if (hasTo && !hasFrom) return;                                   // verified
+      if (hasTo && hasFrom) throw new Error(`Unklarer Zustand: „${from}“ und „${to}“ existieren beide.`);
+      moveBroken = true;                                                // silent no-op → fall back
+    }
+  }
+  usedCopy = true;
+  const f = await (await src.getFileHandle(from)).getFile();
+  const nh = await dst.getFileHandle(to, { create:true });
+  const w = await nh.createWritable(); await w.write(f); await w.close();
+  const copy = await nh.getFile();
+  if (copy.size !== f.size){
+    try{ await dst.removeEntry(to); }catch(_){}
+    throw new Error('Kopie unvollständig, Original bleibt erhalten: ' + from);
+  }
+  await dst.getFileHandle(to);                                          // throws if the copy is not there
+  await src.removeEntry(from);
+  if (await exists(src, from)) throw new Error(`„${from}“ konnte nicht entfernt werden – ist die Datei in einem anderen Programm geöffnet?`);
+}
+const renameFile = (dir, from, to) => transfer(dir, dir, from, to);
+async function runPairs(pairs, onStep){
+  const dir = S.dir, stamp = Date.now().toString(36);
+  const P = pairs.map((p, i) => ({ ...p, tmp: `${TMP_PREFIX}${stamp}_${i}${extOf(p.from)}` }));
+  // pre-flight: let the browser vet every name BEFORE any file is touched
+  for (const p of P){ await assertNameOk(dir, p.tmp); await assertNameOk(dir, p.to); }
+  const phase1 = [];
+  try{
+    for (const p of P){ await renameFile(dir, p.from, p.tmp); phase1.push(p); onStep(); }
+  }catch(e){
+    for (const p of phase1.reverse()){ try{ await renameFile(dir, p.tmp, p.from); }catch(_){} }
+    throw e;
+  }
+  const phase2 = [];
+  try{
+    for (const p of P){ await renameFile(dir, p.tmp, p.to); phase2.push(p); onStep(); }
+  }catch(e){
+    for (const p of phase2){ try{ await renameFile(dir, p.to, p.from); }catch(_){} }
+    for (const p of P) if (!phase2.includes(p)){ try{ await renameFile(dir, p.tmp, p.from); }catch(_){} }
+    throw e;
+  }
+}
+
+const moveBetween = (src, dst, from, to) => transfer(src, dst, from, to);
+async function freeName(dir, name){
+  if (!(await exists(dir, name))) return name;
+  const ext = extOf(name), base = ext ? name.slice(0, -ext.length) : name;
+  for (let n = 2; ; n++){ const c = `${base}_${n}${ext}`; if (!(await exists(dir, c))) return c; }
+}
+async function runMoves(moves, onStep){
+  const sub = await S.dir.getDirectoryHandle(DISCARD_DIR, { create:true });
+  const done = [];
+  try{
+    for (const m of moves){
+      m.to = await freeName(sub, m.from);
+      await moveBetween(S.dir, sub, m.from, m.to); done.push(m); onStep();
+    }
+  }catch(e){
+    for (const m of done.reverse()){ try{ await moveBetween(sub, S.dir, m.to, m.from); }catch(_){} }
+    throw e;
+  }
+}
+async function undoMoves(moves){
+  const sub = await S.dir.getDirectoryHandle(DISCARD_DIR);
+  for (const m of moves) await moveBetween(sub, S.dir, m.to, m.from);
+}
+
+function showDialog(html){ $('dialog').innerHTML = html; $('overlay').classList.add('show'); }
+function closeDialog(){ $('overlay').classList.remove('show'); }
+
+function plan(){
+  recompute();
+  const pairs = S.view.filter(it => !it.discard && it.final !== it.name).map(it => ({ from:it.name, to:it.final }));
+  const moves = cfg.discard === 'move' ? S.view.filter(it => it.discard).map(it => ({ from:it.name })) : [];
+  return { pairs, moves };
+}
+
+$('btnRename').onclick = () => {
+  const { pairs, moves } = plan();
+  if (!pairs.length && !moves.length) return;
+  let list = '';
+  if (pairs.length) list += `<div class="sec">Umbenennen (${pairs.length})</div>` + pairs.map(p => `<div><span class="from">${esc(p.from)}</span> → ${esc(p.to)}</div>`).join('');
+  if (moves.length) list += `<div class="sec">Nach ${DISCARD_DIR}/ verschieben (${moves.length})</div>` + moves.map(m => `<div class="mv">${esc(m.from)}</div>`).join('');
+  showDialog(`<h3>Änderungen ausführen?</h3>
+    <div class="list">${list}</div>
+    <div class="btns"><button id="dCancel">Abbrechen</button><button class="primary" id="dOk">Jetzt ausführen</button></div>`);
+  $('dCancel').onclick = closeDialog;
+  $('dOk').onclick = () => doRename(pairs, moves);
+};
+
+async function doRename(pairs, moves){
+  S.busy = true; usedCopy = false;
+  const total = pairs.length * 2 + moves.length; let done = 0;
+  const step = () => { $('prog').value = ++done; };
+  showDialog(`<h3>Führe aus …</h3><progress id="prog" max="${total}" value="0"></progress>`);
+  const fmtD = it => it.date ? `${fmtDate(it.date)} ${it.dateSrc==='EXIF' ? fmtTime(it.date) : ''}`.trim() : '';
+  const snapshot = S.view.filter(it => !it.discard).map(it => ({
+    nr: it.nr ?? '', from: it.name, to: it.final, desc: it.desc.trim(), date: fmtD(it)
+  }));
+  const discardRows = S.view.filter(it => it.discard).map(it => ({ from: it.name, date: fmtD(it) }));
+  let movesDone = false;
+  try{
+    // pre-flight: vet all names before anything moves
+    await assertNameOk(S.dir, `${TMP_PREFIX}check.jpg`);
+    for (const p of pairs) await assertNameOk(S.dir, p.to);
+    if (moves.length){ await runMoves(moves, step); movesDone = true; }
+    await runPairs(pairs, step);
+    // final check against the real folder – never report success on trust
+    const missing = [];
+    for (const p of pairs) if (!(await exists(S.dir, p.to))) missing.push(p.to);
+    if (moves.length){
+      const sub = await S.dir.getDirectoryHandle(DISCARD_DIR);
+      for (const m of moves) if (!(await exists(sub, m.to))) missing.push(`${DISCARD_DIR}/${m.to}`);
+    }
+    if (missing.length){
+      closeDialog(); S.busy = false; await loadItems();
+      banner('err', `Achtung: ${missing.length} Datei(en) fehlen nach dem Vorgang im Ordner, z. B. „${esc(missing[0])}“. Bitte Ordner prüfen. <span class="spacer"></span><small>${esc(browserVer)} · ${usedCopy ? 'Kopiermodus' : 'direkt'}</small>`);
+      return;
+    }
+    closeDialog();
+    S.lastRun = { rows: snapshot, pairs, moves, discardRows, when: new Date() };
+    saveOrder(snapshot.map(r => r.to).concat(moves.length ? [] : discardRows.map(r => r.from)));
+    const drafts = store.get('bu-drafts:' + S.dir.name, {});
+    pairs.forEach(p => delete drafts[p.from]);
+    store.set('bu-drafts:' + S.dir.name, drafts);
+    if (moves.length){
+      const moved = new Set(moves.map(m => m.from));
+      store.set('bu-discard:' + S.dir.name, store.get('bu-discard:' + S.dir.name, []).filter(n => !moved.has(n)));
+    }
+    S.busy = false;
+    await loadItems();
+    const msg = [];
+    if (pairs.length) msg.push(`${pairs.length} umbenannt`);
+    if (moves.length) msg.push(`${moves.length} nach ${DISCARD_DIR}/ verschoben`);
+    banner('ok', `✓ ${msg.join(', ')} – im Ordner geprüft.${usedCopy ? ' (Kopiermodus: dein Browser benennt nicht direkt um, darum wurde kopiert, geprüft und das Original entfernt.)' : ''}
+      <span class="spacer"></span>
+      <button id="bCsv">Bildverzeichnis (CSV) im Ordner speichern</button>
+      <button id="bUndo">Rückgängig</button>`);
+    $('bCsv').onclick = saveCsv;
+    $('bUndo').onclick = undo;
+  }catch(e){
+    if (movesDone){ try{ await undoMoves(moves); }catch(_){} }
+    closeDialog(); S.busy = false;
+    await loadItems();
+    banner('err', 'Fehler: ' + esc(e.message) + (e.message.includes('noch nichts verändert') ? '' : ' – bereits erfolgte Änderungen wurden zurückgesetzt, soweit möglich.') + ' <span class="spacer"></span><small>' + esc(browserVer) + '</small>');
+  }
+}
+
+async function undo(){
+  const run = S.lastRun; if (!run) return;
+  const rev = run.pairs.map(p => ({ from:p.to, to:p.from }));
+  S.busy = true;
+  showDialog(`<h3>Mache rückgängig …</h3><progress id="prog" max="${rev.length*2 || 1}" value="0"></progress>`);
+  let done = 0;
+  try{
+    // renames first, so moved-back files can't collide with new names
+    await runPairs(rev, () => { $('prog').value = ++done; });
+    if (run.moves.length) await undoMoves(run.moves);
+    closeDialog();
+    const drafts = store.get('bu-drafts:' + S.dir.name, {});
+    run.rows.forEach(r => { if (r.desc) drafts[r.from] = r.desc; });
+    store.set('bu-drafts:' + S.dir.name, drafts);
+    const disc = new Set(store.get('bu-discard:' + S.dir.name, []));
+    run.moves.forEach(m => disc.add(m.from));
+    store.set('bu-discard:' + S.dir.name, [...disc]);
+    saveOrder(run.rows.map(r => r.from).concat(run.discardRows.map(r => r.from)));
+    S.lastRun = null; S.busy = false;
+    await loadItems();
+    banner('ok', '↺ Rückgängig gemacht. Beschreibungen und Aussortierung sind wieder eingetragen.');
+  }catch(e){
+    closeDialog(); S.busy = false; await loadItems();
+    banner('err', 'Rückgängig fehlgeschlagen: ' + esc(e.message));
+  }
+}
+
+function toCsv(rows){
+  return '﻿' + rows.map(r => r.map(c => { c = String(c ?? ''); return /[;"\r\n]/.test(c) ? '"' + c.replace(/"/g,'""') + '"' : c; }).join(';')).join('\r\n');
+}
+async function saveCsv(){
+  const run = S.lastRun; if (!run) return;
+  const w = run.when;
+  const name = `Bildverzeichnis_${fmtISO(w)}_${pad(w.getHours(),2)}${pad(w.getMinutes(),2)}.csv`;
+  const movedTo = new Map(run.moves.map(m => [m.from, m.to]));
+  const rows = [['Nr','Dateiname','Beschreibung','Aufnahmedatum','Ursprünglicher Dateiname','Status']]
+    .concat(run.rows.map(r => [r.nr, r.to, r.desc, r.date, r.from, 'verwendet']))
+    .concat(run.discardRows.map(r => ['',
+      movedTo.has(r.from) ? `${DISCARD_DIR}/${movedTo.get(r.from)}` : r.from,
+      '', r.date, r.from, 'aussortiert']));
+  try{
+    const fh = await S.dir.getFileHandle(name, { create:true });
+    const wr = await fh.createWritable(); await wr.write(new Blob([toCsv(rows)], { type:'text/csv' })); await wr.close();
+    S.otherNames.add(name.toLowerCase());
+    $('bCsv').textContent = '✓ ' + name + ' gespeichert'; $('bCsv').disabled = true;
+  }catch(e){ banner('err', 'CSV konnte nicht gespeichert werden: ' + esc(e.message)); }
+}
+
+/* ---------- banner ---------- */
+function banner(type, html){ const b = $('banner'); b.className = 'show ' + type; b.innerHTML = html; }
+function hideBanner(){ $('banner').className = ''; $('banner').innerHTML = ''; }
+
+/* ---------- wiring ---------- */
+$('btnOpen').onclick = pickFolder;
+$('btnOpen2').onclick = pickFolder;
+$('btnReload').onclick = () => { S.lastRun = null; hideBanner(); loadItems(); };
+$('sort').onchange = () => {
+  cfg.sort = $('sort').value; store.set('bu-settings', cfg);
+  if (cfg.sort !== 'manual') applySort();   // switching to manual keeps the current order
+  buildRows(); recompute(); saveOrder(); if (S.items.length) setFocus(0, false);
+};
+Object.values(OPT).forEach(id => $(id).addEventListener('input', recompute));
+
+const drop = $('drop');
+['dragenter','dragover'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); if (ev === 'drop' || e.target === document.documentElement) drop.classList.remove('over'); }));
+document.addEventListener('drop', async e => {
+  const item = [...(e.dataTransfer?.items || [])].find(i => i.kind === 'file');
+  if (!item || !item.getAsFileSystemHandle) return;
+  try{
+    const h = await item.getAsFileSystemHandle();
+    if (h && h.kind === 'directory') await openDir(h);
+    else banner('err', 'Bitte einen Ordner (nicht einzelne Dateien) hineinziehen.');
+  }catch(err){ banner('err', 'Ordner konnte nicht geöffnet werden: ' + esc(err.message)); }
+});
+
+window.addEventListener('beforeunload', e => { if (S.busy){ e.preventDefault(); e.returnValue = ''; } });
+
+applyCfgToUI();
+updateExample();
+})();
+</script>
+</body>
+</html>
