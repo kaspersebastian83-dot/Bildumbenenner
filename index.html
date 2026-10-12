@@ -100,9 +100,24 @@ footer{background:var(--panel);border-top:1px solid var(--line);padding:8px 16px
 .dialog .form label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
 .dialog .form input{color:var(--text)}
 .dialog .chk{display:flex;align-items:center;gap:6px;font-size:13px}
+.dialog.wide{width:min(900px,96vw)}
+.dialog .body{overflow:auto;display:flex;flex-direction:column;gap:12px;padding-right:4px;min-height:0}
+.dialog .form .wide{grid-column:span 2}
+.dialog small{font-weight:400;opacity:.8}
+.dialog .block{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.dialog textarea{font:inherit;font-size:13px;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 8px;resize:vertical;width:100%}
+.dialog #m_template{font-family:var(--mono);font-size:12px;line-height:1.45}
+.dialog details{border:1px solid var(--line);border-radius:6px;padding:8px 10px;display:block;flex:0 0 auto}
+.dialog summary{cursor:pointer;font-size:13px;font-weight:600}
+.dialog details > *:not(summary){margin-top:8px}
+.dialog code{font-family:var(--mono);font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.dialog pre{font-family:var(--mono);font-size:11.5px;line-height:1.45;white-space:pre-wrap;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:10px;margin:0;max-height:40vh;overflow:auto}
+.dialog .btns.left{justify-content:flex-start}
+.dialog .btns .spacer{flex:1}
+.dialog .warn{color:var(--warn);font-weight:600}
 .dialog .m{font-size:13px;color:var(--muted);line-height:1.5}
 .dialog .m b{color:var(--text)}
-@media (max-width:560px){.dialog .form{grid-template-columns:1fr}}
+@media (max-width:560px){.dialog .form{grid-template-columns:1fr}.dialog .form .wide{grid-column:auto}}
 kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 4px;background:var(--panel2)}
 
 #banner{display:none;padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px;gap:10px;align-items:center;flex-wrap:wrap}
@@ -144,6 +159,7 @@ progress{width:100%}
     <div class="brand">Bild<span>umbenenner</span></div>
     <button id="btnOpen" class="primary">Ordner wählen …</button>
     <button id="btnReload" disabled>Neu einlesen</button>
+    <button id="btnMeta" disabled>Projektdaten …</button>
     <span class="folder" id="folderName"></span>
     <span class="spacer"></span>
     <label class="opts">Sortierung
@@ -205,7 +221,7 @@ progress{width:100%}
 <footer id="foot" style="display:none">
   <span id="stats"></span>
   <span class="keys" title="Enter / ↓: nächstes Bild · Shift+Enter / ↑: vorheriges Bild · Strg+D: Text vom vorherigen Bild übernehmen · Alt+X: aussortieren / wiederherstellen · Vorschaubild ziehen: verschieben · Esc: Vollbild schließen"><kbd>↵</kbd> nächstes · <kbd>⇧↵</kbd> vorheriges · <kbd>Strg D</kbd> übernehmen · <kbd>Alt X</kbd> aussortieren</span>
-  <button id="btnZip" disabled title="Verwendete Bilder mit neuen Namen + Metadaten.txt als ZIP speichern">ZIP exportieren …</button>
+  <button id="btnZip" disabled title="Verwendete Bilder mit neuen Namen + Anweisung/Projektdaten als ZIP speichern">ZIP exportieren …</button>
   <button id="btnRename" class="primary" disabled>Umbenennen</button>
 </footer>
 
@@ -329,6 +345,7 @@ async function openDir(dir){
   S.dir = dir; S.lastRun = null;
   $('folderName').textContent = '📁 ' + dir.name;
   $('btnReload').disabled = false;
+  $('btnMeta').disabled = false;
   hideBanner();
   await loadItems();
 }
@@ -790,7 +807,7 @@ async function undoMoves(moves){
   for (const m of moves) await moveBetween(sub, S.dir, m.to, m.from);
 }
 
-function showDialog(html){ $('dialog').innerHTML = html; $('overlay').classList.add('show'); }
+function showDialog(html){ $('dialog').className = 'dialog'; $('dialog').innerHTML = html; $('overlay').classList.add('show'); }
 function closeDialog(){ $('overlay').classList.remove('show'); }
 
 function plan(){
@@ -972,28 +989,101 @@ class ZipWriter{
 
 const deDate = iso => { const m = (iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? `${m[3]}.${m[2]}.${m[1]}` : (iso || ''); };
 const safeFile = s => (s || '').trim().replace(/[<>:"\/\\|?*\x00-\x1F]/g, '-').replace(/\s+/g, '_').replace(/^[.~]+|[. ]+$/g, '');
+const TXT_NAME = '00_Anweisung_Bilddokumentation.txt';
+
+/* ---------- project data + AI instructions ---------- */
+const META_FIELDS = [
+  // key, label, placeholder name, input type, scope
+  ['proj',     'Projektnummer',            'Projektnummer',    'text', 'project', 'z. B. P2026-114'],
+  ['anlage',   'Anlagen-Nr.',              'Anlage',           'text', 'project', 'z. B. Anlage 3'],
+  ['objekt',   'Objekt / Adresse',         'Objekt',           'text', 'project', 'z. B. EFH, Musterstr. 1, 52525 Heinsberg'],
+  ['ereignis', 'Schadenereignis',          'Schadenereignis',  'text', 'project', 'z. B. Brand im Erdgeschoss (Küche)'],
+  ['sdatum',   'Schadendatum',             'Schadendatum',     'date', 'project', ''],
+  ['ort',      'Ortstermin',               'Ortstermin',       'date', 'project', ''],
+  ['sv',       'Sachverständiger',         'Sachverständiger', 'text', 'global',  'z. B. Dr. S. Kasper'],
+];
+
+const DEFAULT_TEMPLATE = `ANWEISUNG ZUR ERSTELLUNG DER BILDDOKUMENTATION
+
+Ziel
+Erstelle aus den Bildern in diesem ZIP-Archiv eine Bilddokumentation als PDF. Sie ist {Anlage} zum Gutachten {Projektnummer} und wird dem Gutachten als Anlage beigefügt.
+
+Inhalt und Bildunterschriften
+- Verwende ausschließlich die Bilder aus diesem Archiv, vollständig und in der Reihenfolge des Bildverzeichnisses unten.
+- Nummeriere die Bilder fortlaufend: "Bild 1", "Bild 2", … (wie im Bildverzeichnis).
+- Bildunterschrift = die Beschreibung aus dem Bildverzeichnis. Nur sprachlich glätten (z. B. Unterstriche durch Leerzeichen ersetzen, Groß-/Kleinschreibung). Keine Befunde, Bewertungen, Ursachen oder Ortsangaben ergänzen, die nicht in der Beschreibung stehen.
+- Unter jeder Bildunterschrift in kleiner Schrift: Dateiname und Aufnahmedatum.
+- Bilder nicht beschneiden, spiegeln oder farblich bearbeiten. EXIF-Ausrichtung beachten (Hochformat bleibt Hochformat). Seitenverhältnis immer erhalten.
+
+Layout
+- DIN A4 Hochformat, Seitenränder ca. 20 mm, schlichte serifenlose Schrift.
+- Seite 1 ist ein Deckblatt: Titel "Bilddokumentation – {Anlage}", darunter die Projektdaten (Projektnummer, Objekt, Schadenereignis, Schadendatum, Ortstermin, Sachverständiger, Anzahl der Bilder).
+- Ab Seite 2: zwei Bilder pro Seite untereinander, jeweils mit Bildunterschrift. Ein einzelnes letztes Bild steht allein auf der Seite.
+- Kopfzeile auf jeder Seite außer dem Deckblatt: links "{Anlage} – Bilddokumentation", rechts "Projekt {Projektnummer}".
+- Fußzeile auf jeder Seite: links "{Sachverständiger}", rechts "Seite X von Y".
+
+Dateigröße (verbindlich)
+- Jede PDF-Datei darf höchstens 14 MB groß sein.
+- Bilder dafür moderat verkleinern: lange Kante max. ca. 2000 px, JPEG-Qualität ca. 80 %. Nicht stärker komprimieren als nötig.
+- Ist das PDF danach immer noch größer als 14 MB, teile es in mehrere PDF-Dateien auf. Getrennt wird nur an Seitengrenzen.
+- Dateiname ohne Aufteilung: {Projektnummer}_{Anlage}_Bilddokumentation.pdf
+- Dateinamen bei Aufteilung: {Projektnummer}_{Anlage}_Bilddokumentation_Teil_1_von_N.pdf, _Teil_2_von_N.pdf usw.
+- Bei Aufteilung: Das Deckblatt steht nur in Teil 1. Jeder weitere Teil beginnt mit einer Zeile "Bilddokumentation {Anlage} – Teil X von N (Bild A bis Bild B)". Die Bildnummern laufen über alle Teile durch; die Seitenzählung "Seite X von Y" gilt je Teil, ergänzt um "Teil X von N".
+- Prüfe die tatsächliche Dateigröße jeder erzeugten PDF-Datei, bevor du sie auslieferst.
+
+Abschlusskontrolle
+- Alle Bilder enthalten (Anzahl laut Bildverzeichnis), Reihenfolge und Bildunterschriften korrekt zugeordnet.
+- Melde danach kurz: Anzahl der PDF-Dateien, Größe und Seitenzahl je Datei, Gesamtzahl der Bilder.
+- Nenne Bilder, bei denen dir etwas auffällt (z. B. fehlende Beschreibung, starke Unschärfe), lass sie aber nicht eigenmächtig weg.
+
+Die PROJEKTHINWEISE weiter unten haben Vorrang vor dieser Standardanweisung, falls sie ihr widersprechen.`;
+
+function loadMeta(){
+  const g = store.get('bu-global', {});
+  const m = Object.assign({ proj: cfg.prefix.trim(), anlage: '', objekt: '', ereignis: '', sdatum: '', ort: '', notes: '', onlyDesc: true },
+                          store.get('bu-meta:' + S.dir.name, {}));
+  m.sv = g.sv || '';
+  m.template = g.template || DEFAULT_TEMPLATE;
+  return m;
+}
+function saveMeta(m){
+  const { sv, template, ...project } = m;
+  store.set('bu-meta:' + S.dir.name, project);
+  store.set('bu-global', { sv, template: template === DEFAULT_TEMPLATE ? '' : template });
+}
+const fieldValue = (m, key, type) => type === 'date' ? deDate(m[key]) : (m[key] || '').trim();
+
+function fillTemplate(m){
+  let t = m.template;
+  for (const [key, , ph, type] of META_FIELDS) t = t.split('{' + ph + '}').join(fieldValue(m, key, type) || `[${ph} fehlt]`);
+  return t;
+}
 
 function zipSelection(onlyDesc){
   return S.view.filter(it => !it.discard && (!onlyDesc || it.nr != null));
 }
-function zipFileName(meta){
-  return `${safeFile(meta.proj) || safeFile(S.dir.name) || 'Bilder'}_Bilddokumentation${meta.ort ? '_' + meta.ort : ''}.zip`;
+function zipFileName(m){
+  return `${safeFile(m.proj) || safeFile(S.dir.name) || 'Bilder'}_Bilddokumentation${m.ort ? '_' + m.ort : ''}.zip`;
 }
-function metaText(meta, items, now){
+function buildTxt(m, items, now){
   const L = [];
   const dateOf = it => it.date ? `${fmtDate(it.date)}${it.dateSrc === 'EXIF' ? ' ' + fmtTime(it.date) : ''} (lt. ${it.dateSrc})` : '–';
-  L.push('BILDDOKUMENTATION', '');
-  L.push(`Projektnummer:   ${meta.proj || '–'}`);
-  L.push(`Ortstermin:      ${meta.ort ? deDate(meta.ort) : '–'}`);
-  L.push(`Anzahl Bilder:   ${items.length}`);
-  L.push(`Erstellt am:     ${fmtDate(now)} ${fmtTime(now)}`);
-  L.push(`Quellordner:     ${S.dir.name}`);
+  L.push('Diese Datei enthält die vollständige Anweisung für die Bilddokumentation sowie alle Projektdaten und das Bildverzeichnis.', '');
+  L.push('#'.repeat(70), '', fillTemplate(m).trim(), '');
+  L.push('#'.repeat(70), '', 'PROJEKTHINWEISE', '', (m.notes || '').trim() || '(keine)', '');
+  L.push('#'.repeat(70), '', 'PROJEKTDATEN', '');
+  const w = Math.max(...META_FIELDS.map(f => f[1].length)) + 2;
+  for (const [key, label, , type] of META_FIELDS) L.push(`${(label + ':').padEnd(w)} ${fieldValue(m, key, type) || '–'}`);
+  L.push(`${'Anzahl Bilder:'.padEnd(w)} ${items.length}`);
+  L.push(`${'Erstellt am:'.padEnd(w)} ${fmtDate(now)} ${fmtTime(now)}`);
+  L.push(`${'Quellordner:'.padEnd(w)} ${S.dir.name}`);
   const gone = S.view.filter(it => it.discard).length;
-  if (gone) L.push(`Aussortiert:     ${gone} Bild(er), nicht enthalten`);
-  L.push('', '', 'BILDVERZEICHNIS', '='.repeat(60), '');
-  items.forEach(it => {
-    L.push(it.final);
-    if (it.desc.trim()) L.push(`    Beschreibung:  ${it.desc.trim()}`);
+  if (gone) L.push(`${'Aussortiert:'.padEnd(w)} ${gone} Bild(er), nicht im Archiv`);
+  L.push('', '#'.repeat(70), '', 'BILDVERZEICHNIS (Reihenfolge = Reihenfolge in der Dokumentation)', '');
+  items.forEach((it, i) => {
+    L.push(`Bild ${i + 1}`);
+    L.push(`    Datei:         ${it.final}`);
+    L.push(`    Beschreibung:  ${it.desc.trim() || '(keine Beschreibung)'}`);
     L.push(`    Aufnahme:      ${dateOf(it)}`);
     if (it.final !== it.name) L.push(`    Original:      ${it.name}`);
     L.push('');
@@ -1009,43 +1099,76 @@ function wireRunButtons(){
   if ($('bUndo')) $('bUndo').onclick = undo;
 }
 
-function openZipDialog(){
+/* One dialog for both: editing project data, and (forZip) exporting. */
+function openMetaDialog(forZip){
   recompute();
-  const key = 'bu-meta:' + S.dir.name;
-  const meta = Object.assign({ proj: cfg.prefix.trim(), ort: '', onlyDesc: true }, store.get(key, {}));
+  const m = loadMeta();
   const active = S.view.filter(it => !it.discard);
   const withDesc = active.filter(it => it.nr != null).length;
-  showDialog(`<h3>ZIP exportieren</h3>
-    <div class="form">
-      <label>Projektnummer <input type="text" id="zProj" placeholder="z. B. P2026-114"></label>
-      <label>Ortstermin <input type="date" id="zOrt"></label>
+  const fields = META_FIELDS.map(([key, label, ph, type, scope, hint]) =>
+    `<label${key === 'objekt' || key === 'ereignis' ? ' class="wide"' : ''}>${label}${scope === 'global' ? ' <small>(für alle Projekte)</small>' : ''}
+       <input type="${type}" id="m_${key}" placeholder="${esc(hint)}"></label>`).join('');
+  showDialog(`<h3>${forZip ? 'ZIP für Bilddokumentation exportieren' : 'Projektdaten'}</h3>
+    <div class="body">
+      <div class="form">${fields}</div>
+      <label class="block">Projekthinweise für die KI <small>(nur dieses Projekt, haben Vorrang vor der Standardanweisung)</small>
+        <textarea id="m_notes" rows="3" placeholder="z. B. Bilder 5–8 als Detailaufnahmen kennzeichnen · Raumbezeichnungen wie im Grundriss (Anlage 2) verwenden"></textarea></label>
+      <details id="m_tplBox"><summary>Standardanweisung bearbeiten <small>(gilt für alle Projekte)</small></summary>
+        <div class="m">Platzhalter: ${META_FIELDS.map(f => `<code>{${f[2]}}</code>`).join(' ')}</div>
+        <textarea id="m_template" rows="14" spellcheck="false"></textarea>
+        <div class="btns left"><button id="m_tplReset">Auf Standard zurücksetzen</button></div>
+      </details>
+      ${forZip ? `<label class="chk"><input type="checkbox" id="zOnly"> nur Bilder mit Beschreibung</label>` : ''}
+      <div class="m" id="zInfo"></div>
+      <pre id="m_preview" hidden></pre>
     </div>
-    <label class="chk"><input type="checkbox" id="zOnly"> nur Bilder mit Beschreibung</label>
-    <div class="m" id="zInfo"></div>
-    <div class="btns"><button id="zCancel">Abbrechen</button><button class="primary" id="zOk">ZIP speichern …</button></div>`);
-  $('zProj').value = meta.proj; $('zOrt').value = meta.ort;
-  $('zOnly').checked = withDesc > 0 && meta.onlyDesc !== false;
-  $('zOnly').disabled = withDesc === 0 || withDesc === active.length;
-  const read = () => ({ proj: $('zProj').value.trim(), ort: $('zOrt').value, onlyDesc: $('zOnly').checked });
-  const update = () => {
-    const m = read(); store.set(key, m);
-    const items = zipSelection(m.onlyDesc);
-    const bytes = items.reduce((a, it) => a + it.size, 0);
-    const pending = items.some(it => it.final !== it.name);
-    $('zInfo').innerHTML =
-      `Inhalt: <b>${items.length}</b> Bilder (${fmtSize(bytes)}) + <b>Metadaten.txt</b>` +
-      (active.length - items.length ? ` · ${active.length - items.length} ohne Beschreibung nicht enthalten` : '') +
-      (S.view.length - active.length ? ` · Aussortierte nicht enthalten` : '') +
-      `<br>Dateiname: <b>${esc(zipFileName(m))}</b>` +
-      (pending ? `<br>Die Bilder bekommen im ZIP die neuen Namen – die Dateien im Ordner bleiben dabei unverändert.` : '');
-    $('zOk').disabled = !items.length;
+    <div class="btns"><button id="m_prev">Textdatei-Vorschau</button><span class="spacer"></span>
+      <button id="zCancel">${forZip ? 'Abbrechen' : 'Schließen'}</button>
+      ${forZip ? '<button class="primary" id="zOk">ZIP speichern …</button>' : ''}</div>`);
+  $('dialog').classList.add('wide');
+  for (const [key] of META_FIELDS) $('m_' + key).value = m[key] || '';
+  $('m_notes').value = m.notes || '';
+  $('m_template').value = m.template;
+  if (forZip){
+    $('zOnly').checked = withDesc > 0 && m.onlyDesc !== false;
+    $('zOnly').disabled = withDesc === 0 || withDesc === active.length;
+  }
+  const read = () => {
+    const r = { template: $('m_template').value.trim() ? $('m_template').value : DEFAULT_TEMPLATE, notes: $('m_notes').value,
+                onlyDesc: forZip ? $('zOnly').checked : m.onlyDesc };
+    for (const [key] of META_FIELDS) r[key] = $('m_' + key).value.trim();
+    return r;
   };
-  ['zProj', 'zOrt', 'zOnly'].forEach(id => $(id).addEventListener('input', update));
+  const update = () => {
+    const r = read(); saveMeta(r);
+    const items = zipSelection(r.onlyDesc);
+    const missing = META_FIELDS.filter(([key]) => !r[key]).map(f => f[1]);
+    let html = missing.length ? `<span class="warn">Noch leer: ${missing.join(', ')}</span> – in der Anweisung steht dann „[… fehlt]“.<br>` : '✓ Alle Projektdaten ausgefüllt.<br>';
+    if (forZip){
+      const bytes = items.reduce((a, it) => a + it.size, 0);
+      html += `Inhalt: <b>${items.length}</b> Bilder (${fmtSize(bytes)}) + <b>${TXT_NAME}</b>` +
+        (active.length - items.length ? ` · ${active.length - items.length} ohne Beschreibung nicht enthalten` : '') +
+        (S.view.length - active.length ? ' · Aussortierte nicht enthalten' : '') +
+        `<br>Dateiname: <b>${esc(zipFileName(r))}</b>` +
+        (items.some(it => it.final !== it.name) ? '<br>Die Bilder bekommen im ZIP die neuen Namen – die Dateien im Ordner bleiben unverändert.' : '');
+      $('zOk').disabled = !items.length;
+    }
+    $('zInfo').innerHTML = html;
+    if (!$('m_preview').hidden) $('m_preview').textContent = buildTxt(r, items, new Date()).replace(/^﻿/, '');
+  };
+  $('dialog').querySelectorAll('input,textarea').forEach(el => el.addEventListener('input', update));
+  $('m_tplReset').onclick = () => { $('m_template').value = DEFAULT_TEMPLATE; update(); };
+  $('m_prev').onclick = () => {
+    const p = $('m_preview'); p.hidden = !p.hidden;
+    $('m_prev').textContent = p.hidden ? 'Textdatei-Vorschau' : 'Vorschau ausblenden';
+    update(); if (!p.hidden) p.scrollIntoView({ block: 'nearest' });
+  };
   update();
   $('zCancel').onclick = closeDialog;
-  $('zOk').onclick = () => doZip(read());
-  setTimeout(() => (meta.proj ? $('zOrt') : $('zProj')).focus(), 0);
+  if (forZip) $('zOk').onclick = () => doZip(read());
+  setTimeout(() => $(m.proj ? 'm_anlage' : 'm_proj').focus(), 0);
 }
+const openZipDialog = () => openMetaDialog(true);
 
 async function doZip(meta){
   const items = zipSelection(meta.onlyDesc);
@@ -1076,7 +1199,7 @@ async function doZip(meta){
       $('prog').value = ++n;
     }
     const now = new Date();
-    await zw.add('Metadaten.txt', new TextEncoder().encode(metaText(meta, items, now)), now);
+    await zw.add(TXT_NAME, new TextEncoder().encode(buildTxt(meta, items, now)), now);
     await zw.finish();
     let where;
     if (writable){
@@ -1092,7 +1215,7 @@ async function doZip(meta){
       where = `„${esc(name)}“ (Download-Ordner)`;
     }
     closeDialog(); S.busy = false; recompute();
-    banner('ok', `✓ ZIP gespeichert: ${where} – ${items.length} Bilder + Metadaten.txt, ${fmtSize(zw.total)}.<span class="spacer"></span>${runButtonsHtml()}`);
+    banner('ok', `✓ ZIP gespeichert: ${where} – ${items.length} Bilder + Anweisung, ${fmtSize(zw.total)}.<span class="spacer"></span>${runButtonsHtml()}`);
     wireRunButtons();
   }catch(e){
     if (writable){ try{ await writable.abort(); }catch(_){} }
@@ -1108,6 +1231,7 @@ function hideBanner(){ $('banner').className = ''; $('banner').innerHTML = ''; }
 /* ---------- wiring ---------- */
 $('btnOpen').onclick = pickFolder;
 $('btnZip').onclick = openZipDialog;
+$('btnMeta').onclick = () => openMetaDialog(false);
 $('btnOpen2').onclick = pickFolder;
 $('btnReload').onclick = () => { S.lastRun = null; hideBanner(); loadItems(); };
 $('sort').onchange = () => {
