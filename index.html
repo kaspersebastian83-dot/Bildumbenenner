@@ -280,9 +280,10 @@ progress{width:100%}
    ===================================================================================================== */
 
 /* ---------- version ---------- */
-const APP_VERSION = '1.1.1';
-const APP_DATE = '2026-10-12';
+const APP_VERSION = '1.2.0';
+const APP_DATE = '2026-10-13';
 const CHANGELOG = [
+  ['1.2.0', '13.10.2026', 'Zusammenarbeit mit der Projektzentrale: Projekte öffnen sich direkt aus der Projektzentrale (Unterordner „Fotos“). Wird ein ganzer Projektordner gewählt (z. B. „26.0123 Köln“), arbeitet die App in dessen „Fotos“. Projektnummer kommt aus dem Ordnernamen; Objekt, Schadenereignis, Schadendatum, Ortstermin und Sachverständiger werden mit „_Projekt.json“ abgeglichen.'],
   ['1.1.1', '12.10.2026', 'Korrektur: Der Offline-Speicher verwaltet nur noch die eigenen Dateien. Version 1.1.0 hat beim Aktualisieren auch den Offline-Speicher anderer Apps unter derselben Adresse gelöscht (z. B. Probenplan).'],
   ['1.1.0', '12.10.2026', 'Online-Version über GitHub Pages: funktioniert nach dem ersten Aufruf auch offline, lässt sich als App installieren und meldet neue Versionen („Update verfügbar“).'],
   ['1.0.0', '12.10.2026', 'Erste Version für das Büro: Umbenennen mit Vorschau, Aussortieren, Drag & Drop, Drehen, Abschnitte und Probe-Nr., Projektdaten, ZIP mit KI-Anweisung, SHA-256-Prüfsummen, PDF-Bilddokumentation (≤ 14 MB je Datei), Projektdaten in _Bildumbenenner.json im Projektordner.'],
@@ -292,7 +293,7 @@ const verCmp = (a, b) => { const x = verNum(a), y = verNum(b); for (let i = 0; i
 const $ = id => document.getElementById(id);
 const IMG_EXT = ['jpg','jpeg','png','webp','gif','bmp','tif','tiff','heic','heif'];
 const PREVIEWABLE = ['jpg','jpeg','png','webp','gif','bmp'];
-const S = { dir:null, items:[], view:[], otherNames:new Set(), focus:-1, lastRun:null, busy:false, pvToken:0, pvUrl:null };
+const S = { dir:null, proj:null, items:[], view:[], otherNames:new Set(), focus:-1, lastRun:null, busy:false, pvToken:0, pvUrl:null };
 const DISCARD_DIR = '_aussortiert';
 const TMP_PREFIX = 'umb-tmp_';
 
@@ -419,7 +420,8 @@ async function loadProject(dir){
     }
   }
   let imported = 0;
-  if (!d){ const r = await importLegacy(dir); d = r.d; imported = r.hits; }
+  if (!d && !S.proj){ const r = await importLegacy(dir); d = r.d; imported = r.hits; }   // project folders are always named „Fotos“ – folder-name keys would mix projects
+  if (!d) d = projFromJson({});
   P.data = d;
   if (d.settings){
     cfg = Object.assign({}, defaults, store.get('bu-settings', {}), d.settings);
@@ -431,7 +433,7 @@ async function loadProject(dir){
   if (imported){ P.dirty = true; await flushProject(); note = `Bisherige Angaben zu ${imported} Bild(ern) aus dem Browser übernommen und in „${PROJ_FILE}“ im Projektordner gespeichert.`; }
   return note;
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushProject(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden'){ flushProject(); flushPJ(); } });
 
 /* ---------- settings ---------- */
 const OPT = { prefix:'oPrefix', date:'oDate', num:'oNum', start:'oStart', digits:'oDigits', sep:'oSep', spaces:'oSpaces', uml:'oUml', lower:'oLower', probe:'oProbe', discard:'oDiscard' };
@@ -569,6 +571,133 @@ function dateFromName(n){
   return (d.getMonth() === m[2]-1) ? d : null;
 }
 
+/* ---------- Projektzentrale: shared archive folder + _Projekt.json ----------
+   Contract shared with Projektzentrale (keep identical there):
+     • IndexedDB „mosaik-suite“ v1, store „kv“, key „archiv“ → handle of „Mosaik Archivordner“
+       (all apps on kaspersebastian83-dot.github.io share this database)
+     • project folders „<YY>.<Nummer> <Schadenort>“, e.g. „26.0123 Köln“, photos in the subfolder „Fotos“
+     • _Projekt.json in the project folder: shared project data. Read fresh → patch changed fields → write;
+       unknown fields are kept. Projektnummer and Schadenort come from the folder name.               */
+const SUITE = {
+  db: null,
+  open(){
+    return this.db || (this.db = new Promise((res, rej) => {
+      const r = indexedDB.open('mosaik-suite', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('kv');
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    }));
+  },
+  async get(k){
+    const db = await this.open();
+    return new Promise((res, rej) => { const r = db.transaction('kv').objectStore('kv').get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  }
+};
+const PROJ_RE = /^(\d{2})\.(\d{2,6})(?:[\s_-]+(.*))?$/;
+function parseProjName(name){
+  const m = PROJ_RE.exec(String(name).normalize('NFC').trim());
+  return m ? { nr: `${m[1]}.${m[2]}`, ort: (m[3] || '').trim() } : null;
+}
+const FOTOS_DIR = 'Fotos';
+const PJ_FILE = '_Projekt.json';
+// Bildumbenenner field ↔ _Projekt.json field
+const PJ_MAP = [['objekt', 'objekt'], ['ereignis', 'schadenereignis'], ['sdatum', 'schadendatum'], ['ort', 'ortstermin'], ['sv', 'sachverstaendiger']];
+const PJ = { data: null, sent: {}, pending: {}, timer: null, writing: Promise.resolve(), failed: false };
+
+async function findSubdir(dir, name){
+  const want = name.normalize('NFC').toLowerCase();
+  for await (const h of dir.values()) if (h.kind === 'directory' && h.name.normalize('NFC').toLowerCase() === want) return h;
+  return null;
+}
+async function readPJ(projDir){
+  try{
+    const txt = await (await (await projDir.getFileHandle(PJ_FILE)).getFile()).text();
+    return txt.trim() ? JSON.parse(txt) : {};
+  }catch(e){ if (e.name === 'NotFoundError') return {}; throw e; }
+}
+/* project values fill the fields; the project file wins over this app's own copy, because it is what Projektzentrale
+   and coworkers edit. Returns true if something changed. */
+function applyPJ(meta){
+  if (!S.proj || !PJ.data) return false;
+  let changed = false;
+  if (!meta.proj && S.proj.nr){ meta.proj = S.proj.nr; changed = true; }
+  for (const [k, pk] of PJ_MAP){
+    const v = (PJ.data[pk] || '').trim();
+    if (k === 'sv') continue;                       // personal setting – handled in loadMeta
+    if (v && meta[k] !== v){ meta[k] = v; changed = true; }
+  }
+  return changed;
+}
+async function loadPJ(){
+  PJ.data = null; PJ.sent = {}; PJ.pending = {}; PJ.failed = false;
+  if (!S.proj) return '';
+  try{ PJ.data = await readPJ(S.proj.dir); }
+  catch(e){ return `„${PJ_FILE}“ ist nicht lesbar (${esc(e.message)}) – gemeinsame Projektdaten werden in dieser Sitzung nicht übernommen.`; }
+  for (const [, pk] of PJ_MAP) PJ.sent[pk] = (PJ.data[pk] || '').trim();
+  const meta = projGet('meta', {});
+  if (applyPJ(meta)) projSet('meta', meta);
+  return '';
+}
+function queuePJ(m){
+  if (!S.proj || !PJ.data) return;
+  for (const [k, pk] of PJ_MAP){
+    const v = (m[k] || '').trim();
+    if (v !== (PJ.sent[pk] || '')){ PJ.pending[pk] = v; PJ.sent[pk] = v; }
+  }
+  if (Object.keys(PJ.pending).length){ clearTimeout(PJ.timer); PJ.timer = setTimeout(flushPJ, 600); }
+}
+function flushPJ(){
+  clearTimeout(PJ.timer);
+  const patch = PJ.pending, proj = S.proj;
+  if (!proj || !Object.keys(patch).length) return PJ.writing;
+  PJ.pending = {};
+  PJ.writing = PJ.writing.then(async () => {
+    try{
+      const cur = await readPJ(proj.dir);
+      if (cur.format === 'mosaik-projekt' && cur.version > 1) throw new Error('die Datei stammt von einer neueren Projektzentrale');
+      const o = Object.assign({ format: 'mosaik-projekt', version: 1,
+        hinweis: 'Gemeinsame Projektdaten (Projektzentrale, Bildumbenenner, Probenplan). Bitte nicht löschen oder umbenennen.' },
+        cur, patch, { projektnummer: proj.nr, schadenort: proj.ort, geaendert: new Date().toISOString(), geaendertMit: 'Bildumbenenner ' + APP_VERSION });
+      const fh = await proj.dir.getFileHandle(PJ_FILE, { create: true });
+      const w = await fh.createWritable(); await w.write(JSON.stringify(o, null, 2) + '\n'); await w.close();
+      if (S.proj === proj) PJ.data = o;
+    }catch(e){
+      if (!PJ.failed){ PJ.failed = true; banner('err', `Gemeinsame Projektdaten („${PJ_FILE}“) konnten nicht gespeichert werden: ${esc(e.message)}. Die Angaben bleiben im Bildumbenenner erhalten.`); }
+    }
+  });
+  return PJ.writing;
+}
+
+/* open a project folder („26.0123 Köln“): works on its „Fotos“ subfolder */
+async function openProject(projDir){
+  const p = parseProjName(projDir.name);
+  let fotos = await findSubdir(projDir, FOTOS_DIR);
+  if (!fotos){
+    if (!confirm(`Im Projekt „${projDir.name}“ gibt es keinen Unterordner „${FOTOS_DIR}“. Jetzt anlegen?`)) return;
+    fotos = await projDir.getDirectoryHandle(FOTOS_DIR, { create: true });
+  }
+  await openDir(fotos, { dir: projDir, name: projDir.name, nr: p ? p.nr : '', ort: p ? p.ort : '' });
+}
+/* called with ?projekt=<Ordnername> from Projektzentrale */
+async function openFromZentrale(name){
+  let archiv = null;
+  try{ archiv = await SUITE.get('archiv'); }catch(e){}
+  if (!archiv){ banner('err', `Projekt „${esc(name)}“: Der Archivordner ist in diesem Browser nicht bekannt. Bitte in der Projektzentrale einmal den Archivordner wählen – oder hier „Ordner wählen …“.`); return; }
+  const go = async () => {
+    try{
+      const projDir = await archiv.getDirectoryHandle(name);
+      await openProject(projDir);
+    }catch(e){ banner('err', `Projekt „${esc(name)}“ nicht gefunden in „${esc(archiv.name)}“: ${esc(e.message)}`); }
+  };
+  const st = await archiv.queryPermission({ mode: 'readwrite' }).catch(() => 'prompt');
+  if (st === 'granted'){ await go(); return; }
+  banner('info', `Projekt <b>${esc(name)}</b> aus der Projektzentrale <button class="primary" id="btnZentrale">Zugriff erlauben und öffnen</button>`);
+  $('btnZentrale').onclick = async () => {
+    const r = await archiv.requestPermission({ mode: 'readwrite' }).catch(() => 'denied');
+    if (r === 'granted') await go(); else banner('err', 'Ohne Zugriff auf den Archivordner kann das Projekt nicht geöffnet werden.');
+  };
+}
+
 /* ---------- open folder ---------- */
 const supported = 'showDirectoryPicker' in window;
 if (!supported){ $('support').style.display = 'block'; $('btnOpen').disabled = true; $('btnOpen2').disabled = true; }
@@ -584,13 +713,17 @@ async function ensurePerm(dir){
   if ((await dir.queryPermission(o)) === 'granted') return true;
   return (await dir.requestPermission(o)) === 'granted';
 }
-async function openDir(dir){
+async function openDir(dir, proj = null){
   if (!(await ensurePerm(dir))){ banner('err','Ohne Schreibrecht kann nicht umbenannt werden.'); return; }
+  if (!proj && parseProjName(dir.name) && await findSubdir(dir, FOTOS_DIR)) return openProject(dir);   // a whole project folder was chosen
   flushDrafts(); if (S.dir) saveExtra();
-  await flushProject();                       // finish writing the previous project before switching
-  S.dir = dir; S.lastRun = null;
-  const note = await loadProject(dir);
-  $('folderName').textContent = '📁 ' + dir.name;
+  await flushProject(); await flushPJ();      // finish writing the previous project before switching
+  S.dir = dir; S.proj = proj; S.lastRun = null;
+  let note = await loadProject(dir);
+  const pjNote = await loadPJ();
+  if (pjNote) note = note ? note + '<br>' + pjNote : pjNote;
+  $('folderName').textContent = proj ? `📁 ${proj.name} › ${dir.name}` : '📁 ' + dir.name;
+  $('folderName').title = proj ? 'Projekt aus dem Archivordner – Projektdaten werden mit „_Projekt.json“ abgeglichen' : '';
   $('btnReload').disabled = false;
   $('btnMeta').disabled = false;
   hideBanner();
@@ -1377,7 +1510,7 @@ function loadMeta(){
   const g = store.get('bu-global', {});
   const m = Object.assign({ proj: cfg.prefix.trim(), anlage: '', objekt: '', ereignis: '', sdatum: '', ort: '', notes: '', onlyDesc: true },
                           projGet('meta', {}));
-  m.sv = g.sv || '';
+  m.sv = (S.proj && PJ.data && (PJ.data.sachverstaendiger || '').trim()) || g.sv || '';
   m.template = g.template || DEFAULT_TEMPLATE;
   return m;
 }
@@ -1386,7 +1519,10 @@ function saveMeta(m){
   if (img) store.set('bu-zipimg', img);
   if (pdf) store.set('bu-pdf', pdf);
   projSet('meta', project);
-  store.set('bu-global', { sv, template: template === DEFAULT_TEMPLATE ? '' : template });
+  const own = store.get('bu-global', {}).sv;
+  // inside a project the name belongs to the project (_Projekt.json); the personal default only fills an empty one
+  store.set('bu-global', { sv: S.proj && PJ.data && own ? own : sv, template: template === DEFAULT_TEMPLATE ? '' : template });
+  queuePJ(m);
 }
 const fieldValue = (m, key, type) => type === 'date' ? deDate(m[key]) : (m[key] || '').trim();
 
@@ -2088,6 +2224,7 @@ function openInfo(){
       <tr><td>Ausführung</td><td>${IS_WEB ? `Online-Version (${esc(location.host + location.pathname)}) – nach dem ersten Aufruf auch offline nutzbar${navigator.serviceWorker && navigator.serviceWorker.controller ? ' ✓' : ''}. Installieren: im Browser-Menü „App installieren“.` : 'Lokale Datei'}</td></tr>
       <tr><td>Browser</td><td>${esc(browserVer)}${'showDirectoryPicker' in window ? '' : ' – <span class="warn">ohne Ordnerzugriff, bitte Chrome oder Edge verwenden</span>'}</td></tr>
       <tr><td>Projektdaten</td><td>„${PROJ_FILE}“ im jeweiligen Projektordner (Beschreibungen, Abschnitte, Proben, Drehungen, Originalnamen, Prüfsummen, Projektdaten). Nicht löschen oder umbenennen.</td></tr>
+      <tr><td>Projektzentrale</td><td>${S.proj ? `Projekt „${esc(S.proj.name)}“ – gemeinsame Projektdaten in „${PJ_FILE}“ im Projektordner` : 'Projekte lassen sich direkt aus der Projektzentrale öffnen; wird ein Projektordner („26.0123 Köln“) gewählt, wird dessen „Fotos“ verwendet.'}</td></tr>
       <tr><td>Persönlich</td><td>In diesem Browser: Sachverständiger, Standardanweisung, Export-Einstellungen.</td></tr>
       <tr><td>Originale</td><td>Werden nur umbenannt bzw. nach „${DISCARD_DIR}“ verschoben, nie verändert. Drehen und Verkleinern betrifft nur ZIP- und PDF-Kopien.</td></tr>
       <tr><td>Grenzen</td><td>HEIC-Fotos (iPhone) kann Chrome nicht lesen – Kamera auf „Maximale Kompatibilität“ stellen. Im PDF werden Zeichen wie → oder CO₂ als „->“ bzw. „CO2“ geschrieben.</td></tr>
@@ -2115,7 +2252,9 @@ $('btnOpen2').onclick = pickFolder;
 $('btnReload').onclick = async () => {
   flushDrafts(); saveExtra(); await flushProject();
   S.lastRun = null; hideBanner();
+  await flushPJ();
   const note = await loadProject(S.dir);      // picks up changes a coworker saved meanwhile
+  await loadPJ();
   await loadItems();
   if (note) banner(P.readOnly ? 'err' : 'info', note);
 };
@@ -2141,11 +2280,16 @@ document.addEventListener('drop', async e => {
 
 window.addEventListener('beforeunload', e => {
   if (S.dir){ flushDrafts(); saveExtra(); }
+  if (Object.keys(PJ.pending).length) flushPJ();
   if (S.busy || P.dirty){ flushProject(); e.preventDefault(); e.returnValue = ''; }
 });
 
 applyCfgToUI();
 updateExample();
+{
+  const projekt = new URLSearchParams(location.search).get('projekt');
+  if (projekt && supported) openFromZentrale(projekt);
+}
 })();
 </script>
 </body>
