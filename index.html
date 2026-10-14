@@ -45,6 +45,22 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .appbar .brand small{font-weight:400;font-size:12px;opacity:.75}
 .hbadge{font:500 11px/1 var(--mono);background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);border-radius:4px;padding:5px 9px;color:#fff}
 button.hbadge:hover{background:rgba(255,255,255,.26);color:#fff;border-color:rgba(255,255,255,.5)}
+.hbadge.help{font-family:var(--sans);font-size:12px;padding:4px 10px}
+.hbadge.help b{display:inline-block;width:16px;height:16px;line-height:16px;border-radius:50%;background:#fff;color:var(--head);text-align:center;font-size:11px;margin-right:4px}
+.linkbtn{border:0;background:none;padding:0;color:var(--accent);text-decoration:underline;text-underline-offset:3px;font-size:13px}
+.linkbtn:hover{color:var(--accent-l)}
+.dialog .body.helpdoc{display:block}
+.helpdoc table{width:auto}
+.helpdoc h4{margin:14px 0 4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--accent)}
+.helpdoc h4:first-child{margin-top:0}
+.helpdoc p,.helpdoc li{font-size:13.5px;line-height:1.55}
+.helpdoc ol,.helpdoc ul{margin:4px 0;padding-left:22px}
+.helpdoc li{margin:3px 0}
+.helpdoc ul ul{margin:2px 0}
+.helpdoc code{font-family:var(--mono);font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.helpdoc table{border-collapse:collapse;font-size:13px}
+.helpdoc td{padding:3px 14px 3px 0;vertical-align:top}
+.helpdoc td:first-child{white-space:nowrap}
 .appbar .projbadge{font:500 12px/1 var(--mono);background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.34);border-radius:4px;padding:6px 10px;color:#fff;white-space:nowrap}
 .appbar .projbadge b{font-weight:600;margin-right:2px}
 .appbar .folder{font:12px var(--mono);color:rgba(255,255,255,.82);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
@@ -219,6 +235,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
   <div class="appbar">
     <div class="brand"><span class="hex">⬡</span> FotoKit <small>Bilddokumentation</small></div>
     <button id="btnInfo" class="hbadge" title="Version, Speicherorte, Änderungen, Problem melden">v1.0.0</button>
+    <button id="btnHelp" class="hbadge help" title="Kurzanleitung (F1)"><b>?</b> Kurzanleitung</button>
     <button id="btnUpd" class="upd" hidden title="Neu laden lädt die neue Version – ungespeicherte Änderungen werden vorher gesichert">Update verfügbar – neu laden</button>
     <span class="spacer"></span>
     <span class="projbadge" id="projBadge" hidden></span>
@@ -265,6 +282,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
     <h2>Projektordner öffnen</h2>
     <p>Ordner wählen oder hierher ziehen. Die Bilder werden direkt im Ordner umbenannt – nichts wird hochgeladen.</p>
     <button class="primary" id="btnOpen2">Ordner wählen …</button>
+    <p class="m"><button class="linkbtn" id="btnHelp2">Erstes Mal hier? Kurzanleitung lesen</button></p>
     <p id="support" class="notice" style="display:none;margin-top:18px">Dieser Browser unterstützt keinen Ordnerzugriff. Bitte die Datei in Chrome oder Edge öffnen.</p>
   </div>
 </div>
@@ -328,9 +346,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 const APP_DATE = '2026-10-14';
 const CHANGELOG = [
+  ['1.5.0', '14.10.2026', 'Kurzanleitung in der App: Knopf „? Kurzanleitung“ oben in der blauen Leiste (oder Taste F1), auch zum Ausdrucken als eine Seite.'],
   ['1.4.0', '14.10.2026', 'Neuer Name: FotoKit (früher Bildumbenenner). Neues Aussehen passend zu LabelKit – blaue Kopfzeile, Schrift IBM Plex, Version gut sichtbar oben links. Webadresse, Projektdateien und Einstellungen bleiben unverändert.'],
   ['1.3.0', '14.10.2026', 'Sicherer zu zweit: Hat jemand anderes (Kollege oder zweites Fenster) gleichzeitig im selben Projekt gespeichert, werden die Änderungen Bild für Bild zusammengeführt statt überschrieben; echte Konflikte werden angezeigt (deine Fassung bleibt). Beim Zurückkehren ins Fenster werden fremde Änderungen übernommen. Neu: „Problem melden“ kopiert einen kurzen Bericht für die Fehlersuche in die Zwischenablage.'],
   ['1.2.0', '13.10.2026', 'Zusammenarbeit mit der Projektzentrale: Projekte öffnen sich direkt aus der Projektzentrale (Unterordner „Fotos“). Wird ein ganzer Projektordner gewählt (z. B. „26.0123 Köln“), arbeitet die App in dessen „Fotos“. Projektnummer kommt aus dem Ordnernamen; Objekt, Schadenereignis, Schadendatum, Ortstermin und Sachverständiger werden mit „_Projekt.json“ abgeglichen. Projektnummer und Ort stehen gut sichtbar in der Kopfzeile – auch wenn „Fotos“ direkt gewählt wurde (über den in der Projektzentrale gewählten Archivordner).'],
@@ -1323,7 +1342,8 @@ function onKey(e){
   }
 }
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape'){ $('lightbox').classList.remove('show'); }
+  if (e.key === 'Escape'){ $('lightbox').classList.remove('show'); if ($('overlay').classList.contains('show') && $('hClose')) closeDialog(); }
+  if (e.key === 'F1'){ e.preventDefault(); if (!$('overlay').classList.contains('show')) openHelp(); }
 });
 
 /* ---------- renaming ---------- */
@@ -2456,6 +2476,67 @@ function openProblem(){
   };
 }
 
+
+/* ---------- Kurzanleitung (same text as the one-page guide; works offline) ---------- */
+const HELP_HTML = `
+<h4>Einmalig einrichten</h4>
+<ul>
+  <li><b>Browser:</b> Google Chrome oder Microsoft Edge (Firefox kann keine Ordner bearbeiten).</li>
+  <li><b>Installieren:</b> im Browser-Menü „App installieren“ – dann gibt es ein eigenes Symbol.</li>
+  <li><b>Projektzentrale:</b> dort einmal „Archivordner wählen …“ → <code>C:\\daten\\Mosaik Archivordner</code>. Danach öffnen sich Projekte per Klick.</li>
+  <li>Fragt der Browser „Änderungen speichern?“ bzw. „Zugriff erlauben?“ → <b>Erlauben</b>. Nach einem Neustart fragt er einmal erneut.</li>
+</ul>
+<h4>In 5 Schritten zur Bilddokumentation</h4>
+<ol>
+  <li><b>Projekt öffnen:</b> in der Projektzentrale „Fotos bearbeiten → FotoKit“ – oder hier „Ordner wählen …“ und den Projektordner (z. B. <code>26.0123 Köln</code>) wählen. Oben in der blauen Leiste stehen dann Projektnummer und Ort.</li>
+  <li><b>Bilder beschreiben:</b> links ein Bild anklicken, rechts erscheint die Vorschau. Beschreibung eintippen, <kbd>Enter</kbd> springt zum nächsten Bild. Darunter optional <b>Abschnitt</b> (z. B. „Küche“ – gilt für die folgenden Bilder mit) und <b>Probe-Nr.</b> (z. B. „P1“).</li>
+  <li><b>Aufräumen:</b> unbrauchbare Bilder mit ✕ aussortieren (sie wandern ans Ende, nichts wird gelöscht). Reihenfolge per Ziehen ändern, schiefe Bilder mit ↻ drehen.</li>
+  <li><b>Projektdaten prüfen:</b> „Projektdaten …“ – Anlagen-Nr., Objekt, Schadenereignis, Daten, Sachverständiger. Was in der Projektzentrale schon eingetragen ist, steht hier bereits.</li>
+  <li><b>Ausgeben:</b>
+    <ul>
+      <li><b>Umbenennen</b> – benennt die Dateien im Ordner nach der Beschreibung (z. B. <code>03_P2_Küche_Decke.jpg</code>). Rückgängig ist danach möglich.</li>
+      <li><b>PDF erstellen</b> – Bilddokumentation mit Deckblatt, 2 Bildern pro Seite und Probenahmestellen; wird im Ordner <code>Fotos</code> gespeichert, bei Bedarf in Teile ≤ 14 MB aufgeteilt.</li>
+      <li><b>ZIP exportieren</b> – Bilder mit neuen Namen plus Anweisung, wenn eine KI die Dokumentation erstellen soll.</li>
+    </ul></li>
+</ol>
+<h4>Tastenkürzel</h4>
+<table>
+  <tr><td><kbd>Enter</kbd> / <kbd>↓</kbd></td><td>nächstes Bild</td></tr>
+  <tr><td><kbd>Shift+Enter</kbd> / <kbd>↑</kbd></td><td>vorheriges Bild</td></tr>
+  <tr><td><kbd>Strg+D</kbd></td><td>Beschreibung vom vorherigen Bild übernehmen</td></tr>
+  <tr><td><kbd>Alt+X</kbd></td><td>aussortieren / zurückholen</td></tr>
+  <tr><td><kbd>Alt+R</kbd> / <kbd>Alt+Shift+R</kbd></td><td>rechts / links drehen</td></tr>
+  <tr><td>Klick auf die Vorschau</td><td>Vollbild (<kbd>Esc</kbd> schließt)</td></tr>
+  <tr><td><kbd>F1</kbd></td><td>diese Kurzanleitung</td></tr>
+</table>
+<h4>Gut zu wissen</h4>
+<ul>
+  <li><b>Originale bleiben unverändert.</b> Sie werden nur umbenannt bzw. nach <code>_aussortiert</code> verschoben. Drehen und Verkleinern betrifft nur PDF und ZIP.</li>
+  <li><b><code>_Bildumbenenner.json</code> nicht löschen oder umbenennen.</b> Darin stehen alle Beschreibungen, Abschnitte und Proben – so kann jeder Kollege am Projekt weiterarbeiten.</li>
+  <li><b>Möglichst nicht zu zweit im selben Projekt.</b> Passiert es doch, führt FotoKit die Änderungen zusammen; bei einem Konflikt bleibt die eigene Fassung und die App zeigt es an.</li>
+  <li><b>iPhone-Fotos (HEIC)</b> kann der Browser nicht lesen. Am iPhone: Einstellungen → Kamera → Formate → „Maximale Kompatibilität“.</li>
+  <li><b>Wenn etwas nicht klappt:</b> „Problem melden“ in der Fehlermeldung (oder Klick auf die Versionsnummer oben links) kopiert einen Bericht – in eine E-Mail einfügen und kurz sagen, was passiert ist.</li>
+</ul>`;
+function openHelp(){
+  showDialog(`<h3>Kurzanleitung <small>${APP_NAME} ${APP_VERSION}</small></h3>
+    <div class="body helpdoc">${HELP_HTML}</div>
+    <div class="btns"><button id="hPrint" title="Kurzanleitung als eine Seite drucken oder als PDF speichern">Drucken …</button><span class="spacer"></span><button class="primary" id="hClose">Schließen</button></div>`);
+  $('dialog').classList.add('wide');
+  $('hClose').onclick = closeDialog;
+  $('hPrint').onclick = () => {
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${APP_NAME} – Kurzanleitung</title><style>
+      body{font:10.5pt/1.45 "IBM Plex Sans","Segoe UI",sans-serif;color:#21303e;margin:14mm 16mm}
+      h1{font-size:16pt;margin:0 0 2mm;color:#3f7cc0} .sub{color:#6b8199;margin:0 0 4mm}
+      h4{font-size:9pt;text-transform:uppercase;letter-spacing:.08em;color:#3f7cc0;margin:4mm 0 1mm}
+      ul,ol{margin:1mm 0;padding-left:6mm} li{margin:.6mm 0} td{padding:.4mm 5mm .4mm 0;vertical-align:top}
+      code,kbd{font-family:Consolas,monospace;font-size:9pt} @page{size:A4;margin:0}</style></head><body>
+      <h1>${APP_NAME} – Kurzanleitung</h1><p class="sub">Bilddokumentation für Projektordner · Version ${APP_VERSION} · App: ${esc(location.href.split(/[?#]/)[0])}</p>${HELP_HTML}</body></html>`);
+    w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
+  };
+}
+
 /* ---------- banner ---------- */
 function banner(type, html){
   const b = $('banner'); b.className = 'show ' + type; b.innerHTML = html;
@@ -2471,6 +2552,8 @@ function hideBanner(){ $('banner').className = ''; $('banner').innerHTML = ''; }
 /* ---------- wiring ---------- */
 $('btnOpen').onclick = pickFolder;
 $('btnInfo').onclick = openInfo;
+$('btnHelp').onclick = openHelp;
+$('btnHelp2').onclick = openHelp;
 $('btnUpd').onclick = applyUpdate;
 $('btnInfo').textContent = 'v' + APP_VERSION;
 document.title = `${APP_NAME} ${APP_VERSION}`;
