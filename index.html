@@ -149,6 +149,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 #banner.ok{background:color-mix(in srgb,var(--ok) 14%,var(--panel))}
 #banner.err{background:color-mix(in srgb,var(--err) 14%,var(--panel))}
 #banner.info{background:var(--panel2)}
+#banner .repBtn{font-size:12px;padding:2px 9px;margin-left:auto}
 
 #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:50;cursor:zoom-out}
 #lightbox.show{display:flex}
@@ -284,9 +285,10 @@ progress{width:100%}
    ===================================================================================================== */
 
 /* ---------- version ---------- */
-const APP_VERSION = '1.2.0';
-const APP_DATE = '2026-10-13';
+const APP_VERSION = '1.3.0';
+const APP_DATE = '2026-10-14';
 const CHANGELOG = [
+  ['1.3.0', '14.10.2026', 'Sicherer zu zweit: Hat jemand anderes (Kollege oder zweites Fenster) gleichzeitig im selben Projekt gespeichert, werden die Änderungen Bild für Bild zusammengeführt statt überschrieben; echte Konflikte werden angezeigt (deine Fassung bleibt). Beim Zurückkehren ins Fenster werden fremde Änderungen übernommen. Neu: „Problem melden“ kopiert einen kurzen Bericht für die Fehlersuche in die Zwischenablage.'],
   ['1.2.0', '13.10.2026', 'Zusammenarbeit mit der Projektzentrale: Projekte öffnen sich direkt aus der Projektzentrale (Unterordner „Fotos“). Wird ein ganzer Projektordner gewählt (z. B. „26.0123 Köln“), arbeitet die App in dessen „Fotos“. Projektnummer kommt aus dem Ordnernamen; Objekt, Schadenereignis, Schadendatum, Ortstermin und Sachverständiger werden mit „_Projekt.json“ abgeglichen. Projektnummer und Ort stehen gut sichtbar in der Kopfzeile – auch wenn „Fotos“ direkt gewählt wurde (über den in der Projektzentrale gewählten Archivordner).'],
   ['1.1.1', '12.10.2026', 'Korrektur: Der Offline-Speicher verwaltet nur noch die eigenen Dateien. Version 1.1.0 hat beim Aktualisieren auch den Offline-Speicher anderer Apps unter derselben Adresse gelöscht (z. B. Probenplan).'],
   ['1.1.0', '12.10.2026', 'Online-Version über GitHub Pages: funktioniert nach dem ersten Aufruf auch offline, lässt sich als App installieren und meldet neue Versionen („Update verfügbar“).'],
@@ -311,7 +313,7 @@ const TMP_PREFIX = 'umb-tmp_';
 const PROJ_FILE = '_Bildumbenenner.json';
 const PROJ_KINDS = ['drafts', 'discard', 'rot', 'extra', 'orig', 'hash', 'order', 'meta'];
 const NAMING_KEYS = ['prefix', 'date', 'num', 'start', 'digits', 'sep', 'spaces', 'uml', 'lower', 'probe', 'discard', 'sort'];
-const P = { data: null, timer: null, writing: Promise.resolve(), dirty: false, failed: false, readOnly: false };
+const P = { data: null, base: null, lastText: null, timer: null, writing: Promise.resolve(), dirty: false, failed: false, readOnly: false };
 const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
 const pickNaming = c => Object.fromEntries(NAMING_KEYS.filter(k => k in c).map(k => [k, c[k]]));
 const store = {
@@ -370,18 +372,110 @@ function flushProject(){
   clearTimeout(P.timer);
   if (!P.dirty || !S.dir || !P.data || P.readOnly) return P.writing;
   P.dirty = false;
-  const dir = S.dir, json = projToJson();
+  const dir = S.dir;
   P.writing = P.writing.then(async () => {
     try{
       const fh = await dir.getFileHandle(PROJ_FILE, { create: true });
+      // someone else (a coworker, another window) saved since we loaded or last wrote → merge instead of overwriting
+      const onDisk = await (await fh.getFile()).text();
+      if (S.dir === dir && onDisk.trim() && onDisk !== P.lastText){
+        let theirs;
+        try{ theirs = projFromJson(JSON.parse(onDisk)); }
+        catch(e){ throw new Error('die Datei wird gerade von jemand anderem gespeichert oder ist beschädigt – neuer Versuch beim nächsten Speichern'); }
+        mergeExternal(theirs);
+      }
+      const json = projToJson();
       const w = await fh.createWritable(); await w.write(json); await w.close();
+      if (S.dir === dir){ P.lastText = json; P.base = clone(P.data); }
       if (P.failed){ P.failed = false; hideBanner(); }
     }catch(e){
       P.dirty = true;
       if (!P.failed){ P.failed = true; banner('err', `Projektdatei „${PROJ_FILE}“ konnte nicht gespeichert werden: ${esc(e.message)} – Änderungen gehen beim Schließen verloren.`); }
+      logProblem('Speichern ' + PROJ_FILE + ': ' + e.message);
     }
   });
   return P.writing;
+}
+
+/* three-way merge, entry by entry: base = state when we loaded/last wrote, ours = this window, theirs = file on disk.
+   Changed only by them → take theirs; changed only by us → keep ours; changed by both differently → keep ours, report. */
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function mergeMap(b, o, t, kind, out){
+  b = b || {}; o = o || {}; t = t || {};
+  const r = {};
+  for (const k of new Set([...Object.keys(b), ...Object.keys(o), ...Object.keys(t)])){
+    let v;
+    if (same(o[k], b[k])){ v = t[k]; if (!same(t[k], o[k]) && kind !== 'hash') out.theirs.add(kind === 'meta' || kind === 'settings' ? '' : k); }
+    else if (same(t[k], b[k]) || same(t[k], o[k])) v = o[k];
+    else if (kind === 'hash') v = t[k];            // checksum cache: either one is fine
+    else { v = o[k]; out.conflicts.add(kind === 'meta' || kind === 'settings' ? 'Projektdaten' : k); }
+    if (v !== undefined) r[k] = clone(v);
+  }
+  return r;
+}
+const asSet = a => Object.fromEntries((a || []).map(n => [n, true]));
+function mergeExternal(theirs){
+  flushDrafts(); saveExtra();                         // newest typing is part of "ours"
+  const b = P.base || projFromJson({}), o = P.data, out = { theirs: new Set(), conflicts: new Set() };
+  const m = {};
+  for (const kind of ['drafts', 'rot', 'extra', 'orig', 'hash', 'meta']) m[kind] = mergeMap(b[kind], o[kind], theirs[kind], kind, out);
+  m.settings = theirs.settings || o.settings ? mergeMap(b.settings, o.settings, theirs.settings, 'settings', out) : null;
+  m.discard = Object.keys(mergeMap(asSet(b.discard), asSet(o.discard), asSet(theirs.discard), 'discard', out));
+  const orderChanged = !same(o.order, b.order) ? false : !same(theirs.order, o.order);
+  m.order = same(o.order, b.order) ? (theirs.order || []) : o.order;
+  out.theirs.delete('');
+  P.data = m;
+  applyMergedToItems(orderChanged);
+  const known = new Set(S.items.map(it => it.name));
+  const unknown = [...new Set([...Object.keys(theirs.drafts || {}), ...Object.keys(theirs.orig || {}), ...(theirs.order || [])])].filter(n => !known.has(n) && !(n in (b.drafts || {})) && !(n in (b.orig || {})) && !(b.order || []).includes(n));
+  const nT = out.theirs.size, nC = out.conflicts.size;
+  if (unknown.length){
+    banner('err', `Jemand anderes hat in diesem Projekt Bilder umbenannt oder hinzugefügt (z. B. „${esc(unknown[0])}“). <b>Bitte „Neu einlesen“</b>, bevor du weiterarbeitest – deine Eingaben bleiben erhalten. <span class="spacer"></span><button id="bMergeReload">Neu einlesen</button>`);
+    $('bMergeReload').onclick = () => $('btnReload').click();
+    logProblem(`Fremde Bildnamen nach Zusammenführen: ${unknown.slice(0, 4).join(', ')}`);
+  } else if (nT || nC){
+    banner(nC ? 'err' : 'info', `Jemand anderes (Kollege oder ein zweites Fenster) hat gleichzeitig in diesem Projekt gespeichert. ` +
+      (nT ? `Dessen Änderungen an ${nT} Bild${nT === 1 ? '' : 'ern'} wurden übernommen. ` : 'Die Änderungen wurden zusammengeführt. ') +
+      (nC ? `<b>Bei ${nC} Eintrag/Einträgen wurde gleichzeitig unterschiedlich geändert – deine Fassung wurde behalten:</b> ${[...out.conflicts].slice(0, 6).map(esc).join(', ')}${nC > 6 ? ' …' : ''}` : '') +
+      ` <span class="spacer"></span><small>Tipp: nicht zu zweit im selben Projekt arbeiten.</small>`);
+    logProblem(`Zusammengeführt: ${nT} von anderen übernommen, ${nC} Konflikte ${[...out.conflicts].slice(0, 6).join(', ')}`);
+  }
+}
+/* coming back to the window: pick up what others saved meanwhile, without writing anything ourselves */
+async function checkExternal(){
+  if (!S.dir || !P.data || P.readOnly || S.busy) return;
+  const dir = S.dir;
+  await P.writing;
+  try{
+    const onDisk = await (await (await dir.getFileHandle(PROJ_FILE)).getFile()).text();
+    if (S.dir !== dir || !onDisk.trim() || onDisk === P.lastText) return;
+    const theirs = projFromJson(JSON.parse(onDisk));
+    mergeExternal(theirs);
+    P.lastText = onDisk; P.base = projFromJson(JSON.parse(onDisk));
+    if (!same(P.data, P.base)) scheduleProjSave();      // our unsaved changes still have to be written
+  }catch(e){ /* not there yet / being written – the next save merges anyway */ }
+}
+window.addEventListener('focus', () => { checkExternal(); });
+
+function applyMergedToItems(orderChanged){
+  const d = P.data, disc = new Set(d.discard);
+  ROT = clone(d.rot); EXTRA = clone(d.extra); ORIG = clone(d.orig); HASH = clone(d.hash);
+  let rebuild = orderChanged && cfg.sort === 'manual';
+  for (const it of S.items){
+    const desc = d.drafts[it.name] || '', ex = d.extra[it.name] || {}, sec = ex.sec || '', probe = ex.probe || '';
+    if (it.discard !== disc.has(it.name)){ it.discard = disc.has(it.name); rebuild = true; }
+    if (it.desc !== desc){ it.desc = desc; if (it.el) it.el.querySelector('.desc').value = desc; }
+    if (it.sec !== sec){ it.sec = sec; if (it.el) it.el.querySelector('.sec').value = sec; }
+    if (it.probe !== probe){ it.probe = probe; if (it.el) it.el.querySelector('.probe').value = probe; }
+    if (it.el) it.el.classList.toggle('rotated', !!rotOf(it));
+  }
+  if (rebuild){
+    const f = S.focus >= 0 && S.view[S.focus];
+    if (cfg.sort === 'manual') applySort();
+    buildRows();
+    if (f) setFocus(S.view.indexOf(f), false);
+  }
+  recompute();
 }
 
 /* old versions kept per-project data in the browser, keyed only by folder name – take over what matches this folder */
@@ -404,8 +498,10 @@ async function importLegacy(dir){
 async function loadProject(dir){
   clearTimeout(P.timer); P.dirty = false; P.failed = false; P.readOnly = false;
   let d = null, note = '';
+  P.lastText = null; P.base = null;
   try{
     const txt = await (await (await dir.getFileHandle(PROJ_FILE)).getFile()).text();
+    P.lastText = txt;
     // an empty file is what an interrupted *first* save leaves behind – nothing to protect, treat as "no file yet"
     const o = txt.trim() ? JSON.parse(txt) : null;
     d = o ? projFromJson(o) : null;
@@ -427,6 +523,7 @@ async function loadProject(dir){
   if (!d && !S.proj){ const r = await importLegacy(dir); d = r.d; imported = r.hits; }   // project folders are always named „Fotos“ – folder-name keys would mix projects
   if (!d) d = projFromJson({});
   P.data = d;
+  P.base = clone(d);
   if (d.settings){
     cfg = Object.assign({}, defaults, store.get('bu-settings', {}), d.settings);
     applyCfgToUI();
@@ -2265,13 +2362,66 @@ function openInfo(){
       <tr><td>Grenzen</td><td>HEIC-Fotos (iPhone) kann Chrome nicht lesen – Kamera auf „Maximale Kompatibilität“ stellen. Im PDF werden Zeichen wie → oder CO₂ als „->“ bzw. „CO2“ geschrieben.</td></tr>
     </table>
     <div class="m"><b>Änderungen</b><br>${CHANGELOG.map(([v, d, t]) => `<b>${v}</b> (${d}): ${esc(t)}`).join('<br>')}</div></div>
-    <div class="btns"><button class="primary" id="iClose">Schließen</button></div>`);
+    <div class="btns"><button id="iProblem">Problem melden …</button><span class="spacer"></span><button class="primary" id="iClose">Schließen</button></div>`);
   $('dialog').classList.add('wide');
   $('iClose').onclick = closeDialog;
+  $('iProblem').onclick = openProblem;
+}
+
+/* ---------- problem report ----------
+   The app sends nothing anywhere. To make "it didn't work" actionable, it keeps the last messages in memory and
+   „Problem melden“ puts a short report on the clipboard (shown first, so the user sees exactly what is copied). */
+const PROBLEMS = [];
+function logProblem(msg){
+  PROBLEMS.push(`${new Date().toLocaleTimeString('de-DE')}  ${String(msg).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 400)}`);
+  if (PROBLEMS.length > 25) PROBLEMS.shift();
+}
+window.addEventListener('error', e => logProblem('JS-Fehler: ' + (e.message || e.error) + (e.filename ? ` (${e.lineno}:${e.colno})` : '')));
+window.addEventListener('unhandledrejection', e => logProblem('Unbehandelt: ' + ((e.reason && e.reason.message) || e.reason)));
+function problemReport(){
+  const it = S.items || [], L = [];
+  L.push('PROBLEMBERICHT BILDUMBENENNER');
+  L.push(`Zeitpunkt:   ${new Date().toLocaleString('de-DE')}`);
+  L.push(`Version:     ${APP_VERSION} (${IS_WEB ? 'online ' + location.host + location.pathname : 'lokale Datei'})${navigator.serviceWorker && navigator.serviceWorker.controller ? ', offline bereit' : ''}`);
+  L.push(`Browser:     ${browserVer} · ${navigator.platform || ''} · online: ${navigator.onLine ? 'ja' : 'nein'}`);
+  L.push(`Ordner:      ${S.dir ? S.dir.name : '–'}${S.proj ? `  (Projekt ${S.proj.name})` : ''}`);
+  L.push(`Bilder:      ${it.length} · aussortiert ${it.filter(x => x.discard).length} · mit Beschreibung ${it.filter(x => x.desc && x.desc.trim()).length}`);
+  L.push(`Projektdatei: ${P.readOnly ? 'nur lesen' : 'ok'}${P.failed ? ', Speichern fehlgeschlagen' : ''}${P.dirty ? ', ungespeicherte Änderungen' : ''}`);
+  L.push(`Benennung:   ${JSON.stringify(pickNaming(cfg))}`);
+  const bc = $('banner').cloneNode(true); bc.querySelectorAll('button').forEach(x => x.remove());
+  const b = bc.textContent.trim();
+  if (b) L.push(`Anzeige:     ${b.replace(/\s+/g, ' ').slice(0, 400)}`);
+  L.push('', 'Letzte Meldungen:');
+  L.push(...(PROBLEMS.length ? PROBLEMS.map(x => '  ' + x) : ['  (keine)']));
+  L.push('', 'Was wollte ich tun / was ist passiert?', '  ');
+  return L.join('\n');
+}
+function openProblem(){
+  showDialog(`<h3>Problem melden</h3>
+    <div class="body"><div class="m">Dieser Bericht wird in die Zwischenablage kopiert – einfach in eine E-Mail oder Nachricht einfügen und kurz beschreiben, was passiert ist. Er enthält Version, Browser, Ordner- und Projektname und die letzten Meldungen, <b>keine Bilder und keine Beschreibungen</b>.</div>
+      <textarea id="pText" rows="16" spellcheck="false" style="font:12px/1.4 var(--mono);width:100%"></textarea></div>
+    <div class="btns"><span class="m" id="pDone"></span><span class="spacer"></span><button id="pClose">Schließen</button><button class="primary" id="pCopy">In Zwischenablage kopieren</button></div>`);
+  $('dialog').classList.add('wide');
+  $('pText').value = problemReport();
+  $('pClose').onclick = closeDialog;
+  $('pCopy').onclick = async () => {
+    const t = $('pText').value;
+    try{ await navigator.clipboard.writeText(t); }
+    catch(e){ $('pText').select(); document.execCommand('copy'); }
+    $('pDone').textContent = '✓ Kopiert';
+  };
 }
 
 /* ---------- banner ---------- */
-function banner(type, html){ const b = $('banner'); b.className = 'show ' + type; b.innerHTML = html; }
+function banner(type, html){
+  const b = $('banner'); b.className = 'show ' + type; b.innerHTML = html;
+  if (type === 'err'){
+    logProblem(html);
+    const r = document.createElement('button'); r.className = 'repBtn'; r.textContent = 'Problem melden';
+    r.title = 'Bericht für die Fehlersuche in die Zwischenablage kopieren'; r.onclick = openProblem;
+    b.appendChild(r);
+  }
+}
 function hideBanner(){ $('banner').className = ''; $('banner').innerHTML = ''; }
 
 /* ---------- wiring ---------- */
