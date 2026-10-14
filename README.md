@@ -1,8 +1,10 @@
-# Bildumbenenner
+# FotoKit (früher Bildumbenenner)
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
 **App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/
+
+Die Webadresse, die Projektdatei `_Bildumbenenner.json` und die gespeicherten Einstellungen behalten den alten Namen – so funktionieren bestehende Projekte, Lesezeichen und installierte Apps weiter. Die aktuelle Version steht oben links in der blauen Kopfzeile (Klick darauf: Änderungen, Problem melden).
 
 ## Datenschutz in einem Satz
 
