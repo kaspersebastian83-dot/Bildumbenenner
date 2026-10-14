@@ -38,6 +38,9 @@ header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 
 .dialog .info td{padding:3px 12px 3px 0;vertical-align:top;font-size:13px}
 .dialog .info td:first-child{color:var(--muted);white-space:nowrap}
 .folder{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.projbadge{font-size:14px;padding:3px 10px;border-radius:6px;background:var(--focus);border:1px solid var(--accent);white-space:nowrap}
+.projbadge b{font-family:var(--mono);color:var(--accent);margin-right:2px}
+.folder .hint{font-family:"Segoe UI",system-ui,sans-serif;font-size:12px;margin-left:8px}
 .spacer{flex:1}
 .opts{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font-size:13px;color:var(--muted)}
 .opts label{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
@@ -181,6 +184,7 @@ progress{width:100%}
     <button id="btnOpen" class="primary">Ordner wählen …</button>
     <button id="btnReload" disabled>Neu einlesen</button>
     <button id="btnMeta" disabled>Projektdaten …</button>
+    <span class="projbadge" id="projBadge" hidden></span>
     <span class="folder" id="folderName"></span>
     <span class="spacer"></span>
     <label class="opts">Sortierung
@@ -283,7 +287,7 @@ progress{width:100%}
 const APP_VERSION = '1.2.0';
 const APP_DATE = '2026-10-13';
 const CHANGELOG = [
-  ['1.2.0', '13.10.2026', 'Zusammenarbeit mit der Projektzentrale: Projekte öffnen sich direkt aus der Projektzentrale (Unterordner „Fotos“). Wird ein ganzer Projektordner gewählt (z. B. „26.0123 Köln“), arbeitet die App in dessen „Fotos“. Projektnummer kommt aus dem Ordnernamen; Objekt, Schadenereignis, Schadendatum, Ortstermin und Sachverständiger werden mit „_Projekt.json“ abgeglichen.'],
+  ['1.2.0', '13.10.2026', 'Zusammenarbeit mit der Projektzentrale: Projekte öffnen sich direkt aus der Projektzentrale (Unterordner „Fotos“). Wird ein ganzer Projektordner gewählt (z. B. „26.0123 Köln“), arbeitet die App in dessen „Fotos“. Projektnummer kommt aus dem Ordnernamen; Objekt, Schadenereignis, Schadendatum, Ortstermin und Sachverständiger werden mit „_Projekt.json“ abgeglichen. Projektnummer und Ort stehen gut sichtbar in der Kopfzeile – auch wenn „Fotos“ direkt gewählt wurde (über den in der Projektzentrale gewählten Archivordner).'],
   ['1.1.1', '12.10.2026', 'Korrektur: Der Offline-Speicher verwaltet nur noch die eigenen Dateien. Version 1.1.0 hat beim Aktualisieren auch den Offline-Speicher anderer Apps unter derselben Adresse gelöscht (z. B. Probenplan).'],
   ['1.1.0', '12.10.2026', 'Online-Version über GitHub Pages: funktioniert nach dem ersten Aufruf auch offline, lässt sich als App installieren und meldet neue Versionen („Update verfügbar“).'],
   ['1.0.0', '12.10.2026', 'Erste Version für das Büro: Umbenennen mit Vorschau, Aussortieren, Drag & Drop, Drehen, Abschnitte und Probe-Nr., Projektdaten, ZIP mit KI-Anweisung, SHA-256-Prüfsummen, PDF-Bilddokumentation (≤ 14 MB je Datei), Projektdaten in _Bildumbenenner.json im Projektordner.'],
@@ -668,6 +672,22 @@ function flushPJ(){
   return PJ.writing;
 }
 
+/* reading aid in the header: which project (folder „26.0123 Köln“) is open */
+function showProject(dir, proj){
+  const b = $('projBadge'), f = $('folderName');
+  b.hidden = !proj;
+  if (proj){
+    b.innerHTML = `<b>${esc(proj.nr || proj.name)}</b> ${esc(proj.ort)}`;
+    b.title = `Projektordner „${proj.name}“ – Projektdaten werden mit „${PJ_FILE}“ abgeglichen`;
+    f.textContent = `📁 ${proj.name} › ${dir.name}`;
+    f.title = '';
+  } else {
+    f.innerHTML = '📁 ' + esc(dir.name) + (dir.name.normalize('NFC').toLowerCase() === FOTOS_DIR.toLowerCase()
+      ? '<span class="hint">– Projekt unbekannt: den Projektordner (z. B. „26.0123 Köln“) statt „Fotos“ wählen oder über die Projektzentrale öffnen</span>' : '');
+    f.title = '';
+  }
+}
+
 /* open a project folder („26.0123 Köln“): works on its „Fotos“ subfolder */
 async function openProject(projDir){
   const p = parseProjName(projDir.name);
@@ -713,17 +733,32 @@ async function ensurePerm(dir){
   if ((await dir.queryPermission(o)) === 'granted') return true;
   return (await dir.requestPermission(o)) === 'granted';
 }
+/* a folder chosen directly (e.g. „Fotos“) cannot see its parent – but the archive folder remembered from the
+   Projektzentrale can tell where it lies: archiv.resolve(dir) → ['26.0123 Köln', 'Fotos'] */
+async function projectOf(dir){
+  let archiv = null;
+  try{ archiv = await SUITE.get('archiv'); }catch(e){}
+  if (!archiv) return null;
+  try{
+    if ((await archiv.queryPermission({ mode: 'readwrite' })) !== 'granted') return null;
+    const path = await archiv.resolve(dir);
+    if (!path || path.length !== 2 || path[1].normalize('NFC').toLowerCase() !== FOTOS_DIR.toLowerCase()) return null;
+    const p = parseProjName(path[0]);
+    if (!p) return null;
+    return { dir: await archiv.getDirectoryHandle(path[0]), name: path[0], nr: p.nr, ort: p.ort };
+  }catch(e){ return null; }
+}
 async function openDir(dir, proj = null){
   if (!(await ensurePerm(dir))){ banner('err','Ohne Schreibrecht kann nicht umbenannt werden.'); return; }
   if (!proj && parseProjName(dir.name) && await findSubdir(dir, FOTOS_DIR)) return openProject(dir);   // a whole project folder was chosen
+  if (!proj) proj = await projectOf(dir);
   flushDrafts(); if (S.dir) saveExtra();
   await flushProject(); await flushPJ();      // finish writing the previous project before switching
   S.dir = dir; S.proj = proj; S.lastRun = null;
   let note = await loadProject(dir);
   const pjNote = await loadPJ();
   if (pjNote) note = note ? note + '<br>' + pjNote : pjNote;
-  $('folderName').textContent = proj ? `📁 ${proj.name} › ${dir.name}` : '📁 ' + dir.name;
-  $('folderName').title = proj ? 'Projekt aus dem Archivordner – Projektdaten werden mit „_Projekt.json“ abgeglichen' : '';
+  showProject(dir, proj);
   $('btnReload').disabled = false;
   $('btnMeta').disabled = false;
   hideBanner();
