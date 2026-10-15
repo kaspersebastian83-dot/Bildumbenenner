@@ -24,6 +24,10 @@ Die App läuft vollständig im Browser auf dem eigenen Rechner. **Fotos, Projekt
 4. **Projektdaten** eintragen (Projektnummer, Anlage, Objekt, Schadenereignis, Ortstermin …).
 5. **Umbenennen** – oder direkt **PDF erstellen** (Deckblatt, 2 Bilder pro Seite, Probenahmestellen-Tabelle, Aufteilung in Dateien ≤ 14 MB) bzw. **ZIP exportieren** (Bilder + Anweisung für eine KI + Prüfsummen).
 
+## Ergebnistabelle für das Gutachten
+
+„Ergebnistabelle …“ liest den **XML-Export des Prüfberichts** (Eurofins liefert ihn mit der PDF; bei Projekten aus dem Archivordner wird er automatisch im Unterordner `Laborergebnisse` gefunden). Die Proben werden über die Probe-Nr. den Fotos zugeordnet (`Probe 3` = `P3`), ein Wert (Standard: Σ16 EPA-PAK, dazu BaP) wird nach einer **eigenen Bewertungsskala** eingestuft. „Tabelle kopieren“ legt eine fertige Tabelle mit Fußnoten (BG, Prüfbericht, Skala) in die Zwischenablage – in Word mit Strg+V einfügen. Alternativ „Alle Einzelwerte“. Fehlende Werte, Fotos ohne Probe im Bericht und ein Bericht zu einem anderen Projekt werden als Prüfhinweis angezeigt. Grenzwerte sind nicht eingebaut – die Skala legt ihr selbst fest (gespeichert im Browser).
+
 ## Wo liegen die Daten?
 
 | Was | Wo |
