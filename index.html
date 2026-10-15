@@ -227,6 +227,25 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 .drop h2{font-weight:600;color:var(--accent)}
 .divider{color:var(--accent);letter-spacing:.09em;font-size:11px}
 #banner{padding:9px 20px}
+.labopts{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end}
+.labopts label{display:flex;flex-direction:column;gap:3px}
+.labopts label.wide{flex:1 1 260px}
+.labopts .chk{display:flex;gap:12px;align-items:center;padding-bottom:6px}
+.labopts .chk label{flex-direction:row;align-items:center;gap:5px;font-size:13px}
+.labprev{border:1px solid var(--line);border-radius:7px;padding:4px 12px 10px;background:var(--panel);overflow:auto;max-height:46vh;font-size:13px}
+.labtab{border-collapse:collapse;font-size:12.5px}
+.labtab th,.labtab td{border:1px solid var(--line2);padding:3px 7px;vertical-align:top;text-align:left}
+.labtab th{background:var(--panel2);font-weight:600}
+.labwarn{border:1px solid #f2c98b;background:#fff8ec;color:#5a3d00;border-radius:7px;padding:6px 12px;font-size:12.5px}
+.labwarn ul{margin:2px 0 0;padding-left:18px}
+@media (prefers-color-scheme: dark){ .labwarn{background:#3a2f1a;border-color:#7a5a20;color:#f0d9a8} }
+.scale{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.scale .sname{display:flex;flex-direction:column;gap:3px;max-width:420px}
+.stab{border-collapse:collapse;width:auto}
+.stab th{font-size:12px;font-weight:600;color:var(--muted);text-align:left;padding:2px 6px}
+.stab td{padding:2px 6px}
+.stab input[type=number]{width:110px}
+.stab button{padding:2px 8px}
 </style>
 </head>
 <body>
@@ -245,6 +264,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
     <button id="btnOpen" class="primary">Ordner wählen …</button>
     <button id="btnReload" disabled>Neu einlesen</button>
     <button id="btnMeta" disabled>Projektdaten …</button>
+    <button id="btnLab" disabled title="Ergebnistabelle aus dem XML-Export des Laborberichts – zum Einfügen ins Gutachten">Ergebnistabelle …</button>
     <span class="spacer"></span>
     <label class="opts"><span class="lbl">Sortierung</span>
       <select id="sort">
@@ -346,9 +366,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.6.0';
 const APP_DATE = '2026-10-15';
 const CHANGELOG = [
+  ['1.6.0', '15.10.2026', 'Neu: „Ergebnistabelle …“ – liest den XML-Export des Laborberichts (z. B. Eurofins), ordnet Proben über die Probe-Nr. den Fotos zu, bewertet nach eigener Skala und kopiert eine fertige Tabelle zum Einfügen ins Gutachten (Word: Strg+V). Übersicht oder alle Einzelwerte; Prüfhinweise bei fehlenden Werten, Fotos oder falschem Projekt.'],
   ['1.5.1', '15.10.2026', 'Verständliche Dateinamen für PDF und ZIP: „Bilddokumentation 26.0123 Aachen.pdf“ (bei Aufteilung „… - Teil 1 von 2.pdf“). Projektnummer und Ort kommen aus dem Projektordner.'],
   ['1.5.0', '14.10.2026', 'Kurzanleitung in der App: Knopf „? Kurzanleitung“ oben in der blauen Leiste (oder Taste F1), auch zum Ausdrucken als eine Seite.'],
   ['1.4.0', '14.10.2026', 'Neuer Name: FotoKit (früher Bildumbenenner). Neues Aussehen passend zu LabelKit – blaue Kopfzeile, Schrift IBM Plex, Version gut sichtbar oben links. Webadresse, Projektdateien und Einstellungen bleiben unverändert.'],
@@ -922,6 +943,7 @@ async function openDir(dir, proj = null){
   showProject(dir, proj);
   $('btnReload').disabled = false;
   $('btnMeta').disabled = false;
+  $('btnLab').disabled = false; LAB.rep = null; LAB.err = '';
   hideBanner();
   await loadItems();
   if (note) banner(P.readOnly ? 'err' : 'info', note);
@@ -2483,6 +2505,361 @@ function openProblem(){
 }
 
 
+/* ---------- Ergebnistabelle aus dem Laborbericht (XML-Export) ----------
+   Reads the lab's XML export (Eurofins „AnalyticalReport“), matches samples to photos via the Probe-Nr., rates one
+   value against the user's own scale and puts a Word-ready table on the clipboard. Nothing is guessed: missing values,
+   photos or categories are shown as such and listed as warnings. */
+const LAB_DIR = 'Laborergebnisse';
+const normProbe = s => {
+  const t = String(s || '').trim(), m = /^(?:p|probe)?\s*-?\s*0*(\d+)\s*([a-z]?)$/i.exec(t);
+  return m ? 'P' + m[1] + m[2].toLowerCase() : t.toUpperCase();
+};
+const berlinDate = iso => {
+  const d = new Date(iso); if (isNaN(d)) return '';
+  return new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
+};
+const labNum = r => {            // "1300" → 1300, "1,9" → 1.9, "< 0,50" / "(n.b.)" → 0 (below BG), "" / "NaN" → NaN
+  const t = String(r || '').trim();
+  if (/^</.test(t) || /n\.\s*b\.|n\.\s*n\./i.test(t)) return 0;
+  const v = parseFloat(t.replace(/\./g, '').replace(',', '.'));
+  return isFinite(v) ? v : NaN;
+};
+const belowBG = r => /^\s*</.test(r || '') || /n\.\s*b\.|n\.\s*n\./i.test(r || '');
+function parseLabXml(text, fileName){
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length) throw new Error('Die Datei ist kein gültiges XML.');
+  const kids = (el, name) => el ? [...el.children].filter(c => c.localName === name) : [];
+  const kid = (el, name) => kids(el, name)[0] || null;
+  const txt = (el, name) => { const k = kid(el, name); return k ? k.textContent.trim() : ''; };
+  const all = (el, name) => [...el.getElementsByTagName('*')].filter(e => e.localName === name);
+  const root = doc.documentElement;
+  if (root.localName !== 'AnalyticalReport') throw new Error('Unbekanntes Format – erwartet wird der XML-Export eines Prüfberichts (z. B. Eurofins „AnalyticalReport“).');
+  const batch = all(root, 'Batch')[0];
+  let labor = txt(kid(root, 'MainOffice'), 'PartnerName') || txt(kid(root, 'OwnerPartner'), 'PartnerName');
+  labor = labor.replace(/^EF\s+/, 'Eurofins ').replace(/\s*\([^)]*\)\s*$/, '');
+  const signed = txt(root, 'SignatureOn');
+  const rep = {
+    datei: fileName || '', bericht: root.getAttribute('AnalyticalReportCode') || '', labor,
+    datum: signed ? berlinDate(signed) : (txt(root, 'ProcessingTo').split(' ')[0] || ''),
+    auftragsref: txt(batch, 'ClientPurchaseOrderReference'), vorlaeufig: root.getAttribute('IsPreliminaryReport') === 'true',
+    proben: []
+  };
+  for (const sp of all(root, 'SamplePartner')){
+    const af = {};
+    kids(sp, 'AdditionalFields').forEach(a => { af[a.getAttribute('Name')] = txt(a, 'Value'); });
+    const lines = all(sp, 'AnalyticalReportLine').map(l => ({
+      param: txt(l, 'ParameterName'), group: txt(l, 'GroupLevel1Name'), result: txt(l, 'Result'), unit: txt(l, 'Unit'), loq: txt(l, 'LOQ'),
+      order: +txt(l, 'LineOrder') || 0
+    })).sort((a, b) => a.order - b.order);
+    const ref = txt(sp, 'Description');
+    const area = lines.find(l => /größe der probenfläche|probenfläche/i.test(l.param));
+    rep.proben.push({
+      ref, label: normProbe(ref), desc: af.SPLPT_NAME || '', art: af.SAMPLETYPE || txt(sp, 'Matrix'),
+      labNr: txt(sp, 'SamplePartnerCode'), datum: berlinDate(txt(sp, 'SamplingDate')), order: +txt(sp, 'SampleOrder') || 0,
+      flaeche: area ? `${area.result} ${area.unit}`.trim() : '', lines: lines.filter(l => l !== area)
+    });
+  }
+  rep.proben.sort((a, b) => a.order - b.order);
+  if (!rep.proben.length) throw new Error('Im Prüfbericht wurden keine Proben gefunden.');
+  return rep;
+}
+const LAB = { rep: null, files: [] };
+const scaleKey = (param, unit) => `${param}|${unit}`;
+const loadScales = () => store.get('bu-scales', {});
+function rate(scale, v){
+  if (!scale || !scale.cats || !scale.cats.length || !isFinite(v)) return '';
+  let c = scale.cats[0].name;
+  for (const k of scale.cats) if (isFinite(k.from) && v >= k.from) c = k.name;
+  return c;
+}
+function photoNumbers(){        // Probe-Nr. → picture numbers as in the PDF / Bildverzeichnis
+  const map = new Map();
+  zipSelection(loadMeta().onlyDesc).forEach((it, i) => {
+    it.probe.split(/[,;\/]+/).map(x => x.trim()).filter(Boolean).map(normProbe)
+      .forEach(p => { if (!map.has(p)) map.set(p, []); map.get(p).push(i + 1); });
+  });
+  return map;
+}
+const numRange = ns => {
+  const out = []; let a = null, b = null;
+  for (const n of [...ns].sort((x, y) => x - y)){ if (a !== null && n === b + 1){ b = n; continue; } if (a !== null) out.push(a === b ? `${a}` : `${a}–${b}`); a = b = n; }
+  if (a !== null) out.push(a === b ? `${a}` : `${a}–${b}`);
+  return out.length ? 'Bild ' + out.join(', ') : '';
+};
+const shortParam = p => p.replace(/^Summe 16 EPA-PAK.*$/i, 'Σ16 EPA-PAK').replace(/^Benzo\[a\]pyren$/i, 'BaP');
+
+function labTables(rep, o){
+  const scales = loadScales(), photos = photoNumbers(), warn = [];
+  const p1 = o.p1, p2 = o.p2;
+  const line = (pr, p) => pr.lines.find(l => l.param === p);
+  // one table per Probenart + unit of the rated value (wipe samples and material samples never share a scale)
+  const groups = new Map();
+  for (const pr of rep.proben){
+    const l1 = line(pr, p1), key = `${pr.art}|${l1 ? l1.unit : ''}`;
+    if (!groups.has(key)) groups.set(key, { art: pr.art, unit: l1 ? l1.unit : '', proben: [] });
+    groups.get(key).proben.push(pr);
+  }
+  const known = new Set(rep.proben.map(p => p.label));
+  for (const [pn, ns] of photos) if (!known.has(pn)) warn.push(`Probe-Nr. ${pn} (Bild ${ns.join(', ')}) kommt im Prüfbericht nicht vor.`);
+  const tables = [], noPhoto = [];
+  let tno = +o.startNr || 1;
+  for (const g of groups.values()){
+    const scale = scales[scaleKey(p1, g.unit)];
+    const u2 = (g.proben.map(pr => line(pr, p2)).find(Boolean) || {}).unit || '';
+    if (o.mode === 'einzel'){
+      const params = [];
+      g.proben.forEach(pr => pr.lines.forEach(l => { if (!params.some(x => x.param === l.param)) params.push({ param: l.param, unit: l.unit, loq: l.loq }); }));
+      const head = ['Parameter', 'Einheit', 'BG', ...g.proben.map(pr => pr.label)];
+      const rows = [];
+      if (o.cFoto) rows.push({ cells: ['Foto', '', '', ...g.proben.map(pr => numRange(photos.get(pr.label) || []) || '–')] });
+      params.forEach(pa => rows.push({ cells: [pa.param, pa.unit, pa.loq, ...g.proben.map(pr => { const l = line(pr, pa.param); return l ? l.result : '–'; })],
+                                       strong: /^summe/i.test(pa.param) }));
+      tables.push({ title: `Tabelle ${tno++}: ${o.title || 'Analysenergebnisse'}${groups.size > 1 ? ' – ' + g.art : ''} (alle Einzelwerte)`, head, rows, unit: g.unit, scale: null, group: g,
+                    legend: g.proben.map(pr => `${pr.label}: ${pr.desc}`) });
+      continue;
+    }
+    const head = ['Probe', 'Probenahmestelle'];
+    if (o.cFlaeche) head.push('Fläche');
+    head.push(`${shortParam(p1)} [${g.unit}]`);
+    if (p2) head.push(`${shortParam(p2)} [${u2}]`);
+    if (o.cRating && scale) head.push('Bewertung');
+    if (o.cFoto) head.push('Foto');
+    const rows = g.proben.map(pr => {
+      const l1 = line(pr, p1), l2 = p2 ? line(pr, p2) : null;
+      let desc = pr.desc;
+      if (o.cFlaeche && pr.flaeche) desc = desc.replace(new RegExp(',?\\s*' + pr.flaeche.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$'), '');
+      const v1 = l1 ? (belowBG(l1.result) ? '< BG' : l1.result) : '–';
+      const cat = l1 ? rate(scale, labNum(l1.result)) : '';
+      const ph = numRange(photos.get(pr.label) || []);
+      if (!l1) warn.push(`${pr.label}: kein Wert für „${p1}“ im Prüfbericht.`);
+      if (o.cFoto && !ph) noPhoto.push(pr.label);
+      const cells = [pr.label, desc];
+      if (o.cFlaeche) cells.push(pr.flaeche || '–');
+      cells.push(v1);
+      if (p2) cells.push(l2 ? (belowBG(l2.result) ? '< BG' : l2.result) : '–');
+      if (o.cRating && scale) cells.push(cat || '–');
+      if (o.cFoto) cells.push(ph || '–');
+      return { cells, strong: !!(scale && cat && scale.cats.length > 1 && cat === scale.cats[scale.cats.length - 1].name) };
+    });
+    if (o.cRating && !scale) warn.push(`Für ${shortParam(p1)} in ${g.unit || '(ohne Einheit)'} ist noch keine Bewertungsskala angelegt – Spalte „Bewertung“ entfällt.`);
+    const counts = {};
+    if (scale) g.proben.forEach(pr => { const l1 = line(pr, p1), c = l1 ? rate(scale, labNum(l1.result)) : ''; if (c) counts[c] = (counts[c] || 0) + 1; });
+    const summary = scale ? `${g.proben.length} Probe${g.proben.length === 1 ? '' : 'n'}: ` + scale.cats.filter(c => counts[c.name]).map(c => {
+      const who = g.proben.filter(pr => { const l1 = line(pr, p1); return l1 && rate(scale, labNum(l1.result)) === c.name; }).map(pr => pr.label);
+      return `${counts[c.name]} × ${c.name}${who.length <= 4 ? ` (${who.join(', ')})` : ''}`;
+    }).join(', ') + '.' : '';
+    tables.push({ title: `Tabelle ${tno++}: ${o.title || 'Analysenergebnisse'}${groups.size > 1 ? ' – ' + g.art : ''}`, head, rows, unit: g.unit, scale, group: g, summary });
+  }
+  if (noPhoto.length) warn.push(`Ohne Foto mit passender Probe-Nr.: ${noPhoto.join(', ')} – in der Liste bei „Probe-Nr.“ eintragen oder Spalte „Foto“ abwählen.`);
+  const loqs = [...new Set(rep.proben.flatMap(pr => pr.lines.filter(l => l.loq && (l.unit === groups.values().next().value.unit)).map(l => l.loq)))];
+  const foot = [];
+  if (o.mode !== 'einzel') foot.push(`< BG = unterhalb der Bestimmungsgrenze${loqs.length === 1 ? ` (BG ${loqs[0]} ${[...groups.values()][0].unit} je Einzelstoff)` : ''}; bei Summen: alle Einzelstoffe unterhalb der BG.`);
+  else foot.push('BG = Bestimmungsgrenze.');
+  foot.push(`Prüfbericht ${rep.labor ? rep.labor + ' ' : ''}${rep.bericht}${rep.datum ? ' vom ' + rep.datum : ''}${rep.vorlaeufig ? ' (vorläufig)' : ''}.`);
+  const usedScales = [...new Set(tables.filter(t => t.scale && o.cRating).map(t => t.scale.name).filter(Boolean))];
+  if (usedScales.length) foot.push(`Bewertung nach Skala „${usedScales.join('“, „')}“.`);
+  if (o.cFoto) foot.push('Bildnummern gemäß Bilddokumentation.');
+  return { tables, foot, warn };
+}
+function labHtml(res, forClipboard){
+  const b = forClipboard ? 'border:1px solid #808080;' : '';
+  // the description column wraps, everything else stays on one line – Word then sizes the columns sensibly
+  const wide = t => t.head.findIndex(h => /^(Probenahmestelle|Parameter)$/.test(h));
+  // fixed percentages so Word and LibreOffice don't squeeze the short columns
+  const widths = t => {
+    const w = t.head.map((h, i) => {
+      if (i === wide(t)) return 0;
+      const len = Math.max(Math.min(h.length, 11) * 0.8, ...t.rows.map(r => String(r.cells[i]).length));
+      return Math.min(15, Math.max(8, Math.round(len * 1.1 + 3)));
+    });
+    const rest = Math.max(30, 100 - w.reduce((a, x) => a + x, 0));
+    return w.map(x => x || rest);
+  };
+  const cell = (tag, t, i, c, bold, ws) => {
+    const nw = i === wide(t) ? '' : 'white-space:nowrap;';
+    const st = `${b}padding:2px 6px;vertical-align:top;line-height:1.25;${nw}${tag === 'th' ? 'background:#e7eef6;text-align:left;font-weight:bold;' : ''}`;
+    const v = nw && tag === 'td' ? esc(c).replace(/ /g, '&nbsp;') : esc(c);   // short values never break inside (600 cm², Bild 2–3)
+    return `<${tag}${ws ? ` width="${ws[i]}%"` : ''} style="${st}${ws ? `width:${ws[i]}%;` : ''}">${bold ? `<b>${v}</b>` : v}</${tag}>`;
+  };
+  return res.tables.map(t => `<p style="margin:12px 0 4px"><b>${esc(t.title)}</b></p>
+    <table ${forClipboard ? 'border="1" cellspacing="0" cellpadding="3" width="100%" style="border-collapse:collapse;width:100%;font-size:10pt"' : 'class="labtab"'}>
+      <thead><tr>${t.head.map((h, i) => cell('th', t, i, h, false, forClipboard ? widths(t) : null)).join('')}</tr></thead>
+      <tbody>${t.rows.map(r => `<tr>${r.cells.map((c, i) => cell('td', t, i, c, r.strong)).join('')}</tr>`).join('')}</tbody>
+    </table>
+    ${t.legend ? `<p style="margin:4px 0;font-size:9pt">${t.legend.map(esc).join('<br>')}</p>` : ''}
+    ${t.summary ? `<p style="margin:4px 0">${esc(t.summary)}</p>` : ''}`).join('') +
+    `<p style="margin:6px 0 0;font-size:9pt;color:#555">${res.foot.map(esc).join('<br>')}</p>`;
+}
+function labText(res){
+  return res.tables.map(t => [t.title, t.head.join('\t'), ...t.rows.map(r => r.cells.join('\t')), ...(t.legend || []), t.summary || ''].filter(x => x !== '').join('\r\n')).join('\r\n\r\n') +
+    '\r\n\r\n' + res.foot.join('\r\n');
+}
+
+async function findLabFiles(){
+  LAB.files = [];
+  if (!S.proj) return;
+  const d = await findSubdir(S.proj.dir, LAB_DIR).catch(() => null);
+  if (!d) return;
+  for await (const h of d.values()){
+    if (h.kind !== 'file' || !/\.xml$/i.test(h.name)) continue;
+    const f = await h.getFile();
+    LAB.files.push({ handle: h, name: h.name, mod: f.lastModified });
+  }
+  LAB.files.sort((a, b) => b.mod - a.mod);
+}
+async function loadLabFile(file){
+  const rep = parseLabXml(await file.text(), file.name);
+  LAB.rep = rep;
+  return rep;
+}
+
+async function openLabDialog(){
+  if (!S.dir){ banner('info', 'Bitte zuerst den Projektordner öffnen.'); return; }
+  recompute();
+  await findLabFiles();
+  if (!LAB.rep && LAB.files.length){
+    try{ await loadLabFile(await LAB.files[0].handle.getFile()); }catch(e){ LAB.rep = null; LAB.err = e.message; }
+  }
+  const o = Object.assign({ mode: 'uebersicht', title: 'Ergebnisse der Wischproben', startNr: 1, cFlaeche: true, cRating: true, cFoto: true, p1: '', p2: '' }, store.get('bu-labtab', {}));
+  showDialog(`<h3>Ergebnistabelle aus dem Laborbericht</h3>
+    <div class="body">
+      <div class="m" id="lSrc"></div>
+      <div class="labopts">
+        <label><span class="lbl">Darstellung</span><select id="lMode"><option value="uebersicht">Übersicht (je Probe eine Zeile)</option><option value="einzel">Alle Einzelwerte</option></select></label>
+        <label><span class="lbl">Bewerteter Wert</span><select id="lP1"></select></label>
+        <label class="ov"><span class="lbl">2. Wert</span><select id="lP2"></select></label>
+        <label><span class="lbl">Tabelle Nr.</span><input type="number" id="lNr" min="1" style="width:64px"></label>
+        <label class="wide"><span class="lbl">Überschrift</span><input type="text" id="lTitle"></label>
+        <span class="ov chk"><label><input type="checkbox" id="lFl"> Fläche</label><label><input type="checkbox" id="lRa"> Bewertung</label></span>
+        <span class="chk"><label><input type="checkbox" id="lFo"> Foto (Bild-Nr.)</label></span>
+      </div>
+      <details id="lScaleBox"><summary>Bewertungsskala <small id="lScaleInfo"></small></summary><div id="lScale"></div></details>
+      <div id="lWarn"></div>
+      <div class="labprev" id="lPrev"></div>
+    </div>
+    <div class="btns"><button id="lFile">Andere Datei …</button><input type="file" id="lFileIn" accept=".xml,application/xml,text/xml" hidden>
+      <span class="spacer"></span><span class="m" id="lDone"></span><button id="lClose">Schließen</button><button class="primary" id="lCopy">Tabelle kopieren</button></div>`);
+  $('dialog').classList.add('wide');
+  $('lMode').value = o.mode; $('lNr').value = o.startNr; $('lTitle').value = o.title;
+  $('lFl').checked = o.cFlaeche; $('lRa').checked = o.cRating; $('lFo').checked = o.cFoto;
+  let res = null;
+  const params = () => {
+    const ps = [];
+    (LAB.rep ? LAB.rep.proben : []).forEach(pr => pr.lines.forEach(l => { if (!ps.includes(l.param)) ps.push(l.param); }));
+    return ps;
+  };
+  const fillParams = () => {
+    const ps = params();
+    const def1 = ps.find(p => p === o.p1) || ps.find(p => /^summe 16 epa-pak/i.test(p)) || ps.find(p => /^summe/i.test(p)) || ps[0] || '';
+    const def2 = o.p2 === '' && o.p1 ? '' : (ps.find(p => p === o.p2) || ps.find(p => /^benzo\[a\]pyren$/i.test(p)) || '');
+    $('lP1').innerHTML = ps.map(p => `<option>${esc(p)}</option>`).join('');
+    $('lP2').innerHTML = '<option value="">– keiner –</option>' + ps.map(p => `<option>${esc(p)}</option>`).join('');
+    $('lP1').value = def1; $('lP2').value = def2;
+  };
+  const read = () => ({ mode: $('lMode').value, title: $('lTitle').value.trim(), startNr: +$('lNr').value || 1,
+    cFlaeche: $('lFl').checked, cRating: $('lRa').checked, cFoto: $('lFo').checked, p1: $('lP1').value, p2: $('lP2').value });
+  const scaleInfo = () => {
+    const r = read(), rep = LAB.rep, sc = loadScales();
+    if (!rep || !r.p1){ $('lScaleInfo').textContent = ''; return; }
+    const units = [...new Set(rep.proben.map(pr => (pr.lines.find(l => l.param === r.p1) || {}).unit).filter(Boolean))];
+    $('lScaleInfo').textContent = units.map(u => sc[scaleKey(r.p1, u)] ? `· ${shortParam(r.p1)} [${u}]: „${sc[scaleKey(r.p1, u)].name || 'ohne Namen'}“` : `· ${shortParam(r.p1)} [${u}]: noch keine`).join(' ');
+  };
+  const renderScale = () => {
+    const r = read(), rep = LAB.rep;
+    if (!rep || !r.p1){ $('lScale').innerHTML = ''; $('lScaleInfo').textContent = ''; return; }
+    const units = [...new Set(rep.proben.map(pr => (pr.lines.find(l => l.param === r.p1) || {}).unit).filter(Boolean))];
+    const sc = loadScales();
+    scaleInfo();
+    $('lScale').innerHTML = units.map(u => {
+      const s = sc[scaleKey(r.p1, u)] || { name: '', cats: [{ name: '', from: 0 }] };
+      return `<div class="scale" data-unit="${esc(u)}">
+        <div class="m">Skala für <b>${esc(shortParam(r.p1))} in ${esc(u)}</b> – Kategorien aufsteigend; ein Wert gehört zur letzten Kategorie, deren „ab“-Wert er erreicht. Werte unter der BG zählen als 0. Gilt für alle Projekte in diesem Browser.</div>
+        <label class="sname"><span class="lbl">Name der Skala</span><input type="text" class="sN" value="${esc(s.name)}" placeholder="z. B. PAK Wischproben, Stand 10/2026"></label>
+        <table class="stab"><tr><th>Kategorie</th><th>ab ${esc(u)}</th><th></th></tr>
+          ${s.cats.map((c, i) => `<tr><td><input type="text" class="cN" value="${esc(c.name)}" placeholder="z. B. unauffällig"></td>
+            <td><input type="number" class="cF" step="any" value="${i === 0 ? 0 : (isFinite(c.from) ? c.from : '')}" ${i === 0 ? 'disabled' : ''}></td>
+            <td>${i ? '<button class="cDel" title="Kategorie entfernen">✕</button>' : ''}</td></tr>`).join('')}
+        </table>
+        <div class="btns left"><button class="cAdd">+ Kategorie</button><button class="sDel">Skala löschen</button></div></div>`;
+    }).join('');
+    const save = el => {
+      const u = el.dataset.unit, cats = [...el.querySelectorAll('.stab tr')].slice(1).map((tr, i) => ({ name: tr.querySelector('.cN').value.trim(), from: i === 0 ? 0 : parseFloat(tr.querySelector('.cF').value) }))
+        .filter((c, i) => c.name || i === 0);
+      const all = loadScales();
+      all[scaleKey(read().p1, u)] = { name: el.querySelector('.sN').value.trim(), cats: cats.filter(c => c.name).sort((a, b) => (a.from || 0) - (b.from || 0)), geaendert: new Date().toISOString() };
+      if (!all[scaleKey(read().p1, u)].cats.length) delete all[scaleKey(read().p1, u)];
+      store.set('bu-scales', all);
+      scaleInfo();
+      update(false);
+    };
+    $('lScale').querySelectorAll('.scale').forEach(el => {
+      el.querySelectorAll('input').forEach(i => i.addEventListener('change', () => save(el)));
+      el.querySelector('.cAdd').onclick = () => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td><input type="text" class="cN" placeholder="Kategorie"></td><td><input type="number" class="cF" step="any"></td><td><button class="cDel" title="Kategorie entfernen">✕</button></td>';
+        el.querySelector('.stab').appendChild(tr);
+        tr.querySelectorAll('input').forEach(i => i.addEventListener('change', () => save(el)));
+        tr.querySelector('.cDel').onclick = () => { tr.remove(); save(el); };
+        tr.querySelector('.cN').focus();
+      };
+      el.querySelectorAll('.cDel').forEach(b => b.onclick = () => { b.closest('tr').remove(); save(el); });
+      el.querySelector('.sDel').onclick = () => { const all = loadScales(); delete all[scaleKey(read().p1, el.dataset.unit)]; store.set('bu-scales', all); renderScale(); update(false); };
+    });
+  };
+  const update = (withScale = true) => {
+    const rep = LAB.rep, r = read();
+    store.set('bu-labtab', r);
+    document.querySelectorAll('#dialog .ov').forEach(e => { e.style.display = r.mode === 'einzel' ? 'none' : ''; });
+    $('lCopy').disabled = !rep;
+    if (!rep){
+      $('lSrc').innerHTML = (LAB.err ? `<span class="warn">${esc(LAB.err)}</span><br>` : '') +
+        (S.proj ? `Im Ordner „${LAB_DIR}“ des Projekts liegt kein XML-Export. ` : '') + 'Bitte den <b>XML-Export</b> des Prüfberichts wählen („Andere Datei …“). Das Labor liefert ihn zusammen mit der PDF.';
+      $('lPrev').innerHTML = ''; $('lWarn').innerHTML = ''; return;
+    }
+    const projMismatch = S.proj && rep.auftragsref && parseProjName(rep.auftragsref) && parseProjName(rep.auftragsref).nr !== S.proj.nr;
+    $('lSrc').innerHTML = `<b>${esc(rep.datei)}</b> · Prüfbericht ${esc(rep.bericht)}${rep.datum ? ' vom ' + esc(rep.datum) : ''} · ${esc(rep.labor)} · ${rep.proben.length} Proben · Auftragsreferenz „${esc(rep.auftragsref || '–')}“` +
+      (rep.vorlaeufig ? ' · <span class="warn">vorläufiger Bericht</span>' : '') +
+      (projMismatch ? `<br><span class="warn">Achtung: Der Prüfbericht gehört laut Auftragsreferenz zu ${esc(rep.auftragsref)}, geöffnet ist ${esc(S.proj.name)}.</span>` : '');
+    if (withScale) renderScale();
+    res = labTables(rep, r);
+    $('lWarn').innerHTML = res.warn.length ? `<div class="labwarn"><b>Bitte prüfen:</b><ul>${res.warn.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '';
+    $('lPrev').innerHTML = labHtml(res, false);
+  };
+  fillParams();
+  ['lMode', 'lP1', 'lP2', 'lFl', 'lRa', 'lFo'].forEach(id => $(id).addEventListener('change', () => update(true)));
+  ['lNr', 'lTitle'].forEach(id => $(id).addEventListener('input', () => update(false)));
+  $('lClose').onclick = closeDialog;
+  $('lFile').onclick = async () => {
+    if (window.showOpenFilePicker){
+      try{
+        const [h] = await window.showOpenFilePicker({ id: 'laborbericht', types: [{ description: 'XML-Export Prüfbericht', accept: { 'application/xml': ['.xml'] } }] });
+        await loadLabFile(await h.getFile()); LAB.err = '';
+      }catch(e){ if (e.name !== 'AbortError'){ LAB.rep = null; LAB.err = e.message; } }
+      fillParams(); update(true);
+    } else $('lFileIn').click();
+  };
+  $('lFileIn').onchange = async () => {
+    const f = $('lFileIn').files[0]; if (!f) return;
+    try{ await loadLabFile(f); LAB.err = ''; }catch(e){ LAB.rep = null; LAB.err = e.message; }
+    fillParams(); update(true);
+  };
+  $('lCopy').onclick = async () => {
+    if (!res) return;
+    const html = `<html><body>${labHtml(res, true)}</body></html>`, text = labText(res);
+    try{
+      await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
+      $('lDone').textContent = '✓ Kopiert – in Word mit Strg+V einfügen';
+    }catch(e){
+      const box = document.createElement('div'); box.contentEditable = 'true'; box.innerHTML = labHtml(res, true);
+      box.style.cssText = 'position:fixed;left:-9999px'; document.body.appendChild(box);
+      const rg = document.createRange(); rg.selectNodeContents(box); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg);
+      const ok = document.execCommand('copy'); box.remove(); sel.removeAllRanges();
+      $('lDone').textContent = ok ? '✓ Kopiert – in Word mit Strg+V einfügen' : 'Kopieren nicht möglich: ' + e.message;
+    }
+  };
+  update(true);
+}
+
 /* ---------- Kurzanleitung (same text as the one-page guide; works offline) ---------- */
 const HELP_HTML = `
 <h4>Einmalig einrichten</h4>
@@ -2503,6 +2880,7 @@ const HELP_HTML = `
       <li><b>Umbenennen</b> – benennt die Dateien im Ordner nach der Beschreibung (z. B. <code>03_P2_Küche_Decke.jpg</code>). Rückgängig ist danach möglich.</li>
       <li><b>PDF erstellen</b> – Bilddokumentation mit Deckblatt, 2 Bildern pro Seite und Probenahmestellen; wird im Ordner <code>Fotos</code> gespeichert, bei Bedarf in Teile ≤ 14 MB aufgeteilt.</li>
       <li><b>ZIP exportieren</b> – Bilder mit neuen Namen plus Anweisung, wenn eine KI die Dokumentation erstellen soll.</li>
+      <li><b>Ergebnistabelle …</b> – liest den XML-Export des Laborberichts (aus <code>Laborergebnisse</code>), ordnet die Proben über die Probe-Nr. den Fotos zu, bewertet nach eurer Skala und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
     </ul></li>
 </ol>
 <h4>Tastenkürzel</h4>
@@ -2559,6 +2937,7 @@ function hideBanner(){ $('banner').className = ''; $('banner').innerHTML = ''; }
 $('btnOpen').onclick = pickFolder;
 $('btnInfo').onclick = openInfo;
 $('btnHelp').onclick = openHelp;
+$('btnLab').onclick = openLabDialog;
 $('btnHelp2').onclick = openHelp;
 $('btnUpd').onclick = applyUpdate;
 $('btnInfo').textContent = 'v' + APP_VERSION;
