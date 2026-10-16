@@ -61,3 +61,9 @@ Originalbilder werden **nur umbenannt** bzw. nach `_aussortiert/` verschoben –
 - `index.html` – die komplette App (eine Datei, keine externen Bibliotheken)
 - `sw.js` – Service Worker: Offline-Nutzung, immer neueste Version wenn online
 - `manifest.webmanifest`, `icon*.{svg,png}` – Installation als App
+
+## Tests
+
+```sh
+node tests/laborwerte.cjs   # Laborwerte der Ergebnistabelle: Zahlen und Qualifikatoren wie in PlanKit
+```
