@@ -100,7 +100,7 @@ const PROJ = '26.0142 Teststadt';
   const d = await datei();
   assert.equal(d.hinweis, 'Gemeinsame Projektdaten (Projektzentrale, FotoKit, PlanKit, LabelKit). Bitte nicht löschen oder umbenennen.');
   assert.equal(d.notizen, 'bleibt', 'unbekannte Felder bleiben');
-  assert.match(d.geaendertMit, /^FotoKit 1\.6\.3$/);
+  assert.match(d.geaendertMit, /^FotoKit 1\.7\.0$/);
 
   assert.deepEqual(errors, []);
   await browser.close(); server.close();
