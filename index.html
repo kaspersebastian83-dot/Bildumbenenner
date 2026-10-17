@@ -367,9 +367,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.7.1';
 const APP_DATE = '2026-10-17';
 const CHANGELOG = [
+  ['1.7.1', '17.10.2026', 'Behoben: Das Projektmenü der Leiste oben („Anderes Projekt“) schloss sich von selbst, wenn die Leiste sich im Hintergrund aktualisierte (alle 20 Sekunden und beim Zurückkehren ins Fenster).'],
   ['1.7.0', '17.10.2026', 'Neue schmale Leiste oben, in allen vier Apps gleich: Projekt mit Wechsel zu den zuletzt geöffneten, die vier Arbeitsschritte (LabelKit, FotoKit, PlanKit, BelegKit) mit Haken bei erledigten Schritten, und ein Knopf „Weiter: …“ zum nächsten offenen Schritt – öffnet die App mit demselben Projekt. Ohne geöffnetes Projekt bietet die Leiste „Weiter mit <zuletzt geöffnetes Projekt>“ an. Die Leiste liest den Projektordner nur und schreibt nie hinein; ohne Ordnerrecht (oder in Safari) fehlen nur die Haken.'],
   ['1.6.3', '17.10.2026', 'Projektdaten (Objekt, Schadendatum, Ortstermin …) werden beim Zurückkehren ins Fenster neu gelesen – Änderungen aus der Projektzentrale oder von Kollegen landen so auch in PDF und ZIP. Speichern der Projektdaten mit Sperre: FotoKit und Projektzentrale überschreiben sich nicht mehr gegenseitig, wenn sie gleichzeitig schreiben.'],
   ['1.6.2', '17.10.2026', 'Ergebnistabelle: Laborwerte werden wie in PlanKit gelesen. „n.b.“ (nicht bestimmt) und „n.n.“ erscheinen wieder als solche statt als „< BG“; Werte unter der BG, n.n. und n.b. bekommen keine Kategorie mehr (bisher die niedrigste). Mehrdeutige Zahlen wie „1.250“ ohne Formatangabe werden nicht mehr still als 1250 gelesen und „0.5“ nicht mehr als 5 – sie bleiben ohne Bewertung und stehen unter „Bitte prüfen“. Tabelle und Ergebniskarte in PlanKit bewerten damit gleich.'],
@@ -3236,6 +3237,7 @@ updateExample();
     }
   }
   async function aktualisieren(){
+    if (pop) return;   // Menü offen: nicht neu zeichnen (würde es schließen); der nächste Durchlauf holt das nach
     var mein = ++lauf, n = urlName();
     if (n !== name){ name = n; stand = null; }
     try{ zuletzt = (await kvGet('zuletzt')) || []; if (!Array.isArray(zuletzt)) zuletzt = []; }catch(e){ zuletzt = []; }
