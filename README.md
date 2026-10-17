@@ -66,4 +66,5 @@ Originalbilder werden **nur umbenannt** bzw. nach `_aussortiert/` verschoben –
 
 ```sh
 node tests/laborwerte.cjs   # Laborwerte der Ergebnistabelle: Zahlen und Qualifikatoren wie in PlanKit
+node tests/projektdaten-browser.cjs [chromium|webkit]   # _Projekt.json: Neu-Lesen beim Fensterwechsel, Sperre beim Speichern (braucht Playwright)
 ```

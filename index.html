@@ -367,9 +367,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.6.2';
+const APP_VERSION = '1.6.3';
 const APP_DATE = '2026-10-17';
 const CHANGELOG = [
+  ['1.6.3', '17.10.2026', 'Projektdaten (Objekt, Schadendatum, Ortstermin …) werden beim Zurückkehren ins Fenster neu gelesen – Änderungen aus der Projektzentrale oder von Kollegen landen so auch in PDF und ZIP. Speichern der Projektdaten mit Sperre: FotoKit und Projektzentrale überschreiben sich nicht mehr gegenseitig, wenn sie gleichzeitig schreiben.'],
   ['1.6.2', '17.10.2026', 'Ergebnistabelle: Laborwerte werden wie in PlanKit gelesen. „n.b.“ (nicht bestimmt) und „n.n.“ erscheinen wieder als solche statt als „< BG“; Werte unter der BG, n.n. und n.b. bekommen keine Kategorie mehr (bisher die niedrigste). Mehrdeutige Zahlen wie „1.250“ ohne Formatangabe werden nicht mehr still als 1250 gelesen und „0.5“ nicht mehr als 5 – sie bleiben ohne Bewertung und stehen unter „Bitte prüfen“. Tabelle und Ergebniskarte in PlanKit bewerten damit gleich.'],
   ['1.6.1', '16.10.2026', 'Sicherheit: strenge Inhaltsrichtlinie (Content Security Policy) – die Seite kann keine Daten an andere Server senden und lädt keinen fremden Code.'],
   ['1.6.0', '15.10.2026', 'Neu: „Ergebnistabelle …“ – liest den XML-Export des Laborberichts (z. B. Eurofins), ordnet Proben über die Probe-Nr. den Fotos zu, bewertet nach eigener Skala und kopiert eine fertige Tabelle zum Einfügen ins Gutachten (Word: Strg+V). Übersicht oder alle Einzelwerte; Prüfhinweise bei fehlenden Werten, Fotos oder falschem Projekt.'],
@@ -543,7 +544,25 @@ async function checkExternal(){
     if (!same(P.data, P.base)) scheduleProjSave();      // our unsaved changes still have to be written
   }catch(e){ /* not there yet / being written – the next save merges anyway */ }
 }
-window.addEventListener('focus', () => { checkExternal(); });
+/* Projektdaten (_Projekt.json) ändern sich auch in Projektzentrale oder bei Kollegen: beim Zurückkehren ins Fenster neu lesen,
+   sonst landen alte Angaben (Objekt, Schadendatum, Ortstermin …) in PDF und ZIP. Eigene, noch nicht geschriebene Änderungen bleiben unberührt. */
+async function refreshPJ(){
+  if (!S.proj || !PJ.data || S.busy || $('overlay').classList.contains('show')) return;
+  const proj = S.proj;
+  await PJ.writing;
+  if (Object.keys(PJ.pending).length) return;
+  let fresh;
+  try{ fresh = await readPJ(proj.dir); }catch(e){ return; }
+  if (S.proj !== proj || Object.keys(PJ.pending).length) return;
+  const changed = PJ_MAP.some(([, pk]) => (fresh[pk] || '').trim() !== (PJ.sent[pk] || ''));
+  PJ.data = fresh;
+  if (!changed) return;
+  for (const [, pk] of PJ_MAP) PJ.sent[pk] = (fresh[pk] || '').trim();
+  const meta = projGet('meta', {});
+  if (applyPJ(meta)) projSet('meta', meta);
+  if (!$('banner').classList.contains('err')) banner('ok', 'Projektdaten wurden geändert (Projektzentrale oder Kollege) und neu übernommen.');
+}
+window.addEventListener('focus', () => { checkExternal(); refreshPJ(); });
 
 function applyMergedToItems(orderChanged){
   const d = P.data, disc = new Set(d.discard);
@@ -806,6 +825,9 @@ async function readPJ(projDir){
 }
 /* project values fill the fields; the project file wins over this app's own copy, because it is what Projektzentrale
    and coworkers edit. Returns true if something changed. */
+/* Gemeinsame Regeln für _Projekt.json (in Projektzentrale und FotoKit identisch halten): eine Sperre je Projekt, ein Hinweistext. */
+const PJ_HINWEIS = 'Gemeinsame Projektdaten (Projektzentrale, FotoKit, PlanKit, LabelKit). Bitte nicht löschen oder umbenennen.';
+function mitPjSperre(name, fn){ return navigator.locks ? navigator.locks.request('mosaik:projekt:' + name, fn) : fn(); }
 function applyPJ(meta){
   if (!S.proj || !PJ.data) return false;
   let changed = false;
@@ -842,13 +864,16 @@ function flushPJ(){
   PJ.pending = {};
   PJ.writing = PJ.writing.then(async () => {
     try{
-      const cur = await readPJ(proj.dir);
-      if (cur.format === 'mosaik-projekt' && cur.version > 1) throw new Error('die Datei stammt von einer neueren Projektzentrale');
-      const o = Object.assign({ format: 'mosaik-projekt', version: 1,
-        hinweis: 'Gemeinsame Projektdaten (Projektzentrale, FotoKit, Probenplan). Bitte nicht löschen oder umbenennen.' },
-        cur, patch, { projektnummer: proj.nr, schadenort: proj.ort, geaendert: new Date().toISOString(), geaendertMit: APP_NAME + ' ' + APP_VERSION });
-      const fh = await proj.dir.getFileHandle(PJ_FILE, { create: true });
-      const w = await fh.createWritable(); await w.write(JSON.stringify(o, null, 2) + '\n'); await w.close();
+      /* Lesen → ändern → Schreiben unter einer Sperre je Projekt: Projektzentrale (anderer Tab) schreibt dieselbe Datei und nimmt dieselbe Sperre. */
+      const o = await mitPjSperre(proj.name, async () => {
+        const cur = await readPJ(proj.dir);
+        if (cur.format === 'mosaik-projekt' && cur.version > 1) throw new Error('die Datei stammt von einer neueren Projektzentrale');
+        const o = Object.assign({}, cur, patch, { format: 'mosaik-projekt', version: 1, hinweis: PJ_HINWEIS,
+          projektnummer: proj.nr, schadenort: proj.ort, geaendert: new Date().toISOString(), geaendertMit: APP_NAME + ' ' + APP_VERSION });
+        const fh = await proj.dir.getFileHandle(PJ_FILE, { create: true });
+        const w = await fh.createWritable(); await w.write(JSON.stringify(o, null, 2) + '\n'); await w.close();
+        return o;
+      });
       if (S.proj === proj) PJ.data = o;
     }catch(e){
       if (!PJ.failed){ PJ.failed = true; banner('err', `Gemeinsame Projektdaten („${PJ_FILE}“) konnten nicht gespeichert werden: ${esc(e.message)}. Die Angaben bleiben in FotoKit erhalten.`); }
