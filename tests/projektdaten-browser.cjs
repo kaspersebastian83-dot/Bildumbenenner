@@ -100,7 +100,8 @@ const PROJ = '26.0142 Teststadt';
   const d = await datei();
   assert.equal(d.hinweis, 'Gemeinsame Projektdaten (Projektzentrale, FotoKit, PlanKit, LabelKit). Bitte nicht löschen oder umbenennen.');
   assert.equal(d.notizen, 'bleibt', 'unbekannte Felder bleiben');
-  assert.match(d.geaendertMit, /^FotoKit 1\.7\.0$/);
+  const version = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').match(/APP_VERSION = '([\d.]+)'/)[1];
+  assert.equal(d.geaendertMit, 'FotoKit ' + version);
 
   assert.deepEqual(errors, []);
   await browser.close(); server.close();
