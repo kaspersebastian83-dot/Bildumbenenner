@@ -370,9 +370,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.8.1';
 const APP_DATE = '2026-10-18';
 const CHANGELOG = [
+  ['1.8.1', '19.10.2026', 'Behoben: Die Leiste oben zeigt jetzt das Objekt aus der Projektzentrale neben dem Projekt. Sie suchte es bisher an einer Stelle in „_Projekt.json“, an der die Projektzentrale es nicht ablegt.'],
   ['1.8.0', '19.10.2026', 'Neu: Sortierung „nach Abschnitt (Begehung)“ – ordnet die Bilder nach Abschnitten in der Reihenfolge, in der sie zuerst vorkommen; innerhalb eines Abschnitts bleibt die Reihenfolge, Bildnummern passen sich an, Drag & Drop geht weiter (rückgängig möglich). Wird nur der Ordner „Fotos“ gewählt, sucht FotoKit das Projekt jetzt selbst (Archivordner der Projektzentrale) oder bietet „Projekt zuordnen …“ an – damit kommen die Projektdaten automatisch. Im Dialog stehen zusätzlich Auftraggeber und Schaden-Nr. aus der Projektzentrale (nur zur Ansicht). Neue Dateinamen „Bilddokumentation_26.0123_Aachen_2026-10-19.pdf“ (bzw. „_Teil_1_von_2“, ZIP gleich); eine ältere Datei wird nie überschrieben, sondern „(2)“ angehängt.'],
   ['1.7.2', '18.10.2026', 'Die Leiste oben zeigt links den Namen der App-Suite „Spektron“ (die Büro-Apps Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit und SpesenKit). Sonst unverändert.'],
   ['1.7.1', '17.10.2026', 'Behoben: Das Projektmenü der Leiste oben („Anderes Projekt“) schloss sich von selbst, wenn die Leiste sich im Hintergrund aktualisierte (alle 20 Sekunden und beim Zurückkehren ins Fenster).'],
@@ -3207,7 +3208,7 @@ updateExample();
     var s = { label: false, fotos: false, plan: false, beleg: false, objekt: '' };
     try{
       var pj = await proj.getFileHandle('_Projekt.json').then(function(f){ return f.getFile(); }).then(function(f){ return f.text(); }).catch(function(){ return ''; });
-      if (pj){ var j = JSON.parse(pj); if (j && j.daten && typeof j.daten.objekt === 'string') s.objekt = j.daten.objekt.trim(); }
+      if (pj){ var j = JSON.parse(pj), o = j && (typeof j.objekt === 'string' ? j.objekt : j.daten && j.daten.objekt); if (typeof o === 'string') s.objekt = o.trim(); }   // Projektzentrale schreibt die Felder direkt in _Projekt.json (ältere Testdateien: unter „daten“)
     }catch(e3){}
     try{ var fo = await unterordner(proj, 'Fotos'); if (fo) s.fotos = await fo.getFileHandle('_Bildumbenenner.json').then(function(){ return true; }, function(){ return false; }); }catch(e4){}
     try{
