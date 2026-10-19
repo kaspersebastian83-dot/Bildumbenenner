@@ -47,3 +47,5 @@ jobs:
         run: node tests/projektdaten-browser.cjs ${{ matrix.browser }}
       - name: Mosaik bar (project, steps, next step) in the real browser
         run: node tests/leiste-browser.cjs ${{ matrix.browser }}
+      - name: Fotos folder → project, sort by section, PDF name without overwriting
+        run: node tests/sortierung-export-browser.cjs ${{ matrix.browser }}
