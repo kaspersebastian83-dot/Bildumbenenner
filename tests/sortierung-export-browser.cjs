@@ -142,4 +142,4 @@ const PROJ = '26.0177 Bad Teststadt';
   assert.deepEqual(errors, []);
   await browser.close(); server.close();
   console.log(`OK (${name})`);
-})().catch(e => { console.error(e); process.exit(1); });
+})().catch(e => { console.error(e); if (process.env.GITHUB_ACTIONS) console.log(`::error title=sortierung-export (${name})::${String(e.stack || e).split('\n').slice(0, 4).join(' | ').replace(/[\r\n%]/g, ' ')}`); process.exit(1); });
