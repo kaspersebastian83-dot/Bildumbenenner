@@ -2,7 +2,7 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.7.2**
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.8.0**
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
@@ -20,11 +20,11 @@ Die App läuft vollständig im Browser auf dem eigenen Rechner. **Fotos, Projekt
 
 ## Ablauf
 
-1. **Ordner wählen** (oder hineinziehen) – oder das Projekt in der [Projektzentrale](https://kaspersebastian83-dot.github.io/Projektzentrale/) anklicken: „Fotos bearbeiten“ öffnet direkt den Ordner `Fotos`. Wird ein ganzer Projektordner gewählt (`26.0123 Köln`), arbeitet die App ebenfalls in dessen `Fotos`.
+1. **Ordner wählen** (oder hineinziehen) – oder das Projekt in der [Projektzentrale](https://kaspersebastian83-dot.github.io/Projektzentrale/) anklicken: „Fotos bearbeiten“ öffnet direkt den Ordner `Fotos`. Wird ein ganzer Projektordner gewählt (`26.0123 Köln`), arbeitet die App ebenfalls in dessen `Fotos`. Wird nur `Fotos` gewählt, findet die App das Projekt über den Archivordner der Projektzentrale – sonst oben „Projekt zuordnen …“ (ab 1.8).
 2. Pro Bild **Beschreibung** eingeben, optional **Abschnitt** (z. B. „Küche“ – gilt für die folgenden Bilder mit) und **Probe-Nr.** (z. B. „P1“). `Enter` springt zum nächsten Bild.
-3. Unbrauchbare Bilder **aussortieren** (`Alt+X`), Reihenfolge per **Drag & Drop**, schiefe Bilder **drehen** (`Alt+R`).
-4. **Projektdaten** eintragen (Projektnummer, Anlage, Objekt, Schadenereignis, Ortstermin …).
-5. **Umbenennen** – oder direkt **PDF erstellen** (Deckblatt, 2 Bilder pro Seite, Probenahmestellen-Tabelle, Aufteilung in Dateien ≤ 14 MB) bzw. **ZIP exportieren** (Bilder + Anweisung für eine KI + Prüfsummen).
+3. Unbrauchbare Bilder **aussortieren** (`Alt+X`), Reihenfolge per **Drag & Drop** oder Sortierung **„nach Abschnitt (Begehung)“** (Abschnitte in der Reihenfolge ihres ersten Vorkommens, Bildnummern passen sich an), schiefe Bilder **drehen** (`Alt+R`).
+4. **Projektdaten** eintragen (Projektnummer, Anlage, Objekt, Schadenereignis, Ortstermin …) – aus der Projektzentrale vorbelegt, Auftraggeber und Schaden-Nr. werden zur Ansicht angezeigt.
+5. **Umbenennen** – oder direkt **PDF erstellen** (Deckblatt, 2 Bilder pro Seite, Probenahmestellen-Tabelle, Aufteilung in Dateien ≤ 14 MB) bzw. **ZIP exportieren** (Bilder + Anweisung für eine KI + Prüfsummen). Dateiname: `Bilddokumentation_<Projektnummer>_<Ort>_<JJJJ-MM-TT>.pdf` (Teile `…_Teil_1_von_2.pdf`, ZIP gleich); gibt es die Datei schon, wird `(2)` angehängt statt überschrieben.
 
 ## Leiste mit Projekt und Arbeitsschritten (ab 1.7)
 

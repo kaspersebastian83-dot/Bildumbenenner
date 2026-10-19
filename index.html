@@ -66,6 +66,8 @@ button.hbadge:hover{background:rgba(255,255,255,.26);color:#fff;border-color:rgb
 .appbar .projbadge b{font-weight:600;margin-right:2px}
 .appbar .folder{font:12px var(--mono);color:rgba(255,255,255,.82);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .appbar .folder .hint{font:12px var(--sans);color:#ffe2a8;margin-left:8px}
+.appbar .folder #btnAssign{font:12px var(--sans);padding:1px 8px;margin-left:6px;min-height:0;vertical-align:baseline}
+.dialog .form label.ro input{background:var(--panel2);color:var(--muted);cursor:default}
 header{background:var(--panel);border-bottom:1px solid var(--line);display:flex;flex-direction:column;box-shadow:var(--shadow);position:relative;z-index:5}
 .bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 20px 4px}
 .ver{font:600 11px/1 var(--mono);padding:3px 6px;margin-left:4px;color:var(--muted);vertical-align:middle}
@@ -272,6 +274,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
         <option value="name">Dateiname</option>
         <option value="date">Aufnahmedatum</option>
         <option value="manual">manuell</option>
+        <option value="section">nach Abschnitt (Begehung)</option>
       </select>
     </label>
   </div>
@@ -367,9 +370,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.7.2';
+const APP_VERSION = '1.8.0';
 const APP_DATE = '2026-10-18';
 const CHANGELOG = [
+  ['1.8.0', '19.10.2026', 'Neu: Sortierung „nach Abschnitt (Begehung)“ – ordnet die Bilder nach Abschnitten in der Reihenfolge, in der sie zuerst vorkommen; innerhalb eines Abschnitts bleibt die Reihenfolge, Bildnummern passen sich an, Drag & Drop geht weiter (rückgängig möglich). Wird nur der Ordner „Fotos“ gewählt, sucht FotoKit das Projekt jetzt selbst (Archivordner der Projektzentrale) oder bietet „Projekt zuordnen …“ an – damit kommen die Projektdaten automatisch. Im Dialog stehen zusätzlich Auftraggeber und Schaden-Nr. aus der Projektzentrale (nur zur Ansicht). Neue Dateinamen „Bilddokumentation_26.0123_Aachen_2026-10-19.pdf“ (bzw. „_Teil_1_von_2“, ZIP gleich); eine ältere Datei wird nie überschrieben, sondern „(2)“ angehängt.'],
   ['1.7.2', '18.10.2026', 'Die Leiste oben zeigt links den Namen der App-Suite „Spektron“ (die Büro-Apps Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit und SpesenKit). Sonst unverändert.'],
   ['1.7.1', '17.10.2026', 'Behoben: Das Projektmenü der Leiste oben („Anderes Projekt“) schloss sich von selbst, wenn die Leiste sich im Hintergrund aktualisierte (alle 20 Sekunden und beim Zurückkehren ins Fenster).'],
   ['1.7.0', '17.10.2026', 'Neue schmale Leiste oben, in allen vier Apps gleich: Projekt mit Wechsel zu den zuletzt geöffneten, die vier Arbeitsschritte (LabelKit, FotoKit, PlanKit, BelegKit) mit Haken bei erledigten Schritten, und ein Knopf „Weiter: …“ zum nächsten offenen Schritt – öffnet die App mit demselben Projekt. Ohne geöffnetes Projekt bietet die Leiste „Weiter mit <zuletzt geöffnetes Projekt>“ an. Die Leiste liest den Projektordner nur und schreibt nie hinein; ohne Ordnerrecht (oder in Safari) fehlen nur die Haken.'],
@@ -895,10 +899,32 @@ function showProject(dir, proj){
     f.textContent = `📁 ${proj.name} › ${dir.name}`;
     f.title = '';
   } else {
-    f.innerHTML = '📁 ' + esc(dir.name) + (dir.name.normalize('NFC').toLowerCase() === FOTOS_DIR.toLowerCase()
-      ? '<span class="hint">– Projekt unbekannt: den Projektordner (z. B. „26.0123 Köln“) statt „Fotos“ wählen oder über die Projektzentrale öffnen</span>' : '');
+    const isFotos = dir.name.normalize('NFC').toLowerCase() === FOTOS_DIR.toLowerCase();
+    f.innerHTML = '📁 ' + esc(dir.name) + (isFotos
+      ? '<span class="hint">– Projekt unbekannt</span> <button id="btnAssign" title="Den Projektordner wählen, in dem dieser „Fotos“-Ordner liegt – dann werden die Projektdaten aus der Projektzentrale übernommen">Projekt zuordnen …</button>' : '');
     f.title = '';
+    if (isFotos) $('btnAssign').onclick = assignProject;
   }
+}
+const folderLabel = () => !S.dir ? '' : S.proj ? `${S.proj.name} › ${S.dir.name}` : S.dir.name;
+/* „Fotos“ was chosen on its own: find the project it belongs to – via the archive folder of the Projektzentrale
+   (asks for access if needed), otherwise let the user pick the project folder that contains exactly this „Fotos“ folder. */
+async function assignProject(){
+  const fotos = S.dir; if (!fotos) return;
+  let proj = await projectOf(fotos, true);
+  if (!proj){
+    let projDir;
+    try{ projDir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'fotokit-projekt', startIn: fotos }); }
+    catch(e){ if (e.name !== 'AbortError') banner('err', 'Ordner konnte nicht geöffnet werden: ' + esc(e.message)); return; }
+    const p = parseProjName(projDir.name), sub = await findSubdir(projDir, FOTOS_DIR);
+    if (!p || !sub || !(await sub.isSameEntry(fotos))){
+      banner('err', `„${esc(projDir.name)}“ ist nicht der Projektordner dieses „Fotos“-Ordners. Bitte den Ordner wählen, in dem „Fotos“ liegt (z. B. „26.0123 Köln“).`);
+      return;
+    }
+    proj = { dir: projDir, name: projDir.name, nr: p.nr, ort: p.ort };
+  }
+  await openDir(fotos, proj);
+  banner('ok', `Projekt <b>${esc(proj.name)}</b> zugeordnet – Projektdaten aus der Projektzentrale übernommen.`);
 }
 
 /* open a project folder („26.0123 Köln“): works on its „Fotos“ subfolder */
@@ -949,12 +975,14 @@ async function ensurePerm(dir){
 }
 /* a folder chosen directly (e.g. „Fotos“) cannot see its parent – but the archive folder remembered from the
    Projektzentrale can tell where it lies: archiv.resolve(dir) → ['26.0123 Köln', 'Fotos'] */
-async function projectOf(dir){
+async function projectOf(dir, ask = false){
   let archiv = null;
   try{ archiv = await SUITE.get('archiv'); }catch(e){}
   if (!archiv) return null;
   try{
-    if ((await archiv.queryPermission({ mode: 'readwrite' })) !== 'granted') return null;
+    let st = await archiv.queryPermission({ mode: 'readwrite' });
+    if (st !== 'granted' && ask) st = await archiv.requestPermission({ mode: 'readwrite' });
+    if (st !== 'granted') return null;
     const path = await archiv.resolve(dir);
     if (!path || path.length !== 2 || path[1].normalize('NFC').toLowerCase() !== FOTOS_DIR.toLowerCase()) return null;
     const p = parseProjName(path[0]);
@@ -965,7 +993,7 @@ async function projectOf(dir){
 async function openDir(dir, proj = null){
   if (!(await ensurePerm(dir))){ banner('err','Ohne Schreibrecht kann nicht umbenannt werden.'); return; }
   if (!proj && parseProjName(dir.name) && await findSubdir(dir, FOTOS_DIR)) return openProject(dir);   // a whole project folder was chosen
-  if (!proj) proj = await projectOf(dir);
+  if (!proj) proj = await projectOf(dir, dir.name.normalize('NFC').toLowerCase() === FOTOS_DIR.toLowerCase());
   flushDrafts(); if (S.dir) saveExtra();
   await flushProject(); await flushPJ();      // finish writing the previous project before switching
   S.dir = dir; S.proj = proj; S.lastRun = null;
@@ -1041,6 +1069,32 @@ function applySort(){
     const pos = it => ord.has(it.name) ? ord.get(it.name) : Infinity;
     S.items.sort((a,b) => (pos(a) - pos(b)) || byName(a,b));
   }
+}
+/* group by section in the order the sections first appear (= the walk through the site); within a section the
+   order stays. Images that only inherited their section get it written in, so they keep it after the move.
+   Discarded images are left alone. Image numbers follow automatically (recompute). Returns the undo data. */
+function groupBySection(){
+  const undo = { order: S.view.map(it => it.name), sec: new Map(S.items.map(it => [it.name, it.sec])) };
+  const act = S.view.filter(it => !it.discard), gone = S.view.filter(it => it.discard);
+  const first = new Map(); let cur = '', filled = 0;
+  const grp = new Map();
+  for (const it of act){
+    if (it.sec.trim()) cur = it.sec.trim();
+    else if (cur){ it.sec = cur; filled++; if (it.el) it.el.querySelector('.sec').value = cur; }
+    const k = cur.toLocaleLowerCase('de');
+    if (!first.has(k)) first.set(k, first.size);
+    grp.set(it, first.get(k));
+  }
+  act.sort((a, b) => grp.get(a) - grp.get(b));          // stable: order within a section is kept
+  S.items = act.concat(gone);
+  return { undo, sections: first.size, filled };
+}
+function undoGroup(undo){
+  for (const it of S.items) if (undo.sec.has(it.name)){ it.sec = undo.sec.get(it.name); if (it.el) it.el.querySelector('.sec').value = it.sec; }
+  const pos = new Map(undo.order.map((n, i) => [n, i]));
+  S.items.sort((a, b) => (pos.has(a.name) ? pos.get(a.name) : Infinity) - (pos.has(b.name) ? pos.get(b.name) : Infinity));
+  saveExtra(); buildRows(); recompute(); saveOrder(); if (S.items.length) setFocus(0, false);
+  banner('ok', '↺ Sortierung nach Abschnitt rückgängig gemacht.');
 }
 function saveOrder(names){
   projSet('order', names || S.view.map(it => it.name));
@@ -1785,14 +1839,23 @@ function fillTemplate(m){
 function zipSelection(onlyDesc){
   return S.view.filter(it => !it.discard && (!onlyDesc || it.nr != null));
 }
-/* readable export names: „Bilddokumentation 26.0123 Aachen.pdf“ – number and place from the project folder,
-   otherwise the Projektnummer from the project data, otherwise the folder name */
+/* export names: „Bilddokumentation_26.0123_Aachen_2026-10-19.pdf“ – number and place from the project folder,
+   otherwise the Projektnummer from the project data, otherwise the folder name; then the creation date */
 const winName = s => (s || '').replace(/[<>:"\/\\|?*\x00-\x1F]/g, '-').replace(/\s+/g, ' ').trim().replace(/^[.~]+|[. ]+$/g, '');
 function docBaseName(m){
   const generic = !S.dir || /^(fotos|bilder)$/i.test(S.dir.name);
   const parts = S.proj ? [S.proj.nr || S.proj.name, S.proj.ort]
               : [(m.proj || '').trim() || (generic ? '' : S.dir.name)];
-  return winName(['Bilddokumentation', ...parts].filter(Boolean).join(' ')) || 'Bilddokumentation';
+  return ['Bilddokumentation', ...parts.map(winName), fmtISO(new Date())].filter(Boolean).join('_');
+}
+/* never overwrite an earlier export: „…_2026-10-19.pdf“ exists → „…_2026-10-19 (2).pdf“ (all parts of a split PDF get the same suffix) */
+async function freeBase(dir, base, namesOf){
+  const taken = new Set();
+  if (dir) for await (const h of dir.values()) taken.add(h.name.normalize('NFC').toLowerCase());
+  for (let k = 1; ; k++){
+    const b = k === 1 ? base : `${base} (${k})`;
+    if (!namesOf(b).some(n => taken.has(n.normalize('NFC').toLowerCase()))) return b;
+  }
 }
 function zipFileName(m){ return `${docBaseName(m)}.zip`; }
 function buildTxt(m, items, now, exp){
@@ -1869,10 +1932,13 @@ function openMetaDialog(mode){
   const fields = META_FIELDS.map(([key, label, ph, type, scope, hint]) =>
     `<label${key === 'objekt' || key === 'ereignis' ? ' class="wide"' : ''}>${label}${scope === 'global' ? ' <small>(für alle Projekte)</small>' : ''}
        <input type="${type}" id="m_${key}" placeholder="${esc(hint)}"></label>`).join('');
+  // read-only from the Projektzentrale (_Projekt.json) – shown for orientation, not used in PDF/ZIP
+  const pjInfo = S.proj && PJ.data ? [['auftraggeber', 'Auftraggeber'], ['schadennummer', 'Schaden-Nr.']]
+    .map(([k, l]) => `<label class="ro">${l} <small>(Projektzentrale)</small><input type="text" id="m_pz_${k}" readonly tabindex="-1" value="${esc(String(PJ.data[k] || '').trim())}" placeholder="– nicht hinterlegt –"></label>`).join('') : '';
   const sel = (id, vals) => `<select id="${id}">${vals.map(v => `<option value="${v}">${v}</option>`).join('')}</select>`;
   showDialog(`<h3>${forZip ? 'ZIP für Bilddokumentation exportieren' : forPdf ? 'Bilddokumentation als PDF erstellen' : 'Projektdaten'}</h3>
     <div class="body">
-      <div class="form">${fields}</div>
+      <div class="form">${pjInfo}${fields}</div>
       ${forPdf ? '' : `<label class="block">Projekthinweise für die KI <small>(nur dieses Projekt, haben Vorrang vor der Standardanweisung)</small>
         <textarea id="m_notes" rows="3" placeholder="z. B. Bilder 5–8 als Detailaufnahmen kennzeichnen · Raumbezeichnungen wie im Grundriss (Anlage 2) verwenden"></textarea></label>
       <details id="m_tplBox"><summary>Standardanweisung bearbeiten <small>(gilt für alle Projekte)</small></summary>
@@ -1939,7 +2005,7 @@ function openMetaDialog(mode){
         const base = pdfBaseName(r);
         html += `Inhalt: Deckblatt + <b>${items.length}</b> Bilder (${r.pdf.perPage} pro Seite)` + notIn +
           `<br>Geschätzte Größe: ca. <b>${fmtSize(est)}</b> → voraussichtlich <b>${nParts}</b> Datei${nParts > 1 ? 'en' : ''} à max. ${String(r.pdf.maxMB).replace('.', ',')} MB (wird beim Erstellen exakt geprüft)` +
-          `<br>Speicherort: Projektordner „${esc(S.dir.name)}“ · Dateiname: <b>${esc(pdfPartName(base, 1, nParts) + (nParts > 1 ? ' …' : ''))}</b>` +
+          `<br>Speicherort: „${esc(folderLabel())}“ · Dateiname: <b>${esc(pdfPartName(base, 1, nParts) + (nParts > 1 ? ' …' : ''))}</b> <small>(gibt es die Datei schon, wird „(2)“ angehängt – nichts wird überschrieben)</small>` +
           (bad.length ? `<br><span class="warn">${bad.length} Bild(er) im Format ${[...new Set(bad.map(it => it.ext.slice(1).toUpperCase()))].join('/')} kann Chrome nicht lesen – sie erscheinen als Platzhalter.</span>` : '');
       }
       $('zOk').disabled = !items.length;
@@ -2034,7 +2100,8 @@ async function exportImage(it, f, opt, buf){
 async function doZip(meta){
   const items = zipSelection(meta.onlyDesc);
   if (!items.length) return;
-  const name = zipFileName(meta);
+  const base = await freeBase(S.dir, docBaseName(meta), b => [b + '.zip']);
+  const name = base + '.zip';
   // ask for the target first, while the click still counts as a user gesture
   let handle = null;
   if ('showSaveFilePicker' in window){
@@ -2230,7 +2297,7 @@ function writePdf(pages, images, info){
 const PDF_DEFAULTS = { perPage: 2, maxMB: 14, secPage: false };
 const loadPdfOpt = () => Object.assign({}, PDF_DEFAULTS, store.get('bu-pdf', {}));
 const pdfBaseName = docBaseName;
-const pdfPartName = (base, i, n) => n > 1 ? `${base} - Teil ${i} von ${n}.pdf` : `${base}.pdf`;
+const pdfPartName = (base, i, n) => n > 1 ? `${base}_Teil_${i}_von_${n}.pdf` : `${base}.pdf`;
 
 /* Builds all PDF parts. Returns { parts: [{ name, blob, pages, from, to }], failed: [items] }. */
 async function buildAnnex(meta, items, progress){
@@ -2427,8 +2494,12 @@ async function doPdf(meta){
   showDialog(`<h3>Erstelle PDF …</h3><progress id="prog" max="1" value="0"></progress><div class="m" id="zStep"></div>`);
   try{
     const res = await buildAnnex(meta, items, (t, v, max) => { $('zStep').textContent = t; $('prog').max = max || 1; $('prog').value = v; });
-    $('zStep').textContent = 'Speichere im Projektordner …';
+    $('zStep').textContent = `Speichere im Ordner „${S.dir.name}“ …`;
+    const N = res.parts.length, base0 = pdfBaseName(meta);
+    const base = await freeBase(S.dir, base0, b => res.parts.map((p, k) => pdfPartName(b, k + 1, N)));
+    res.parts.forEach((p, k) => { p.name = pdfPartName(base, k + 1, N); });
     for (const p of res.parts){
+      try{ await S.dir.getFileHandle(p.name); throw new Error(`„${p.name}“ gibt es schon – wird nicht überschrieben.`); }catch(e){ if (e.name !== 'NotFoundError') throw e; }
       const fh = await S.dir.getFileHandle(p.name, { create: true });
       const w = await fh.createWritable(); await w.write(p.blob); await w.close();
       const sz = (await fh.getFile()).size;
@@ -2438,7 +2509,7 @@ async function doPdf(meta){
     closeDialog(); S.busy = false; recompute();
     S.lastPdf = res.parts;
     const list = res.parts.map((p, k) => `<button class="pdfOpen" data-k="${k}" title="Im Browser öffnen">„${esc(p.name)}“</button> ${(p.blob.size / 1e6).toFixed(1).replace('.', ',')} MB, ${p.pages} S.`).join(' · ');
-    banner(res.failed.length ? 'err' : 'ok', `✓ PDF erstellt (${res.parts.length} Datei${res.parts.length > 1 ? 'en' : ''}, je max. ${String(meta.pdf.maxMB).replace('.', ',')} MB) im Projektordner: ${list}` +
+    banner(res.failed.length ? 'err' : 'ok', `✓ PDF erstellt (${res.parts.length} Datei${res.parts.length > 1 ? 'en' : ''}, je max. ${String(meta.pdf.maxMB).replace('.', ',')} MB) in „${esc(folderLabel())}“: ${list}` +
       (res.failed.length ? ` <b>· ${res.failed.length} Bild(er) nicht lesbar (Platzhalter eingefügt): ${res.failed.map(it => esc(it.name)).join(', ')}</b>` : '') +
       `<span class="spacer"></span>${runButtonsHtml()}`);
     document.querySelectorAll('.pdfOpen').forEach(b => b.onclick = () => window.open(URL.createObjectURL(S.lastPdf[+b.dataset.k].blob), '_blank'));
@@ -2932,14 +3003,14 @@ const HELP_HTML = `
 </ul>
 <h4>In 5 Schritten zur Bilddokumentation</h4>
 <ol>
-  <li><b>Projekt öffnen:</b> in der Projektzentrale „Fotos bearbeiten → FotoKit“ – oder hier „Ordner wählen …“ und den Projektordner (z. B. <code>26.0123 Köln</code>) wählen. Oben in der blauen Leiste stehen dann Projektnummer und Ort.</li>
+  <li><b>Projekt öffnen:</b> in der Projektzentrale „Fotos bearbeiten → FotoKit“ – oder hier „Ordner wählen …“ und den Projektordner (z. B. <code>26.0123 Köln</code>) wählen. Oben in der blauen Leiste stehen dann Projektnummer und Ort. Wurde nur der Ordner <code>Fotos</code> gewählt, oben „Projekt zuordnen …“ klicken.</li>
   <li><b>Bilder beschreiben:</b> links ein Bild anklicken, rechts erscheint die Vorschau. Beschreibung eintippen, <kbd>Enter</kbd> springt zum nächsten Bild. Darunter optional <b>Abschnitt</b> (z. B. „Küche“ – gilt für die folgenden Bilder mit) und <b>Probe-Nr.</b> (z. B. „P1“).</li>
-  <li><b>Aufräumen:</b> unbrauchbare Bilder mit ✕ aussortieren (sie wandern ans Ende, nichts wird gelöscht). Reihenfolge per Ziehen ändern, schiefe Bilder mit ↻ drehen.</li>
+  <li><b>Aufräumen:</b> unbrauchbare Bilder mit ✕ aussortieren (sie wandern ans Ende, nichts wird gelöscht). Reihenfolge per Ziehen ändern oder mit Sortierung „nach Abschnitt (Begehung)“ nach Räumen ordnen, schiefe Bilder mit ↻ drehen.</li>
   <li><b>Projektdaten prüfen:</b> „Projektdaten …“ – Anlagen-Nr., Objekt, Schadenereignis, Daten, Sachverständiger. Was in der Projektzentrale schon eingetragen ist, steht hier bereits.</li>
   <li><b>Ausgeben:</b>
     <ul>
       <li><b>Umbenennen</b> – benennt die Dateien im Ordner nach der Beschreibung (z. B. <code>03_P2_Küche_Decke.jpg</code>). Rückgängig ist danach möglich.</li>
-      <li><b>PDF erstellen</b> – Bilddokumentation mit Deckblatt, 2 Bildern pro Seite und Probenahmestellen; wird im Ordner <code>Fotos</code> gespeichert, bei Bedarf in Teile ≤ 14 MB aufgeteilt.</li>
+      <li><b>PDF erstellen</b> – Bilddokumentation mit Deckblatt, 2 Bildern pro Seite und Probenahmestellen; wird im Ordner <code>Fotos</code> gespeichert als <code>Bilddokumentation_26.0123_Köln_2026-10-19.pdf</code> (ältere Dateien werden nie überschrieben), bei Bedarf in Teile ≤ 14 MB aufgeteilt.</li>
       <li><b>ZIP exportieren</b> – Bilder mit neuen Namen plus Anweisung, wenn eine KI die Dokumentation erstellen soll.</li>
       <li><b>Ergebnistabelle …</b> – liest den XML-Export des Laborberichts (aus <code>Laborergebnisse</code>), ordnet die Proben über die Probe-Nr. den Fotos zu, bewertet nach eurer Skala und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
     </ul></li>
@@ -3017,6 +3088,18 @@ $('btnReload').onclick = async () => {
   if (note) banner(P.readOnly ? 'err' : 'info', note);
 };
 $('sort').onchange = () => {
+  if ($('sort').value === 'section'){
+    // one-off: arrange by section, then keep that order as „manuell“ (drag & drop and ▲▼ keep working)
+    recompute();
+    const r = groupBySection();
+    cfg.sort = 'manual'; $('sort').value = 'manual'; store.set('bu-settings', cfg);
+    saveExtra(); buildRows(); recompute(); saveOrder(); if (S.items.length) setFocus(0, false);
+    banner('ok', `Nach Abschnitt sortiert: ${r.sections} Abschnitt${r.sections === 1 ? '' : 'e'} in der Reihenfolge der Begehung, Bildnummern angepasst.` +
+      (r.filled ? ` ${r.filled} Bild(er) hatten den Abschnitt nur geerbt – er ist jetzt fest eingetragen.` : '') +
+      ` Die Reihenfolge steht jetzt auf „manuell“ – Verschieben per Drag &amp; Drop geht weiter. <span class="spacer"></span><button id="bUndoSec">Rückgängig</button>`);
+    $('bUndoSec').onclick = () => undoGroup(r.undo);
+    return;
+  }
   cfg.sort = $('sort').value; store.set('bu-settings', cfg);
   if (cfg.sort !== 'manual') applySort();   // switching to manual keeps the current order
   buildRows(); recompute(); saveOrder(); if (S.items.length) setFocus(0, false);
