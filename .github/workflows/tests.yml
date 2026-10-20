@@ -53,3 +53,5 @@ jobs:
         run: node tests/sicherer-projektwechsel-browser.cjs ${{ matrix.browser }}
       - name: Protected projects preserve originals and metadata, including direct file actions
         run: node tests/geschuetzter-projektmodus-browser.cjs ${{ matrix.browser }}
+      - name: Settings disclosure and unchanged workflows at desktop and narrow widths
+        run: node tests/oberflaeche-browser.cjs ${{ matrix.browser }}
