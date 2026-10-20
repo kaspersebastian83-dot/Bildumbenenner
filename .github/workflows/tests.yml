@@ -27,7 +27,8 @@ jobs:
 
   browser-tests:
     name: Browser tests (${{ matrix.browser }})
-    runs-on: ubuntu-latest
+    # Playwright 1.56.1 supports this image; ubuntu-latest may advance beyond it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -55,3 +56,5 @@ jobs:
         run: node tests/geschuetzter-projektmodus-browser.cjs ${{ matrix.browser }}
       - name: Settings disclosure and unchanged workflows at desktop and narrow widths
         run: node tests/oberflaeche-browser.cjs ${{ matrix.browser }}
+      - name: Series labelling with 5, 50 and 150 images, keyboard and preview races
+        run: node tests/serienbeschriftung-browser.cjs ${{ matrix.browser }}
