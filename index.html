@@ -429,9 +429,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.9.3';
+const APP_VERSION = '1.9.4';
 const APP_DATE = '2026-10-20';
 const CHANGELOG = [
+  ['1.9.4', '20.10.2026', 'Speicherfehler nach Umbenennen oder Rückgängig bleiben sichtbar. Erneut speichern sichert die Metadaten unter den bereits geänderten Dateinamen, einschließlich neuer Eingaben; die Dateiaktion wird dabei nicht wiederholt. Eine Erfolgsmeldung erscheint erst nach erfolgreicher Speicherung.'],
   ['1.9.3', '20.10.2026', 'Projektkontext: FotoKit, URL und Spektron-Leiste verwenden erst nach erfolgreichem Öffnen dieselbe Projektzuordnung. Fehlgeschlagene Wechsel erhalten das bisherige Projekt. Unbekannte Fotoordner entfernen eine alte Zuordnung; nachträgliches Zuordnen erhält die Bildinformationen. Bestehende Speicherabsicherung und geschützter Modus bleiben erhalten.'],
   ['1.9.2', '20.10.2026', 'Serienbeschriftung: zuverlässiger Fokus und Vorschauwechsel ohne doppelte Lesevorgänge; verspätete Vorschaufehler beeinflussen kein anderes Bild. Tastenkürzel für Bilder sind bei geöffnetem Dialog, Vollbild und während einer IME-Komposition ausgesetzt; Pfeiltasten im Abschnitts- und Probenfeld bleiben für die Eingabe frei. Der wirksame Abschnitt wird als eingetragen oder von vorherigem Bild übernommen erklärt. Bestehende Übernahme-, Speicher-, Schutz- und Exportfunktionen bleiben erhalten.'],
   ['1.9.1', '20.10.2026', 'Responsive Oberfläche: Kopfzeile, Projektangaben und Aktionen passen sich schmalen Fenstern an. Die Bildliste behält ausreichend Höhe; die Vorschau lässt sich auf schmalen Fenstern per Tastatur ein- und ausklappen. Auswahl und Beschreibung bleiben erhalten. Desktopaufteilung und Datei-, Speicher-, Schutz- und Exportfunktionen bleiben unverändert.'],
@@ -991,11 +992,19 @@ function flushPJ(){
   return PJ.writing;
 }
 
-function saveError(detail){
+function saveError(detail, onSaved = null){
   banner('err', `${detail} Deine Eingaben sind weiterhin geöffnet. Bitte prüfe den Projektordner und versuche erneut zu speichern. Änderungen gehen beim Schließen verloren. <button id="bSaveRetry">Erneut speichern</button>`);
-  $('bSaveRetry').onclick = () => withSavedProject('Das Speichern', async () => {
-    banner('ok', 'Die Änderungen wurden im Projektordner gespeichert. Du kannst jetzt weiterarbeiten oder das Projekt wechseln.');
-  });
+  const session = P.session;
+  const retry = async () => {
+    const ok = await withSavedProject('Das Speichern', async () => {
+      if (onSaved) onSaved();
+      else banner('ok', 'Die Änderungen wurden im Projektordner gespeichert. Du kannst jetzt weiterarbeiten oder das Projekt wechseln.');
+    });
+    // The save gate creates a new error banner on failure. Keep the completion
+    // action through repeated retries, without repeating the physical file work.
+    if (!ok && P.session === session && onSaved && $('bSaveRetry')) $('bSaveRetry').onclick = retry;
+  };
+  $('bSaveRetry').onclick = retry;
 }
 
 // The same gate protects every in-app replacement of the current project state.
@@ -1850,18 +1859,27 @@ async function doRename(pairs, moves){
       const moved = new Set(moves.map(m => m.from));
       projSet('discard', projGet('discard', []).filter(n => !moved.has(n)));
     }
-    await flushProject();                     // project file now matches the renamed files
-    S.busy = false;
+    const saved = await flushProject();
+    // Physical file changes have already happened. Rebuild from the remapped
+    // in-memory metadata so retries and new edits use the current file names.
     await loadItems();
+    S.busy = false; recompute();
     const msg = [];
     if (pairs.length) msg.push(`${pairs.length} umbenannt`);
     if (moves.length) msg.push(`${moves.length} nach ${DISCARD_DIR}/ verschoben`);
-    banner('ok', `✓ ${msg.join(', ')} – im Ordner geprüft.${usedCopy ? ' (Kopiermodus: dein Browser benennt nicht direkt um, darum wurde kopiert, geprüft und das Original entfernt.)' : ''}
+    const complete = () => {
+      banner('ok', `✓ ${msg.join(', ')} – im Ordner geprüft.${usedCopy ? ' (Kopiermodus: dein Browser benennt nicht direkt um, darum wurde kopiert, geprüft und das Original entfernt.)' : ''}
       <span class="spacer"></span>
       <button id="bCsv">Bildverzeichnis (CSV) im Ordner speichern</button>
       <button id="bUndo">Rückgängig</button>`);
-    $('bCsv').onclick = saveCsv;
-    $('bUndo').onclick = undo;
+      $('bCsv').onclick = saveCsv;
+      $('bUndo').onclick = undo;
+    };
+    if (saved === false || P.failed){
+      saveError('Die Dateien wurden bereits umbenannt oder verschoben, ihre Projektdaten konnten aber noch nicht gespeichert werden.', complete);
+      return false;
+    }
+    complete();
   }catch(e){
     if (movesDone){ try{ await undoMoves(moves); }catch(_){} }
     closeDialog(); S.busy = false;
@@ -1897,10 +1915,17 @@ async function undo(){
     run.moves.forEach(m => disc.add(m.from));
     projSet('discard', [...disc]);
     saveOrder(run.rows.map(r => r.from).concat(run.discardRows.map(r => r.from)));
-    await flushProject();
-    S.lastRun = null; S.busy = false;
+    const saved = await flushProject();
+    // The reverse file operation must not run again when only its save failed.
+    S.lastRun = null;
     await loadItems();
-    banner('ok', '↺ Rückgängig gemacht. Beschreibungen und Aussortierung sind wieder eingetragen.');
+    S.busy = false; recompute();
+    const complete = () => banner('ok', '↺ Rückgängig gemacht. Beschreibungen und Aussortierung sind wieder eingetragen.');
+    if (saved === false || P.failed){
+      saveError('Die Dateinamen wurden bereits zurückgesetzt, ihre Projektdaten konnten aber noch nicht gespeichert werden.', complete);
+      return false;
+    }
+    complete();
   }catch(e){
     closeDialog(); S.busy = false; await loadItems();
     banner('err', 'Rückgängig fehlgeschlagen: ' + esc(e.message));

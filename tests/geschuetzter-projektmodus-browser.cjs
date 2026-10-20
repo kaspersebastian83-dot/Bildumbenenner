@@ -150,6 +150,98 @@ let browser, server;
     for (const [n, bytes] of Object.entries(before)) if (!n.endsWith('_Bildumbenenner.json')) assert.deepEqual(after[n], bytes, n);
   });
 
+  for (const action of ['rename', 'undo']) {
+    for (const stage of ['create', 'write', 'close']) {
+      for (const copyFallback of [false, true]) {
+        await scenario(`Metadatenfehler ${action}/${stage}, Kopiermodus=${copyFallback}: Retry erhält Dateizuordnung`, 'normal', async ({page, open, snapshot, before, base}) => {
+          await open('A');
+          await page.locator('#list .desc').first().fill('Neue Eingabe');
+          await page.locator('#list .row').nth(1).locator('.x').click();
+          // Änderungen vor der Dateiaktion sicher abschließen. Der injizierte
+          // Fehler betrifft damit die Metadaten nach der physischen Aktion.
+          await page.locator('#btnReload').click();
+          await page.waitForFunction(() => !document.body.inert && document.querySelector('#list .desc')?.value === 'Neue Eingabe');
+          if (copyFallback) await page.evaluate(() => {
+            FileSystemFileHandle.prototype.move = async () => { throw new DOMException('Synthetischer Kopierfallback', 'NotSupportedError'); };
+          });
+          const renamed = '01_P1_Neue_Eingabe.jpg', prefix = projects.A + '/Fotos/';
+          if (action === 'undo') {
+            await page.locator('#btnRename').click();await page.locator('#dOk').click();await page.locator('#bUndo').waitFor();
+          }
+          const savedBefore = await snapshot();
+          await page.evaluate(stage => {
+            window.failMetadataSave = true;
+            const create = FileSystemFileHandle.prototype.createWritable;
+            FileSystemFileHandle.prototype.createWritable = async function(...args) {
+              if (this.name !== '_Bildumbenenner.json') return create.apply(this, args);
+              if (window.failMetadataSave && stage === 'create') throw new Error('Synthetischer Metadatenfehler');
+              const w = await create.apply(this, args), write = w.write.bind(w), close = w.close.bind(w);
+              w.write = async data => {
+                if (window.failMetadataSave && stage === 'write') throw new Error('Synthetischer Metadatenfehler');
+                return write(data);
+              };
+              w.close = async () => {
+                if (window.failMetadataSave && stage === 'close') throw new Error('Synthetischer Metadatenfehler');
+                return close();
+              };
+              return w;
+            };
+          }, stage);
+          if (action === 'rename') {await page.locator('#btnRename').click();await page.locator('#dOk').click();}
+          else await page.locator('#bUndo').click();
+          await page.locator('#bSaveRetry').waitFor({timeout: 10000});
+          assert.match(await page.locator('#banner').getAttribute('class'), /err/);
+          assert.doesNotMatch(await page.locator('#banner').textContent(), /✓|Rückgängig gemacht/);
+          assert.equal(await page.locator('#list .desc').first().inputValue(), 'Neue Eingabe');
+          assert.equal(await page.locator('#list .sec').first().inputValue(), 'Küche');
+          assert.equal(await page.locator('#list .probe').first().inputValue(), 'P1');
+          const failed = await snapshot();
+          assert.deepEqual(failed[prefix + '_Bildumbenenner.json'], savedBefore[prefix + '_Bildumbenenner.json'], 'Fehlerhafte Speicherung verändert die bisherige JSON nicht');
+          const currentName = action === 'rename' ? renamed : 'IMG_0001.jpg';
+          assert.deepEqual(failed[prefix + currentName], before[prefix + 'IMG_0001.jpg']);
+          assert.deepEqual(failed[prefix + (action === 'rename' ? '_aussortiert/' : '') + 'IMG_0002.jpg'], before[prefix + 'IMG_0002.jpg']);
+          assert.equal(failed[prefix + (action === 'rename' ? 'IMG_0001.jpg' : renamed)], undefined);
+          // Ein weiterer fehlgeschlagener Retry darf weder die Dateiaktion
+          // wiederholen noch die Fortsetzung für einen späteren Erfolg verlieren.
+          await page.locator('#bSaveRetry').click();
+          await page.waitForFunction(() => !document.body.inert && document.querySelector('#bSaveRetry'));
+          assert.deepEqual(await snapshot(), failed);
+          await page.locator('#list .desc').first().fill('Neu nach Speicherfehler');
+          await page.evaluate(() => window.failMetadataSave = false);
+          await page.locator('#bSaveRetry').click();
+          await page.waitForFunction(() => !document.body.inert && !document.querySelector('#bSaveRetry') && document.querySelector('#banner').classList.contains('ok'));
+          const after = await snapshot();
+          const data = JSON.parse(Buffer.from(after[prefix + '_Bildumbenenner.json']).toString());
+          assert.equal(data.bilder[currentName].beschreibung, 'Neu nach Speicherfehler');
+          assert.equal(data.bilder[currentName].abschnitt, 'Küche');
+          assert.equal(data.bilder[currentName].probe, 'P1');
+          assert.equal(data.bilder['IMG_0002.jpg'].drehung, 90);
+          assert.deepEqual(data.bilder[currentName].sha256, {wert: 'synthetisch', bytes: 0, geaendert: 0});
+          assert.equal(data.bilder[currentName].original.name, 'Original.jpg');
+          assert.deepEqual(data.reihenfolge, action === 'rename' ? [renamed] : ['IMG_0001.jpg', 'IMG_0002.jpg']);
+          if (action === 'rename') assert.equal(data.bilder['IMG_0001.jpg'], undefined);
+          else {assert.equal(data.bilder[renamed], undefined);assert.equal(data.bilder['IMG_0002.jpg'].aussortiert, true);}
+          for (const [n, bytes] of Object.entries(failed)) if (!n.endsWith('_Bildumbenenner.json')) assert.deepEqual(after[n], bytes, n);
+          for (const [n, bytes] of Object.entries(before)) if (n.startsWith(projects.B + '/') || n.endsWith('_Projekt.json')) assert.deepEqual(after[n], bytes, n);
+          const fresh = await page.context().newPage();
+          await fresh.goto(base + '?projekt=' + encodeURIComponent(projects.A));
+          await fresh.waitForFunction(() => !document.body.inert && document.querySelector('#list .desc')?.value === 'Neu nach Speicherfehler');
+          assert.equal(await fresh.locator('#list .sec').first().inputValue(), 'Küche');
+          assert.equal(await fresh.locator('#list .probe').first().inputValue(), 'P1');
+          await fresh.close();
+          if (action === 'rename') {
+            // Rückgängig bleibt auch nach wiederholtem Speicher-Retry erreichbar.
+            await page.locator('#bUndo').click();
+            await page.waitForFunction(() => document.querySelector('#banner').textContent.includes('Rückgängig gemacht'));
+            const undone = await snapshot();
+            assert.deepEqual(undone[prefix + 'IMG_0001.jpg'], before[prefix + 'IMG_0001.jpg']);
+            assert.deepEqual(undone[prefix + 'IMG_0002.jpg'], before[prefix + 'IMG_0002.jpg']);
+          } else assert.equal(await page.locator('#bUndo').count(), 0);
+        });
+      }
+    }
+  }
+
   for (const mode of ['future', 'string-format', 'zero-format', 'broken', 'unreadable', 'array', 'null', 'empty']) {
     await scenario(`Geschütztes Projekt (${mode}): UI und sämtliche direkten Dateiaktionen`, mode, async ({ page, open, snapshot, before }) => {
       await open('A');
