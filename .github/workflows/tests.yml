@@ -51,3 +51,5 @@ jobs:
         run: node tests/sortierung-export-browser.cjs ${{ matrix.browser }}
       - name: Safe project transitions, save failures, retries, reload and update
         run: node tests/sicherer-projektwechsel-browser.cjs ${{ matrix.browser }}
+      - name: Protected projects preserve originals and metadata, including direct file actions
+        run: node tests/geschuetzter-projektmodus-browser.cjs ${{ matrix.browser }}
