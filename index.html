@@ -7,6 +7,24 @@
 <title>FotoKit</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<script>
+// Projektübergabe: Fragment hat Vorrang; alte Query-Links früh und ohne Anfrage bereinigen.
+const PROJEKT_URL = (() => {
+  const start = new URL(location.href);
+  const projekt = new URLSearchParams(start.hash.slice(1)).get('projekt') ?? start.searchParams.get('projekt');
+  function setzen(name){
+    const url = new URL(location.href);
+    // Fremde Fragmentbestandteile (auch reine Anker wie #fotos) unverändert erhalten.
+    const teile = url.hash.slice(1).split('&').filter(t => t && !new URLSearchParams(t).has('projekt'));
+    if (name !== null) teile.push('projekt=' + encodeURIComponent(name));
+    url.searchParams.delete('projekt');
+    url.hash = teile.join('&');
+    if (url.href !== location.href) try{ history.replaceState(history.state, '', url); }catch(e){}
+  }
+  if (start.searchParams.has('projekt')) setzen(projekt);
+  return { projekt, setzen };
+})();
+</script>
 <meta name="theme-color" content="#4179b2">
 <style>
 /* Look: angelehnt an LabelKit (gleiche Farben, Schrift IBM Plex – eingebettet, damit es offline gleich aussieht).
@@ -1036,10 +1054,7 @@ async function withSavedProject(action, next){
 let activeProjectName = '';
 function syncProjectContext(){
   const name = S.proj ? S.proj.name : '';
-  const url = new URL(location.href);
-  if (name) url.searchParams.set('projekt', name);
-  else url.searchParams.delete('projekt');
-  if (url.href !== location.href) history.replaceState(history.state, '', url);
+  PROJEKT_URL.setzen(name || null);
   activeProjectName = name;
   showProject(S.dir, S.proj);
   if (window.MosaikLeiste) MosaikLeiste.aktualisieren();
@@ -3375,7 +3390,7 @@ window.addEventListener('beforeunload', e => {
 applyCfgToUI();
 updateExample();
 {
-  const projekt = new URLSearchParams(location.search).get('projekt');
+  const projekt = PROJEKT_URL.projekt;
   if (projekt && supported) openFromZentrale(projekt);
 }
 })();
