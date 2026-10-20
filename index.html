@@ -81,6 +81,12 @@ header{background:var(--panel);border-bottom:1px solid var(--line);display:flex;
 .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
 .opts{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font-size:13px;color:var(--muted);padding:6px 20px 10px}
 .bar .opts{padding:0}
+.toolgroup{display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0}
+.settingsbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;padding:6px 20px 10px}
+#btnNaming{max-width:100%;text-align:left}
+.disclosure-icon{display:inline-block;transition:transform .12s}
+#btnNaming[aria-expanded=true] .disclosure-icon{transform:rotate(90deg)}
+.settingsbar .example{max-width:100%;overflow-wrap:anywhere}
 .opts label{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .opts input[type=text]{width:130px;font-family:var(--mono);font-size:12.5px}
 .opts input[type=number]{width:58px}
@@ -151,11 +157,12 @@ main{flex:1;display:flex;min-height:0}
 .drop p{color:var(--muted);margin:6px 0 18px}
 .notice{color:var(--err);font-weight:600}
 
-footer{background:var(--panel);border-top:1px solid var(--line);padding:8px 16px;display:flex;gap:16px;align-items:center;flex-wrap:nowrap;font-size:13px}
+footer{background:var(--panel);border-top:1px solid var(--line);padding:8px 16px;display:flex;gap:8px 16px;align-items:center;flex-wrap:wrap;font-size:13px}
+.export-actions{margin-left:auto;max-width:100%}
 #stats{color:var(--muted);white-space:nowrap;flex:0 0 auto}
 #stats b{color:var(--text)}
 #stats .bad{color:var(--err)}
-.keys{color:var(--muted);font-size:12px;flex:1 1 auto;min-width:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.keys{color:var(--muted);font-size:12px;flex:1 1 0;min-width:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #btnRename,#btnZip,#btnPdf{flex:0 0 auto;white-space:nowrap}
 .pdfOpen{padding:2px 8px;font-size:12.5px}
 .dialog .form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -209,7 +216,7 @@ progress{width:100%}
 }
 @media (max-width:860px){
   main{flex-direction:column}
-  #previewPane{border-left:0;border-top:1px solid var(--line);flex:0 0 42vh}
+  #previewPane{border-left:0;border-top:1px solid var(--line);flex:0 1 42vh;min-height:0}
   .row{grid-template-columns:28px 72px 1fr 28px}
   .thumb{width:72px;height:54px}
 }
@@ -264,11 +271,13 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
     <span class="folder" id="folderName"></span>
   </div>
   <div class="bar">
-    <button id="btnOpen" class="primary">Ordner wählen …</button>
-    <button id="btnReload" disabled>Neu einlesen</button>
-    <button id="btnMeta" disabled>Projektdaten …</button>
-    <button id="btnLab" disabled title="Ergebnistabelle aus dem XML-Export des Laborberichts – zum Einfügen ins Gutachten">Ergebnistabelle …</button>
+    <div class="toolgroup" role="group" aria-label="Projekt und Fotos">
+      <button id="btnOpen" class="primary">Projekt öffnen …</button>
+      <button id="btnReload" disabled>Fotos neu einlesen</button>
+      <button id="btnMeta" disabled>Projektdaten …</button>
+    </div>
     <span class="spacer"></span>
+    <div class="toolgroup" role="group" aria-label="Bildbearbeitung und Sortierung">
     <label class="opts"><span class="lbl">Sortierung</span>
       <select id="sort">
         <option value="name">Dateiname</option>
@@ -277,8 +286,14 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
         <option value="section">nach Abschnitt (Begehung)</option>
       </select>
     </label>
+    </div>
   </div>
-  <div class="opts">
+  <div class="settingsbar">
+    <button id="btnNaming" aria-expanded="false" aria-controls="namingOptions"><span class="disclosure-icon" aria-hidden="true">▸</span> Dateibenennung und weitere Einstellungen</button>
+    <span class="example" id="example"></span>
+  </div>
+  <div id="namingOptions" role="group" aria-label="Dateibenennung und weitere Einstellungen" hidden>
+    <div class="opts">
     <span class="lbl title">Benennung</span>
     <label>Präfix <input type="text" id="oPrefix" placeholder="z. B. P2026-114"></label>
     <label><input type="checkbox" id="oDate"> Datum voranstellen</label>
@@ -295,7 +310,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
     <label>Aussortierte
       <select id="oDiscard"><option value="move">→ Unterordner _aussortiert</option><option value="keep">im Ordner lassen</option></select>
     </label>
-    <span class="example" id="example"></span>
+    </div>
   </div>
 </header>
 
@@ -305,7 +320,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
   <div class="drop" id="drop">
     <h2>Projektordner öffnen</h2>
     <p>Ordner wählen oder hierher ziehen. Die Bilder werden direkt im Ordner umbenannt – nichts wird hochgeladen.</p>
-    <button class="primary" id="btnOpen2">Ordner wählen …</button>
+    <button class="primary" id="btnOpen2">Projekt öffnen …</button>
     <p class="m"><button class="linkbtn" id="btnHelp2">Erstes Mal hier? Kurzanleitung lesen</button></p>
     <p id="support" class="notice" style="display:none;margin-top:18px">Dieser Browser unterstützt keinen Ordnerzugriff. Bitte die Datei in Chrome oder Edge öffnen.</p>
   </div>
@@ -334,9 +349,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 <footer id="foot" style="display:none">
   <span id="stats"></span>
   <span class="keys" title="Enter / ↓: nächstes Bild · Shift+Enter / ↑: vorheriges Bild · Strg+D: Text vom vorherigen Bild übernehmen · Alt+X: aussortieren / wiederherstellen · Alt+R / Alt+Shift+R: drehen · Vorschaubild ziehen: verschieben · Esc: Vollbild schließen"><kbd>↵</kbd> nächstes · <kbd>⇧↵</kbd> vorheriges · <kbd>Strg D</kbd> übernehmen · <kbd>Alt X</kbd> aussortieren · <kbd>Alt R</kbd> drehen</span>
-  <button id="btnPdf" disabled title="Bilddokumentation direkt als PDF erstellen (Deckblatt, 2 Bilder pro Seite, max. 14 MB je Datei)">PDF erstellen …</button>
-  <button id="btnZip" disabled title="Verwendete Bilder mit neuen Namen + Anweisung/Projektdaten als ZIP speichern">ZIP exportieren …</button>
-  <button id="btnRename" class="primary" disabled>Umbenennen</button>
+  <button id="btnRename" disabled title="Originaldateien umbenennen und aussortierte Bilder gegebenenfalls verschieben – unabhängig vom PDF-/ZIP-Export">Umbenennen</button>
+  <div class="toolgroup export-actions" role="group" aria-label="Bilddokumentation und Export">
+    <button id="btnPdf" class="primary" disabled title="Bilddokumentation direkt als PDF erstellen (Deckblatt, 2 Bilder pro Seite, max. 14 MB je Datei)">Bilddokumentation erstellen …</button>
+    <button id="btnZip" disabled title="Verwendete Bilder mit neuen Namen + Anweisung/Projektdaten als ZIP speichern">ZIP exportieren …</button>
+    <button id="btnLab" disabled title="Ergebnistabelle aus dem XML-Export des Laborberichts – zum Einfügen ins Gutachten">Ergebnistabelle …</button>
+  </div>
 </footer>
 
 <datalist id="secList"></datalist>
@@ -370,9 +388,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.8.3';
+const APP_VERSION = '1.9.0';
 const APP_DATE = '2026-10-20';
 const CHANGELOG = [
+  ['1.9.0', '20.10.2026', 'Übersichtlichere Oberfläche: „Dateibenennung und weitere Einstellungen“ ist zunächst eingeklappt; die Dateinamen-Vorschau bleibt sichtbar. Projekt-/Fotoaktionen, Sortierung und Exporte sind gruppiert. „Bilddokumentation erstellen …“ hebt den PDF-Abschluss hervor; Umbenennen bleibt eine eigenständige Aktion. Einstellungen, Speicherfunktionen und Schutzmaßnahmen bleiben unverändert.'],
   ['1.8.3', '20.10.2026', 'Geschützter Projektmodus: Bei unbekanntem Projektformat oder beschädigter/nicht lesbarer Projektdatei sind Originalfotos vor Umbenennung, Verschieben und Rückgängig-Dateiaktionen geschützt – auch bei direktem Funktionsaufruf. Ansicht und sichere Exporte bleiben verfügbar; Projektdateien werden nicht überschrieben.'],
   ['1.8.2', '20.10.2026', 'Sicherer Projektwechsel: Ordnerwechsel, Neu einlesen und App-Update warten auf abgeschlossene Speicherungen. Bei einem Speicherfehler bleibt das Projekt mit allen Eingaben geöffnet; „Erneut speichern“ ermöglicht einen neuen Versuch. Auch noch laufende Schreibvorgänge und gemeinsame Projektdaten werden berücksichtigt.'],
   ['1.8.1', '19.10.2026', 'Behoben: Die Leiste oben zeigt jetzt das Objekt aus der Projektzentrale neben dem Projekt. Sie suchte es bisher an einer Stelle in „_Projekt.json“, an der die Projektzentrale es nicht ablegt.'],
@@ -1013,7 +1032,7 @@ async function openProject(projDir){
 async function openFromZentrale(name){
   let archiv = null;
   try{ archiv = await SUITE.get('archiv'); }catch(e){}
-  if (!archiv){ banner('err', `Projekt „${esc(name)}“: Der Archivordner ist in diesem Browser nicht bekannt. Bitte in der Projektzentrale einmal den Archivordner wählen – oder hier „Ordner wählen …“.`); return; }
+  if (!archiv){ banner('err', `Projekt „${esc(name)}“: Der Archivordner ist in diesem Browser nicht bekannt. Bitte in der Projektzentrale einmal den Archivordner wählen – oder hier „Projekt öffnen …“.`); return; }
   const go = async () => {
     try{
       const projDir = await archiv.getDirectoryHandle(name);
@@ -3097,14 +3116,15 @@ const HELP_HTML = `
 </ul>
 <h4>In 5 Schritten zur Bilddokumentation</h4>
 <ol>
-  <li><b>Projekt öffnen:</b> in der Projektzentrale „Fotos bearbeiten → FotoKit“ – oder hier „Ordner wählen …“ und den Projektordner (z. B. <code>26.0123 Köln</code>) wählen. Oben in der blauen Leiste stehen dann Projektnummer und Ort. Wurde nur der Ordner <code>Fotos</code> gewählt, oben „Projekt zuordnen …“ klicken.</li>
+  <li><b>Projekt öffnen:</b> in der Projektzentrale „Fotos bearbeiten → FotoKit“ – oder hier „Projekt öffnen …“ und den Projektordner (z. B. <code>26.0123 Köln</code>) wählen. Oben in der blauen Leiste stehen dann Projektnummer und Ort. Wurde nur der Ordner <code>Fotos</code> gewählt, oben „Projekt zuordnen …“ klicken. Neue Fotos in diesen Ordner kopieren und „Fotos neu einlesen“ wählen.</li>
+  <li><b>Dateibenennung:</b> „Dateibenennung und weitere Einstellungen“ klappt die bisherigen Optionen auf. Alle Werte bleiben beim Ein-/Ausklappen erhalten; die Vorschau bleibt sichtbar.</li>
   <li><b>Bilder beschreiben:</b> links ein Bild anklicken, rechts erscheint die Vorschau. Beschreibung eintippen, <kbd>Enter</kbd> springt zum nächsten Bild. Darunter optional <b>Abschnitt</b> (z. B. „Küche“ – gilt für die folgenden Bilder mit) und <b>Probe-Nr.</b> (z. B. „P1“).</li>
   <li><b>Aufräumen:</b> unbrauchbare Bilder mit ✕ aussortieren (sie wandern ans Ende, nichts wird gelöscht). Reihenfolge per Ziehen ändern oder mit Sortierung „nach Abschnitt (Begehung)“ nach Räumen ordnen, schiefe Bilder mit ↻ drehen.</li>
   <li><b>Projektdaten prüfen:</b> „Projektdaten …“ – Anlagen-Nr., Objekt, Schadenereignis, Daten, Sachverständiger. Was in der Projektzentrale schon eingetragen ist, steht hier bereits.</li>
   <li><b>Ausgeben:</b>
     <ul>
       <li><b>Umbenennen</b> – benennt die Dateien im Ordner nach der Beschreibung (z. B. <code>03_P2_Küche_Decke.jpg</code>). Rückgängig ist danach möglich.</li>
-      <li><b>PDF erstellen</b> – Bilddokumentation mit Deckblatt, 2 Bildern pro Seite und Probenahmestellen; wird im Ordner <code>Fotos</code> gespeichert als <code>Bilddokumentation_26.0123_Köln_2026-10-19.pdf</code> (ältere Dateien werden nie überschrieben), bei Bedarf in Teile ≤ 14 MB aufgeteilt.</li>
+      <li><b>Bilddokumentation erstellen …</b> – Bilddokumentation als PDF mit Deckblatt, 2 Bildern pro Seite und Probenahmestellen; wird im Ordner <code>Fotos</code> gespeichert als <code>Bilddokumentation_26.0123_Köln_2026-10-19.pdf</code> (ältere Dateien werden nie überschrieben), bei Bedarf in Teile ≤ 14 MB aufgeteilt.</li>
       <li><b>ZIP exportieren</b> – Bilder mit neuen Namen plus Anweisung, wenn eine KI die Dokumentation erstellen soll.</li>
       <li><b>Ergebnistabelle …</b> – liest den XML-Export des Laborberichts (aus <code>Laborergebnisse</code>), ordnet die Proben über die Probe-Nr. den Fotos zu, bewertet nach eurer Skala und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
     </ul></li>
@@ -3165,6 +3185,11 @@ $('btnInfo').onclick = openInfo;
 $('btnHelp').onclick = openHelp;
 $('btnLab').onclick = openLabDialog;
 $('btnHelp2').onclick = openHelp;
+$('btnNaming').onclick = () => {
+  const expanded = $('btnNaming').getAttribute('aria-expanded') === 'true';
+  $('namingOptions').hidden = expanded;
+  $('btnNaming').setAttribute('aria-expanded', String(!expanded));
+};
 $('btnUpd').onclick = applyUpdate;
 $('btnInfo').textContent = 'v' + APP_VERSION;
 document.title = `${APP_NAME} ${APP_VERSION}`;
