@@ -118,7 +118,8 @@ let browser, server;
         const p = await (key === 'U' ? root : await root.getDirectoryHandle('Archiv')).getDirectoryHandle(n), f = await p.getDirectoryHandle('Fotos');
         const raw = await (await (await f.getFileHandle('_Bildumbenenner.json')).getFile()).text();
         const bytes = Array.from(new Uint8Array(await (await (await f.getFileHandle(key + '_01.jpg')).getFile()).arrayBuffer()));
-        return {raw, json: JSON.parse(raw), bytes};
+        const sharedRaw = await (await (await p.getFileHandle('_Projekt.json')).getFile()).text();
+        return {raw, json: JSON.parse(raw), bytes, sharedRaw};
       }, [key, projects[key]]);
       const open = async key => {await page.evaluate(key => window.nextFolder = key, key);await page.locator('#btnOpen').click();};
       await run({page, start, open, contextIs, stillA, disk, base});
@@ -198,6 +199,100 @@ let browser, server;
     await page.evaluate(() => MosaikLeiste.aktualisieren());await stillA('A Beschreibung');
     await page.evaluate(() => releaseRead());await contextIs('B');
   });
+  await scenario('Ziel-Autosave bei spätem Bildfehler: keine A-Daten in B', async ({page, start, open, stillA, disk}) => {
+    await start();
+    await page.locator('#list .desc').fill('A erhaltene Eingabe');
+    await page.evaluate(async () => {
+      const root = await navigator.storage.getDirectory();
+      const p = await (await root.getDirectoryHandle('Archiv')).getDirectoryHandle('26.0902 Kontext B');
+      const h = await p.getFileHandle('_Projekt.json');
+      const data = JSON.parse(await (await h.getFile()).text());
+      data.objekt = 'B aus gemeinsamer Datei';
+      const w = await h.createWritable();await w.write(JSON.stringify(data));await w.close();
+      const get = FileSystemFileHandle.prototype.getFile;
+      FileSystemFileHandle.prototype.getFile = async function(...args) {
+        if (io.holdJSON && this.name === '_Bildumbenenner.json') {
+          io.holdJSON = false;io.jsonStarted = true;
+          await new Promise(resolve => window.releaseJSON = resolve);
+        }
+        return get.apply(this, args);
+      };
+    });
+    const beforeB = await disk('B');
+    await page.evaluate(() => io.holdRead = 'B_01.jpg');
+    await open('B');await page.waitForFunction(() => io.readStarted);
+    await page.evaluate(() => io.holdJSON = true);
+    // Den 400-ms-Autosave während des angehaltenen Bildlesens auslösen lassen.
+    // Auf dem fehlerhaften Stand wartet er danach im Lesen der Zieldatei.
+    await page.waitForTimeout(650);
+    await page.evaluate(() => {io.failRead = true;releaseRead();});
+    await page.waitForFunction(() => !document.body.inert && document.querySelector('#banner').textContent.includes('konnte nicht geöffnet'));
+    await stillA('A erhaltene Eingabe');
+    await page.evaluate(() => {io.failRead = false;io.holdJSON = false;if (window.releaseJSON) releaseJSON();});
+    await page.waitForTimeout(700);
+    assert.deepEqual(await disk('B'), beforeB, 'Fehlgeschlagener Wechsel darf B nicht verändern');
+    await open('unknown');await page.waitForFunction(() => !document.body.inert && document.getElementById('btnAssign'));
+    assert.equal((await disk('A')).json.bilder['A_01.jpg'].beschreibung, 'A erhaltene Eingabe');
+    assert.equal((await disk('A')).json.bilder['B_01.jpg'], undefined);
+  });
+
+  await scenario('Verzögertes Ziel mit geänderten gemeinsamen Daten: erst nach Erfolg autospeichern', async ({page, start, open, disk, contextIs}) => {
+    await start();
+    await page.evaluate(async () => {
+      const root = await navigator.storage.getDirectory();
+      const p = await (await root.getDirectoryHandle('Archiv')).getDirectoryHandle('26.0902 Kontext B');
+      const h = await p.getFileHandle('_Projekt.json');
+      const data = JSON.parse(await (await h.getFile()).text());data.objekt = 'B aus gemeinsamer Datei';
+      const w = await h.createWritable();await w.write(JSON.stringify(data));await w.close();
+    });
+    const b = await disk('B');
+    await page.evaluate(() => io.holdRead = 'B_01.jpg');
+    await open('B');await page.waitForFunction(() => io.readStarted);
+    await page.waitForTimeout(650);
+    assert.deepEqual(await disk('B'), b, 'Beim Laden noch keine Ziel-Schreibvorgänge');
+    await page.evaluate(() => releaseRead());await contextIs('B');
+    await page.waitForFunction(async () => {
+      const r = await navigator.storage.getDirectory();
+      const p = await (await r.getDirectoryHandle('Archiv')).getDirectoryHandle('26.0902 Kontext B');
+      const h = await (await p.getDirectoryHandle('Fotos')).getFileHandle('_Bildumbenenner.json');
+      return JSON.parse(await (await h.getFile()).text()).projekt.objekt === 'B aus gemeinsamer Datei';
+    });
+    const saved = await disk('B');
+    assert.equal(saved.json.projekt.proj, '26.0902');
+    assert.deepEqual(saved.json.bilder, b.json.bilder);
+    assert.deepEqual(saved.json.reihenfolge, b.json.reihenfolge);
+    assert.equal(saved.sharedRaw, b.sharedRaw);
+  });
+
+  for (const malformed of ['reihenfolge', 'beschreibung', 'abschnitt']) {
+    await scenario(`Später Zielfehler (${malformed}): Bildzustand und spätere Speicherung von A bleiben erhalten`, async ({page, start, open, stillA, disk}) => {
+      await start();await page.locator('#list .desc').fill('A erhaltene Eingabe');
+      await page.evaluate(async malformed => {
+        const root = await navigator.storage.getDirectory();
+        const p = await (await root.getDirectoryHandle('Archiv')).getDirectoryHandle('26.0902 Kontext B');
+        const h = await (await p.getDirectoryHandle('Fotos')).getFileHandle('_Bildumbenenner.json');
+        const data = JSON.parse(await (await h.getFile()).text());
+        if (malformed === 'reihenfolge') data.reihenfolge = {};
+        else data.bilder['B_01.jpg'][malformed] = {};
+        const w = await h.createWritable();await w.write(JSON.stringify(data));await w.close();
+      }, malformed);
+      const b = await disk('B');
+      await open('B');
+      await page.waitForFunction(() => !document.body.inert && document.querySelector('#banner').textContent.includes('konnte nicht geöffnet'));
+      await stillA('A erhaltene Eingabe');
+      assert.equal(await page.locator('#list .desc').count(), 1);
+      assert.equal(await page.locator('#list .sec').inputValue(), 'Flur A');
+      assert.equal(await page.locator('#list .probe').inputValue(), 'P1');
+      assert.equal(await page.locator('#list .row.rotated').count(), 1);
+      await page.locator('#list .desc').fill('A nach spätem Ladefehler');
+      await open('unknown');await page.waitForFunction(() => !document.body.inert && document.getElementById('btnAssign'));
+      const a = await disk('A');
+      assert.deepEqual(a.json.bilder, {'A_01.jpg': {beschreibung: 'A nach spätem Ladefehler', abschnitt: 'Flur A', probe: 'P1', drehung: 90}});
+      assert.deepEqual(a.json.reihenfolge, ['A_01.jpg']);
+      assert.deepEqual(await disk('B'), b);
+    });
+  }
+
   await scenario('Unbekannten Fotos-Ordner öffnen und nachträglich richtig zuordnen', async ({page, start, open, disk}) => {
     await start();const beforeU = await disk('U');await open('unknown');
     await page.waitForFunction(() => !document.body.inert && document.getElementById('btnAssign'));
