@@ -8,7 +8,7 @@ const playwright = require('playwright');
 const name = process.argv[2] || 'chromium';
 const root = path.join(__dirname, '..');
 const artifacts = process.env.FOTOKIT_ARTIFACT_DIR;
-const projects = { A: '26.0701 UX-Test A', B: '26.0702 UX-Test B' };
+const projects = { A: '26.0701 Sehr langer Projektname mit mehreren Gebäudeteilen und einer ausführlichen Adresse Musterstraße 123 in Teststadt', B: '26.0702 UX-Test B' };
 let browser, server;
 
 (async () => {
@@ -23,7 +23,7 @@ let browser, server;
   if (artifacts) fs.mkdirSync(artifacts, { recursive: true });
 
   async function run(width, protectedProject = false) {
-    const ctx = await browser.newContext({ viewport: { width, height: 900 } });
+    const ctx = await browser.newContext({ viewport: { width, height: width === 768 ? 1024 : 900 } });
     try {
       const page = await ctx.newPage(), errors = [];
       page.on('pageerror', e => errors.push(e.message));
@@ -95,6 +95,14 @@ let browser, server;
           const rect = id => { const b = document.getElementById(id).getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height, right: b.right, bottom: b.bottom }; };
           return { viewport: innerWidth, scrollWidth: document.documentElement.scrollWidth, header: rect('btnNaming'), pdf: rect('btnPdf'), list: rect('listWrap'), preview: rect('previewPane'), footer: rect('foot') };
         });
+        assert.ok(layout.scrollWidth <= width + 1, `Keine Seitenüberbreite: ${layout.scrollWidth}/${width}`);
+        assert.ok(layout.list.height >= 280, 'Bildliste hat mindestens 280 px Arbeitshöhe');
+        for (const selector of ['#btnOpen','#btnReload','#btnMeta','#sort','#btnNaming','#projBadge','#btnRename','#btnPdf','#btnZip','#btnLab','#pvPrev','#pvNext','#pvDiscard','#mosaikLeiste']) {
+          const b = await page.locator(selector).boundingBox();
+          assert.ok(b && b.x >= -1 && b.x + b.width <= width + 1, `${selector} passt in die Fensterbreite`);
+        }
+        if (width > 860) assert.ok(layout.preview.x >= layout.list.right - 1, 'Desktop bleibt nebeneinander');
+        else assert.ok(layout.preview.y >= layout.list.bottom - 1, 'Schmale Ansicht bleibt untereinander');
         assert.ok(layout.header.x >= 0 && layout.header.right <= width + 1, 'Neuer Einstellungsbutton passt in die Breite');
         assert.ok(layout.pdf.x >= 0 && layout.pdf.right <= width + 1, 'PDF-Aktion passt in die Breite');
         assert.ok(layout.preview.bottom <= layout.footer.y + 1, 'Vorschau wird nicht von der Aktionsleiste überlagert');
@@ -132,6 +140,38 @@ let browser, server;
         assert.equal(await page.locator('#oPrefix').isVisible(), false);
         assert.equal(await page.locator('#example').textContent(), example);
         assert.deepEqual(await page.locator('#list .res').allTextContents(), names);
+      }
+      if (width <= 860) {
+        const previewToggle = page.locator('#btnPreview');
+        await page.locator('#list .desc').first().click();
+        await page.locator('#pvImg').evaluate(img => img.decode());
+        const selected = await page.locator('#pvName').textContent();
+        const descriptions = await page.locator('#list .desc').evaluateAll(es => es.map(e => e.value));
+        const listHeight = await page.locator('#listWrap').evaluate(e => e.clientHeight);
+        await previewToggle.focus(); await page.keyboard.press('Enter');
+        assert.equal(await previewToggle.getAttribute('aria-expanded'), 'false');
+        assert.equal(await page.locator('#pvImg').isVisible(), false);
+        assert.ok(await page.locator('#listWrap').evaluate(e => e.clientHeight) >= listHeight, 'Einklappen vergrößert die Liste');
+        await page.locator('#list .desc').first().press('Enter');
+        assert.equal(await page.locator('#list .desc').nth(1).evaluate(e => e === document.activeElement), true);
+        assert.notEqual(await page.locator('#pvName').textContent(), selected);
+        await previewToggle.focus(); await page.keyboard.press('Space');
+        assert.equal(await previewToggle.getAttribute('aria-expanded'), 'true');
+        assert.equal(await page.locator('#pvName').textContent(), 'IMG_0002.jpg');
+        await page.waitForFunction(() => document.querySelector('#pvImg').clientHeight > 0);
+        await page.locator('#list .desc').nth(1).press('Shift+Enter');
+        assert.equal(await page.locator('#pvName').textContent(), selected);
+        assert.deepEqual(await page.locator('#list .desc').evaluateAll(es => es.map(e => e.value)), descriptions);
+        assert.ok(await page.locator('#listWrap').evaluate(e => e.scrollHeight > e.clientHeight), 'Liste ist scrollbar');
+        await page.locator('#list .desc').last().click();
+        assert.equal(await page.locator('#list .desc').last().evaluate(e => e === document.activeElement), true);
+        await previewToggle.click();
+        await page.setViewportSize({ width:1280, height:900 });
+        assert.equal(await page.locator('#pvImg').isVisible(), true, 'Desktop zeigt Vorschau auch nach mobilem Einklappen');
+        await page.setViewportSize({ width, height: width === 768 ? 1024 : 900 });
+        assert.equal(await page.locator('#pvImg').isVisible(), false);
+        await previewToggle.click();
+        await inspectLayout('vorschau-wieder-offen');
       }
       assert.deepEqual(await snapshot('A'), settled, 'Disclosure ändert keine gespeicherten Daten');
       assert.deepEqual(await page.evaluate(() => ({ settings: localStorage.getItem('bu-settings'), img: localStorage.getItem('bu-zipimg'), pdf: localStorage.getItem('bu-pdf') })), storage);
@@ -180,7 +220,7 @@ let browser, server;
       return true;
     } finally { await ctx.close(); }
   }
-  await run(1280); await run(390); await run(1280, true);
+  await run(1280); await run(768); await run(390); await run(320); await run(1280, true);
   if (artifacts) fs.writeFileSync(path.join(artifacts, 'layout.json'), JSON.stringify(layouts, null, 2));
 })().catch(e => { console.error(e); process.exitCode = 1; }).finally(async () => {
   if (browser) await browser.close(); if (server) await new Promise(resolve => server.close(resolve));

@@ -63,6 +63,7 @@ button.hbadge:hover{background:rgba(255,255,255,.26);color:#fff;border-color:rgb
 .helpdoc td{padding:3px 14px 3px 0;vertical-align:top}
 .helpdoc td:first-child{white-space:nowrap}
 .appbar .projbadge{font:500 12px/1 var(--mono);background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.34);border-radius:4px;padding:6px 10px;color:#fff;white-space:nowrap}
+.appbar .projbadge{min-width:0;max-width:40%;overflow:hidden;text-overflow:ellipsis}
 .appbar .projbadge b{font-weight:600;margin-right:2px}
 .appbar .folder{font:12px var(--mono);color:rgba(255,255,255,.82);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .appbar .folder .hint{font:12px var(--sans);color:#ffe2a8;margin-left:8px}
@@ -95,6 +96,9 @@ header{background:var(--panel);border-bottom:1px solid var(--line);display:flex;
 main{flex:1;display:flex;min-height:0}
 #listWrap{flex:1 1 55%;overflow:auto;padding:10px 12px 40px}
 #previewPane{flex:1 1 45%;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-width:0}
+#listWrap{min-width:0}
+.preview-content{display:flex;flex-direction:column;flex:1;min-height:0}
+#btnPreview{display:none}
 .row{display:grid;grid-template-columns:34px 96px 1fr 30px;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 8px;margin-bottom:6px}
 .row.active{background:var(--focus);border-color:var(--accent)}
 .nr{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right}
@@ -214,11 +218,44 @@ progress{width:100%}
   .keys{display:none}
   #btnPdf{margin-left:auto}
 }
+/* Narrow windows may scroll vertically; the photo list keeps useful working space. */
 @media (max-width:860px){
-  main{flex-direction:column}
-  #previewPane{border-left:0;border-top:1px solid var(--line);flex:0 1 42vh;min-height:0}
-  .row{grid-template-columns:28px 72px 1fr 28px}
+  header,footer,#banner{flex-shrink:0}
+  /* Local sizing only; shared Spektron navigation and project handling stay intact. */
+  #mosaikLeiste .ml-proj{min-width:0;flex-shrink:1}
+  #mosaikLeiste .ml-proj b{min-width:0;overflow:hidden;text-overflow:ellipsis}
+  #mosaikLeiste .ml-steps,#mosaikLeiste .ml-home,#mosaikLeiste .ml-weiter{flex-shrink:0}
+  .appbar{height:auto;min-height:52px;flex-wrap:wrap;padding:8px 12px;gap:8px}
+  .appbar .spacer{display:none}
+  .appbar .projbadge{max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.4}
+  .appbar .projbadge b{white-space:nowrap}
+  .appbar .folder{flex:1 1 100%;white-space:normal;overflow-wrap:anywhere}
+  .bar,.settingsbar,.opts{padding-left:12px;padding-right:12px}
+  .bar>.spacer{display:none}
+  .bar .opts{flex-wrap:wrap;min-width:0}
+  #sort{max-width:100%;min-width:0}
+  .opts label{max-width:100%;white-space:normal}
+  main{flex-direction:column;min-height:560px;flex-shrink:0}
+  #listWrap{flex:1 1 300px;min-height:280px}
+  #previewPane{border-left:0;border-top:1px solid var(--line);flex:0 0 280px;min-height:0}
+  #btnPreview{display:block;flex:none;align-self:flex-start;margin:6px 12px}
+  #previewPane.preview-collapsed{flex-basis:auto}
+  #previewPane.preview-collapsed .preview-content{display:none}
+  .pv-nav{flex-wrap:wrap;gap:6px;padding:0 12px 8px}
+  .pv-meta{padding:6px 12px;font-size:12px}
+  .pv-img{min-height:80px}
+  .row{grid-template-columns:28px 72px minmax(0,1fr) 28px;gap:6px}
   .thumb{width:72px;height:54px}
+  .meta2{flex-wrap:wrap}
+  .meta2 .sec{flex-basis:100%}
+  .meta2 .probe{max-width:100%}
+  footer{padding:8px 12px}
+  #stats{white-space:normal;flex:1 1 100%}
+  .export-actions{margin-left:0}
+  #btnPdf{margin-left:0}
+  #empty{min-height:300px}
+  .drop{padding:24px 16px;min-width:0}
+  .dialog .btns{flex-wrap:wrap}
 }
 
 /* LabelKit-Anmutung für Liste, Vorschau, Fußzeile, Dialoge */
@@ -328,7 +365,9 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 <main id="app" style="display:none">
   <div id="listWrap"><div id="list"></div></div>
-  <aside id="previewPane">
+  <aside id="previewPane" aria-label="Bildvorschau">
+    <button id="btnPreview" aria-expanded="true" aria-controls="previewContent">Bildvorschau einklappen</button>
+    <div id="previewContent" class="preview-content">
     <div class="pv-img" id="pvImgWrap" title="Klick: Vollbild"><img id="pvImg" alt=""></div>
     <div class="pv-meta">
       <div class="n" id="pvName">–</div>
@@ -342,6 +381,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
       <button id="pvRotL" title="Links drehen (Alt+Shift+R)">↺</button>
       <button id="pvRotR" title="Rechts drehen (Alt+R)">↻</button>
       <button id="pvDiscard" title="Alt+X">✕ Aussortieren</button>
+    </div>
     </div>
   </aside>
 </main>
@@ -388,9 +428,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.9.1';
 const APP_DATE = '2026-10-20';
 const CHANGELOG = [
+  ['1.9.1', '20.10.2026', 'Responsive Oberfläche: Kopfzeile, Projektangaben und Aktionen passen sich schmalen Fenstern an. Die Bildliste behält ausreichend Höhe; die Vorschau lässt sich auf schmalen Fenstern per Tastatur ein- und ausklappen. Auswahl und Beschreibung bleiben erhalten. Desktopaufteilung und Datei-, Speicher-, Schutz- und Exportfunktionen bleiben unverändert.'],
   ['1.9.0', '20.10.2026', 'Übersichtlichere Oberfläche: „Dateibenennung und weitere Einstellungen“ ist zunächst eingeklappt; die Dateinamen-Vorschau bleibt sichtbar. Projekt-/Fotoaktionen, Sortierung und Exporte sind gruppiert. „Bilddokumentation erstellen …“ hebt den PDF-Abschluss hervor; Umbenennen bleibt eine eigenständige Aktion. Einstellungen, Speicherfunktionen und Schutzmaßnahmen bleiben unverändert.'],
   ['1.8.3', '20.10.2026', 'Geschützter Projektmodus: Bei unbekanntem Projektformat oder beschädigter/nicht lesbarer Projektdatei sind Originalfotos vor Umbenennung, Verschieben und Rückgängig-Dateiaktionen geschützt – auch bei direktem Funktionsaufruf. Ansicht und sichere Exporte bleiben verfügbar; Projektdateien werden nicht überschrieben.'],
   ['1.8.2', '20.10.2026', 'Sicherer Projektwechsel: Ordnerwechsel, Neu einlesen und App-Update warten auf abgeschlossene Speicherungen. Bei einem Speicherfehler bleibt das Projekt mit allen Eingaben geöffnet; „Erneut speichern“ ermöglicht einen neuen Versuch. Auch noch laufende Schreibvorgänge und gemeinsame Projektdaten werden berücksichtigt.'],
@@ -3185,6 +3226,15 @@ $('btnInfo').onclick = openInfo;
 $('btnHelp').onclick = openHelp;
 $('btnLab').onclick = openLabDialog;
 $('btnHelp2').onclick = openHelp;
+// Presentation only: keep the selected photo, draft text and project data intact.
+$('btnPreview').onclick = () => {
+  const expanded = $('btnPreview').getAttribute('aria-expanded') === 'true';
+  $('previewPane').classList.toggle('preview-collapsed', expanded);
+  $('btnPreview').setAttribute('aria-expanded', String(!expanded));
+  $('btnPreview').textContent = expanded ? 'Bildvorschau ausklappen' : 'Bildvorschau einklappen';
+};
+// Refit after wrapping toolbars, disclosure changes and viewport changes.
+new ResizeObserver(fitPreview).observe($('pvImgWrap'));
 $('btnNaming').onclick = () => {
   const expanded = $('btnNaming').getAttribute('aria-expanded') === 'true';
   $('namingOptions').hidden = expanded;
