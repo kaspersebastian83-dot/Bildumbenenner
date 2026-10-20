@@ -370,9 +370,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.8.1';
-const APP_DATE = '2026-10-18';
+const APP_VERSION = '1.8.2';
+const APP_DATE = '2026-10-20';
 const CHANGELOG = [
+  ['1.8.2', '20.10.2026', 'Sicherer Projektwechsel: Ordnerwechsel, Neu einlesen und App-Update warten auf abgeschlossene Speicherungen. Bei einem Speicherfehler bleibt das Projekt mit allen Eingaben geöffnet; „Erneut speichern“ ermöglicht einen neuen Versuch. Auch noch laufende Schreibvorgänge und gemeinsame Projektdaten werden berücksichtigt.'],
   ['1.8.1', '19.10.2026', 'Behoben: Die Leiste oben zeigt jetzt das Objekt aus der Projektzentrale neben dem Projekt. Sie suchte es bisher an einer Stelle in „_Projekt.json“, an der die Projektzentrale es nicht ablegt.'],
   ['1.8.0', '19.10.2026', 'Neu: Sortierung „nach Abschnitt (Begehung)“ – ordnet die Bilder nach Abschnitten in der Reihenfolge, in der sie zuerst vorkommen; innerhalb eines Abschnitts bleibt die Reihenfolge, Bildnummern passen sich an, Drag & Drop geht weiter (rückgängig möglich). Wird nur der Ordner „Fotos“ gewählt, sucht FotoKit das Projekt jetzt selbst (Archivordner der Projektzentrale) oder bietet „Projekt zuordnen …“ an – damit kommen die Projektdaten automatisch. Im Dialog stehen zusätzlich Auftraggeber und Schaden-Nr. aus der Projektzentrale (nur zur Ansicht). Neue Dateinamen „Bilddokumentation_26.0123_Aachen_2026-10-19.pdf“ (bzw. „_Teil_1_von_2“, ZIP gleich); eine ältere Datei wird nie überschrieben, sondern „(2)“ angehängt.'],
   ['1.7.2', '18.10.2026', 'Die Leiste oben zeigt links den Namen der App-Suite „Spektron“ (die Büro-Apps Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit und SpesenKit). Sonst unverändert.'],
@@ -396,7 +397,7 @@ const verCmp = (a, b) => { const x = verNum(a), y = verNum(b); for (let i = 0; i
 const $ = id => document.getElementById(id);
 const IMG_EXT = ['jpg','jpeg','png','webp','gif','bmp','tif','tiff','heic','heif'];
 const PREVIEWABLE = ['jpg','jpeg','png','webp','gif','bmp'];
-const S = { dir:null, proj:null, items:[], view:[], otherNames:new Set(), focus:-1, lastRun:null, busy:false, pvToken:0, pvUrl:null };
+const S = { dir:null, proj:null, items:[], view:[], otherNames:new Set(), focus:-1, lastRun:null, busy:false, changing:false, pvToken:0, pvUrl:null };
 const DISCARD_DIR = '_aussortiert';
 const TMP_PREFIX = 'umb-tmp_';
 
@@ -410,7 +411,7 @@ const TMP_PREFIX = 'umb-tmp_';
 const PROJ_FILE = '_Bildumbenenner.json';
 const PROJ_KINDS = ['drafts', 'discard', 'rot', 'extra', 'orig', 'hash', 'order', 'meta'];
 const NAMING_KEYS = ['prefix', 'date', 'num', 'start', 'digits', 'sep', 'spaces', 'uml', 'lower', 'probe', 'discard', 'sort'];
-const P = { data: null, base: null, lastText: null, timer: null, writing: Promise.resolve(), dirty: false, failed: false, readOnly: false };
+const P = { data: null, base: null, lastText: null, timer: null, writing: Promise.resolve(true), writes: 0, dirty: false, failed: false, readOnly: false };
 const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
 const pickNaming = c => Object.fromEntries(NAMING_KEYS.filter(k => k in c).map(k => [k, c[k]]));
 const store = {
@@ -470,7 +471,9 @@ function flushProject(){
   if (!P.dirty || !S.dir || !P.data || P.readOnly) return P.writing;
   P.dirty = false;
   const dir = S.dir;
+  P.writes++;
   P.writing = P.writing.then(async () => {
+    let writable = null;
     try{
       const fh = await dir.getFileHandle(PROJ_FILE, { create: true });
       // someone else (a coworker, another window) saved since we loaded or last wrote → merge instead of overwriting
@@ -481,14 +484,19 @@ function flushProject(){
         catch(e){ throw new Error('die Datei wird gerade von jemand anderem gespeichert oder ist beschädigt – neuer Versuch beim nächsten Speichern'); }
         mergeExternal(theirs);
       }
-      const json = projToJson();
-      const w = await fh.createWritable(); await w.write(json); await w.close();
-      if (S.dir === dir){ P.lastText = json; P.base = clone(P.data); }
-      if (P.failed){ P.failed = false; hideBanner(); }
+      const json = projToJson(), saved = clone(P.data);
+      writable = await fh.createWritable(); await writable.write(json); await writable.close(); writable = null;
+      if (S.dir === dir){ P.lastText = json; P.base = saved; }
+      if (P.failed){ P.failed = false; if (!PJ.failed) hideBanner(); }
+      return true;
     }catch(e){
+      if (writable){ try{ await writable.abort(); }catch(_){} }
       P.dirty = true;
-      if (!P.failed){ P.failed = true; banner('err', `Projektdatei „${PROJ_FILE}“ konnte nicht gespeichert werden: ${esc(e.message)} – Änderungen gehen beim Schließen verloren.`); }
+      if (!P.failed){ P.failed = true; saveError(`Projektdatei „${PROJ_FILE}“ konnte nicht gespeichert werden: ${esc(e.message)}.`); }
       logProblem('Speichern ' + PROJ_FILE + ': ' + e.message);
+      return false;
+    }finally{
+      P.writes--;
     }
   });
   return P.writing;
@@ -540,9 +548,10 @@ function mergeExternal(theirs){
 }
 /* coming back to the window: pick up what others saved meanwhile, without writing anything ourselves */
 async function checkExternal(){
-  if (!S.dir || !P.data || P.readOnly || S.busy) return;
+  if (!S.dir || !P.data || P.readOnly || S.busy || S.changing) return;
   const dir = S.dir;
   await P.writing;
+  if (S.changing || S.dir !== dir) return;
   try{
     const onDisk = await (await (await dir.getFileHandle(PROJ_FILE)).getFile()).text();
     if (S.dir !== dir || !onDisk.trim() || onDisk === P.lastText) return;
@@ -555,13 +564,13 @@ async function checkExternal(){
 /* Projektdaten (_Projekt.json) ändern sich auch in Projektzentrale oder bei Kollegen: beim Zurückkehren ins Fenster neu lesen,
    sonst landen alte Angaben (Objekt, Schadendatum, Ortstermin …) in PDF und ZIP. Eigene, noch nicht geschriebene Änderungen bleiben unberührt. */
 async function refreshPJ(){
-  if (!S.proj || !PJ.data || S.busy || $('overlay').classList.contains('show')) return;
+  if (!S.proj || !PJ.data || S.busy || S.changing || $('overlay').classList.contains('show')) return;
   const proj = S.proj;
   await PJ.writing;
-  if (Object.keys(PJ.pending).length) return;
+  if (S.changing || Object.keys(PJ.pending).length) return;
   let fresh;
   try{ fresh = await readPJ(proj.dir); }catch(e){ return; }
-  if (S.proj !== proj || Object.keys(PJ.pending).length) return;
+  if (S.changing || S.proj !== proj || Object.keys(PJ.pending).length) return;
   const changed = PJ_MAP.some(([, pk]) => (fresh[pk] || '').trim() !== (PJ.sent[pk] || ''));
   PJ.data = fresh;
   if (!changed) return;
@@ -649,7 +658,11 @@ async function loadProject(dir){
   if (imported){ P.dirty = true; await flushProject(); note = `Bisherige Angaben zu ${imported} Bild(ern) aus dem Browser übernommen und in „${PROJ_FILE}“ im Projektordner gespeichert.`; }
   return note;
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden'){ flushProject(); flushPJ(); } });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && !S.changing){
+    flushDrafts(); saveExtra(); flushProject(); flushPJ();
+  }
+});
 
 /* ---------- settings ---------- */
 const OPT = { prefix:'oPrefix', date:'oDate', num:'oNum', start:'oStart', digits:'oDigits', sep:'oSep', spaces:'oSpaces', uml:'oUml', lower:'oLower', probe:'oProbe', discard:'oDiscard' };
@@ -818,7 +831,7 @@ const FOTOS_DIR = 'Fotos';
 const PJ_FILE = '_Projekt.json';
 // Bildumbenenner field ↔ _Projekt.json field
 const PJ_MAP = [['objekt', 'objekt'], ['ereignis', 'schadenereignis'], ['sdatum', 'schadendatum'], ['ort', 'ortstermin'], ['sv', 'sachverstaendiger']];
-const PJ = { data: null, sent: {}, pending: {}, timer: null, writing: Promise.resolve(), failed: false };
+const PJ = { data: null, sent: {}, pending: {}, timer: null, writing: Promise.resolve(true), writes: 0, failed: false };
 
 async function findSubdir(dir, name){
   const want = name.normalize('NFC').toLowerCase();
@@ -867,11 +880,17 @@ function queuePJ(m){
 }
 function flushPJ(){
   clearTimeout(PJ.timer);
-  const patch = PJ.pending, proj = S.proj;
-  if (!proj || !Object.keys(patch).length) return PJ.writing;
-  PJ.pending = {};
+  const proj = S.proj;
+  if (!proj || !Object.keys(PJ.pending).length) return PJ.writing;
+  PJ.writes++;
   PJ.writing = PJ.writing.then(async () => {
+    // Take the patch when this queued write starts. A failed predecessor may have
+    // restored fields; newer edits in pending must win over those older values.
+    const patch = PJ.pending;
+    PJ.pending = {};
+    let writable = null;
     try{
+      if (!Object.keys(patch).length) return !PJ.failed;
       /* Lesen → ändern → Schreiben unter einer Sperre je Projekt: Projektzentrale (anderer Tab) schreibt dieselbe Datei und nimmt dieselbe Sperre. */
       const o = await mitPjSperre(proj.name, async () => {
         const cur = await readPJ(proj.dir);
@@ -879,15 +898,63 @@ function flushPJ(){
         const o = Object.assign({}, cur, patch, { format: 'mosaik-projekt', version: 1, hinweis: PJ_HINWEIS,
           projektnummer: proj.nr, schadenort: proj.ort, geaendert: new Date().toISOString(), geaendertMit: APP_NAME + ' ' + APP_VERSION });
         const fh = await proj.dir.getFileHandle(PJ_FILE, { create: true });
-        const w = await fh.createWritable(); await w.write(JSON.stringify(o, null, 2) + '\n'); await w.close();
+        writable = await fh.createWritable(); await writable.write(JSON.stringify(o, null, 2) + '\n'); await writable.close(); writable = null;
         return o;
       });
       if (S.proj === proj) PJ.data = o;
+      if (PJ.failed){ PJ.failed = false; if (!P.failed) hideBanner(); }
+      return true;
     }catch(e){
-      if (!PJ.failed){ PJ.failed = true; banner('err', `Gemeinsame Projektdaten („${PJ_FILE}“) konnten nicht gespeichert werden: ${esc(e.message)}. Die Angaben bleiben in FotoKit erhalten.`); }
+      if (writable){ try{ await writable.abort(); }catch(_){} }
+      PJ.pending = Object.assign({}, patch, PJ.pending);
+      if (!PJ.failed){ PJ.failed = true; saveError(`Gemeinsame Projektdaten („${PJ_FILE}“) konnten nicht gespeichert werden: ${esc(e.message)}.`); }
+      return false;
+    }finally{
+      PJ.writes--;
     }
   });
   return PJ.writing;
+}
+
+function saveError(detail){
+  banner('err', `${detail} Deine Eingaben sind weiterhin geöffnet. Bitte prüfe den Projektordner und versuche erneut zu speichern. Änderungen gehen beim Schließen verloren. <button id="bSaveRetry">Erneut speichern</button>`);
+  $('bSaveRetry').onclick = () => withSavedProject('Das Speichern', async () => {
+    banner('ok', 'Die Änderungen wurden im Projektordner gespeichert. Du kannst jetzt weiterarbeiten oder das Projekt wechseln.');
+  });
+}
+
+// The same gate protects every in-app replacement of the current project state.
+// While it runs, prevent edits/overlapping transitions (including during loading).
+// Autosave keeps its non-rejecting queue, but returns an explicit success result.
+async function withSavedProject(action, next){
+  if (S.changing) return false;
+  if (S.busy){ banner('info', 'Bitte warten, bis der laufende Vorgang abgeschlossen ist.'); return false; }
+  S.changing = true;
+  const inert = document.body.inert, focus = document.activeElement;
+  document.body.inert = true;
+  try{
+    if (S.dir){
+      flushDrafts(); saveExtra();
+      let ok;
+      do{
+        const own = await flushProject();
+        const shared = await flushPJ();
+        ok = own !== false && shared !== false && !P.failed && !PJ.failed;
+        if (!ok){
+          saveError(`Die Änderungen konnten nicht gespeichert werden. ${action} wurde deshalb abgebrochen.`);
+          return false;
+        }
+        // Merging, timers or an already queued write may have added work while
+        // awaiting the first operation. Never replace their state prematurely.
+      }while (P.writes || PJ.writes || (P.dirty && !P.readOnly) || Object.keys(PJ.pending).length);
+    }
+    await next();
+    return true;
+  }finally{
+    document.body.inert = inert;
+    S.changing = false;
+    if (focus && focus.isConnected) focus.focus({ preventScroll: true });
+  }
 }
 
 /* reading aid in the header: which project (folder „26.0123 Köln“) is open */
@@ -924,8 +991,7 @@ async function assignProject(){
     }
     proj = { dir: projDir, name: projDir.name, nr: p.nr, ort: p.ort };
   }
-  await openDir(fotos, proj);
-  banner('ok', `Projekt <b>${esc(proj.name)}</b> zugeordnet – Projektdaten aus der Projektzentrale übernommen.`);
+  if (await openDir(fotos, proj)) banner('ok', `Projekt <b>${esc(proj.name)}</b> zugeordnet – Projektdaten aus der Projektzentrale übernommen.`);
 }
 
 /* open a project folder („26.0123 Köln“): works on its „Fotos“ subfolder */
@@ -992,22 +1058,23 @@ async function projectOf(dir, ask = false){
   }catch(e){ return null; }
 }
 async function openDir(dir, proj = null){
+  if (S.changing || S.busy) return false;
   if (!(await ensurePerm(dir))){ banner('err','Ohne Schreibrecht kann nicht umbenannt werden.'); return; }
   if (!proj && parseProjName(dir.name) && await findSubdir(dir, FOTOS_DIR)) return openProject(dir);   // a whole project folder was chosen
   if (!proj) proj = await projectOf(dir, dir.name.normalize('NFC').toLowerCase() === FOTOS_DIR.toLowerCase());
-  flushDrafts(); if (S.dir) saveExtra();
-  await flushProject(); await flushPJ();      // finish writing the previous project before switching
-  S.dir = dir; S.proj = proj; S.lastRun = null;
-  let note = await loadProject(dir);
-  const pjNote = await loadPJ();
-  if (pjNote) note = note ? note + '<br>' + pjNote : pjNote;
-  showProject(dir, proj);
-  $('btnReload').disabled = false;
-  $('btnMeta').disabled = false;
-  $('btnLab').disabled = false; LAB.rep = null; LAB.err = '';
-  hideBanner();
-  await loadItems();
-  if (note) banner(P.readOnly ? 'err' : 'info', note);
+  return withSavedProject('Der Projektwechsel', async () => {
+    S.dir = dir; S.proj = proj; S.lastRun = null;
+    let note = await loadProject(dir);
+    const pjNote = await loadPJ();
+    if (pjNote) note = note ? note + '<br>' + pjNote : pjNote;
+    showProject(dir, proj);
+    $('btnReload').disabled = false;
+    $('btnMeta').disabled = false;
+    $('btnLab').disabled = false; LAB.rep = null; LAB.err = '';
+    hideBanner();
+    await loadItems();
+    if (note) banner(P.readOnly ? 'err' : 'info', note);
+  });
 }
 
 async function loadItems(){
@@ -2537,9 +2604,7 @@ async function checkUpdate(){
   }catch(e){}
 }
 async function applyUpdate(){
-  if (S.busy){ banner('info', 'Bitte warten, bis der laufende Vorgang abgeschlossen ist – dann neu laden.'); return; }
-  if (S.dir){ flushDrafts(); saveExtra(); await flushProject(); }   // nothing gets lost
-  location.reload();
+  return withSavedProject('Das Update', async () => { location.reload(); });
 }
 setTimeout(checkUpdate, 4000);
 setInterval(checkUpdate, 30 * 60 * 1000);
@@ -3080,13 +3145,13 @@ $('btnPdf').onclick = openPdfDialog;
 $('btnMeta').onclick = () => openMetaDialog(false);
 $('btnOpen2').onclick = pickFolder;
 $('btnReload').onclick = async () => {
-  flushDrafts(); saveExtra(); await flushProject();
-  S.lastRun = null; hideBanner();
-  await flushPJ();
-  const note = await loadProject(S.dir);      // picks up changes a coworker saved meanwhile
-  await loadPJ();
-  await loadItems();
-  if (note) banner(P.readOnly ? 'err' : 'info', note);
+  return withSavedProject('Das erneute Einlesen', async () => {
+    S.lastRun = null; hideBanner();
+    const note = await loadProject(S.dir);      // picks up changes a coworker saved meanwhile
+    await loadPJ();
+    await loadItems();
+    if (note) banner(P.readOnly ? 'err' : 'info', note);
+  });
 };
 $('sort').onchange = () => {
   if ($('sort').value === 'section'){
@@ -3121,9 +3186,12 @@ document.addEventListener('drop', async e => {
 });
 
 window.addEventListener('beforeunload', e => {
-  if (S.dir){ flushDrafts(); saveExtra(); }
-  if (Object.keys(PJ.pending).length) flushPJ();
-  if (S.busy || P.dirty){ flushProject(); e.preventDefault(); e.returnValue = ''; }
+  if (S.dir && !S.changing){ flushDrafts(); saveExtra(); }
+  // A browser reload/close cannot await promises. Warn also while a write is in
+  // flight: dirty/pending have already been removed from the queue at that point.
+  if (S.busy || P.dirty || P.writes || PJ.writes || PJ.failed || Object.keys(PJ.pending).length){
+    flushProject(); flushPJ(); e.preventDefault(); e.returnValue = '';
+  }
 });
 
 applyCfgToUI();

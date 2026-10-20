@@ -46,21 +46,28 @@ const PROJ = '26.0177 Bad Teststadt';
   }
 
   // Archivordner › Projekt › Fotos mit 5 Bildern, _Projekt.json mit Auftraggeber und Schaden-Nr.
-  const anlegen = (mitArchiv) => page.evaluate(async ([proj, mitArchiv]) => {
-    const r = await navigator.storage.getDirectory();
-    for await (const [n] of r.entries()) await r.removeEntry(n, { recursive: true });
-    const archiv = await r.getDirectoryHandle('Archiv', { create: true });
-    const p = await archiv.getDirectoryHandle(proj, { create: true });
-    const fotos = await p.getDirectoryHandle('Fotos', { create: true });
-    // 4×4 JPEG-fähiges PNG genügt für die Liste; für das PDF zählt nur, dass die Datei lesbar ist
-    const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), c => c.charCodeAt(0));
-    for (let i = 1; i <= 5; i++){ const w = await (await fotos.getFileHandle(`IMG_000${i}.png`, { create: true })).createWritable(); await w.write(png); await w.close(); }
-    const w = await (await p.getFileHandle('_Projekt.json', { create: true })).createWritable();
-    await w.write(JSON.stringify({ format: 'mosaik-projekt', version: 1, objekt: 'EFH, Badweg 5', auftraggeber: 'Muster Versicherung AG', schadennummer: 'S-4711' })); await w.close();
-    await new Promise((res, rej) => { const q = indexedDB.open('mosaik-suite', 1); q.onupgradeneeded = () => q.result.createObjectStore('kv');
-      q.onsuccess = () => { const t = q.result.transaction('kv', 'readwrite'); const st = t.objectStore('kv'); mitArchiv ? st.put(archiv, 'archiv') : st.delete('archiv');
-        t.oncomplete = () => res(); t.onerror = () => rej(t.error); }; q.onerror = () => rej(q.error); });
-  }, [PROJ, mitArchiv]);
+  // Stop the previous app before deleting its OPFS files. Otherwise its pending
+  // autosave/thumbnail reads race the fixture reset (locked files / stale blobs).
+  const fixtureUrl = new URL('__fotokit-fixtures', base).href;
+  await page.route(fixtureUrl, route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Testaufbau</title>' }));
+  const anlegen = async (mitArchiv) => {
+    await page.goto(fixtureUrl);
+    return page.evaluate(async ([proj, mitArchiv]) => {
+      const r = await navigator.storage.getDirectory();
+      for await (const [n] of r.entries()) await r.removeEntry(n, { recursive: true });
+      const archiv = await r.getDirectoryHandle('Archiv', { create: true });
+      const p = await archiv.getDirectoryHandle(proj, { create: true });
+      const fotos = await p.getDirectoryHandle('Fotos', { create: true });
+      // 4×4 JPEG-fähiges PNG genügt für die Liste; für das PDF zählt nur, dass die Datei lesbar ist
+      const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), c => c.charCodeAt(0));
+      for (let i = 1; i <= 5; i++){ const w = await (await fotos.getFileHandle(`IMG_000${i}.png`, { create: true })).createWritable(); await w.write(png); await w.close(); }
+      const w = await (await p.getFileHandle('_Projekt.json', { create: true })).createWritable();
+      await w.write(JSON.stringify({ format: 'mosaik-projekt', version: 1, objekt: 'EFH, Badweg 5', auftraggeber: 'Muster Versicherung AG', schadennummer: 'S-4711' })); await w.close();
+      await new Promise((res, rej) => { const q = indexedDB.open('mosaik-suite', 1); q.onupgradeneeded = () => q.result.createObjectStore('kv');
+        q.onsuccess = () => { const t = q.result.transaction('kv', 'readwrite'); const st = t.objectStore('kv'); mitArchiv ? st.put(archiv, 'archiv') : st.delete('archiv');
+          t.oncomplete = () => res(); t.onerror = () => rej(t.error); }; q.onerror = () => rej(q.error); });
+    }, [PROJ, mitArchiv]);
+  };
   // the next showDirectoryPicker returns this folder (path below the OPFS root)
   const naechsterPicker = pfad => page.evaluate(pfad => {
     window.showDirectoryPicker = async () => { let d = await navigator.storage.getDirectory(); for (const n of pfad) d = await d.getDirectoryHandle(n); return d; };
@@ -69,7 +76,7 @@ const PROJ = '26.0177 Bad Teststadt';
 
   // 1a) „Fotos“ direkt gewählt, Archivordner bekannt → Projekt erkannt
   await anlegen(true);
-  await page.reload(); await page.waitForSelector('#btnOpen');
+  await page.goto(base); await page.waitForSelector('#btnOpen');
   await naechsterPicker(['Archiv', PROJ, 'Fotos']);
   await page.locator('#btnOpen').click();
   await page.waitForFunction(() => !document.getElementById('btnMeta').disabled);
@@ -77,7 +84,7 @@ const PROJ = '26.0177 Bad Teststadt';
 
   // 1b) ohne Archivordner: „Projekt zuordnen …“ → Projektordner wählen
   await anlegen(false);
-  await page.reload(); await page.waitForSelector('#btnOpen');
+  await page.goto(base); await page.waitForSelector('#btnOpen');
   await naechsterPicker(['Archiv', PROJ, 'Fotos']);
   await page.locator('#btnOpen').click();
   await page.waitForSelector('#btnAssign');
