@@ -55,3 +55,5 @@ jobs:
         run: node tests/geschuetzter-projektmodus-browser.cjs ${{ matrix.browser }}
       - name: Settings disclosure and unchanged workflows at desktop and narrow widths
         run: node tests/oberflaeche-browser.cjs ${{ matrix.browser }}
+      - name: Series labelling with 5, 50 and 150 images, keyboard and preview races
+        run: node tests/serienbeschriftung-browser.cjs ${{ matrix.browser }}
