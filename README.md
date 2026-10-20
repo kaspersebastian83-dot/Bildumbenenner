@@ -2,7 +2,7 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.8.2**
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.8.3**
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
@@ -47,6 +47,8 @@ Originalbilder werden **nur umbenannt** bzw. nach `_aussortiert/` verschoben –
 
 Ordnerwechsel, „Neu einlesen“ und App-Updates warten auf die Speicherung aller ausstehenden Änderungen, einschließlich der gemeinsamen Projektdaten. Schlägt sie fehl, bleibt das bisherige Projekt mit den Eingaben geöffnet. Nach Prüfen des Projektordners mit **„Erneut speichern“** wiederholen und anschließend den Wechsel erneut auslösen. Beim Schließen oder Neuladen über den Browser warnt FotoKit auch vor noch laufenden Schreibvorgängen; ein erzwungenes Schließen oder das Bestätigen von „Seite verlassen“ kann ungesicherte Änderungen weiterhin verwerfen.
 
+Bei einem unbekannten Projektformat oder einer beschädigten/nicht lesbaren Projektdatei arbeitet FotoKit im **geschützten Modus**: Originalfotos können weder umbenannt noch verschoben werden, auch nicht über Rückgängig. Beide Projektdateien bleiben unverändert. Ansicht und sichere PDF-/ZIP-Ausgaben sind weiterhin möglich; Anpassungen für eine Ausgabe gelten nur in dieser Sitzung. Eine kompatible FotoKit-Version beziehungsweise eine lesbare Projektdatei ist erforderlich, um das Projekt wieder dauerhaft zu bearbeiten.
+
 ## Bekannte Grenzen
 
 - **HEIC-Fotos (iPhone-Standard)** kann Chrome nicht lesen → iPhone: Einstellungen › Kamera › Formate › „Maximale Kompatibilität“ (oder Fotos per WhatsApp übertragen).
@@ -79,6 +81,7 @@ node tests/projektdaten-browser.cjs [chromium|webkit]   # _Projekt.json: Neu-Les
 node tests/leiste-browser.cjs [chromium|webkit]   # Leiste mit Projekt, Arbeitsschritten und „Weiter“ (braucht Playwright)
 node tests/sortierung-export-browser.cjs [chromium|webkit]   # Projektzuordnung, Abschnittssortierung, PDF-Dateinamen
 node tests/sicherer-projektwechsel-browser.cjs [chromium|webkit]   # Speicherfehler, Retry, verzögerte Writes, Einlesen/Update/Browser-Reload
+node tests/geschuetzter-projektmodus-browser.cjs [chromium|webkit]   # Schutz von Originalen/JSON, direkte Dateiaktionen, sichere Exporte
 ```
 
 GitHub führt alle Tests bei jedem Pull Request aus (`.github/workflows/tests.yml`, Chromium und WebKit; ab 1.7.1).

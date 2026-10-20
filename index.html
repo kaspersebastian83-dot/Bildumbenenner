@@ -370,9 +370,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.8.2';
+const APP_VERSION = '1.8.3';
 const APP_DATE = '2026-10-20';
 const CHANGELOG = [
+  ['1.8.3', '20.10.2026', 'Geschützter Projektmodus: Bei unbekanntem Projektformat oder beschädigter/nicht lesbarer Projektdatei sind Originalfotos vor Umbenennung, Verschieben und Rückgängig-Dateiaktionen geschützt – auch bei direktem Funktionsaufruf. Ansicht und sichere Exporte bleiben verfügbar; Projektdateien werden nicht überschrieben.'],
   ['1.8.2', '20.10.2026', 'Sicherer Projektwechsel: Ordnerwechsel, Neu einlesen und App-Update warten auf abgeschlossene Speicherungen. Bei einem Speicherfehler bleibt das Projekt mit allen Eingaben geöffnet; „Erneut speichern“ ermöglicht einen neuen Versuch. Auch noch laufende Schreibvorgänge und gemeinsame Projektdaten werden berücksichtigt.'],
   ['1.8.1', '19.10.2026', 'Behoben: Die Leiste oben zeigt jetzt das Objekt aus der Projektzentrale neben dem Projekt. Sie suchte es bisher an einer Stelle in „_Projekt.json“, an der die Projektzentrale es nicht ablegt.'],
   ['1.8.0', '19.10.2026', 'Neu: Sortierung „nach Abschnitt (Begehung)“ – ordnet die Bilder nach Abschnitten in der Reihenfolge, in der sie zuerst vorkommen; innerhalb eines Abschnitts bleibt die Reihenfolge, Bildnummern passen sich an, Drag & Drop geht weiter (rückgängig möglich). Wird nur der Ordner „Fotos“ gewählt, sucht FotoKit das Projekt jetzt selbst (Archivordner der Projektzentrale) oder bietet „Projekt zuordnen …“ an – damit kommen die Projektdaten automatisch. Im Dialog stehen zusätzlich Auftraggeber und Schaden-Nr. aus der Projektzentrale (nur zur Ansicht). Neue Dateinamen „Bilddokumentation_26.0123_Aachen_2026-10-19.pdf“ (bzw. „_Teil_1_von_2“, ZIP gleich); eine ältere Datei wird nie überschrieben, sondern „(2)“ angehängt.'],
@@ -412,6 +413,7 @@ const PROJ_FILE = '_Bildumbenenner.json';
 const PROJ_KINDS = ['drafts', 'discard', 'rot', 'extra', 'orig', 'hash', 'order', 'meta'];
 const NAMING_KEYS = ['prefix', 'date', 'num', 'start', 'digits', 'sep', 'spaces', 'uml', 'lower', 'probe', 'discard', 'sort'];
 const P = { data: null, base: null, lastText: null, timer: null, writing: Promise.resolve(true), writes: 0, dirty: false, failed: false, readOnly: false };
+const PROTECTED_PROJECT = 'Dieses Projekt kann mit der aktuellen FotoKit-Version nicht sicher bearbeitet werden. Die Originalfotos sind deshalb vor Umbenennung und Verschieben geschützt. Für eine Bearbeitung ist eine kompatible FotoKit-Version beziehungsweise eine lesbare Projektdatei erforderlich. Änderungen in dieser Sitzung werden nicht im Projekt gespeichert.';
 const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
 const pickNaming = c => Object.fromEntries(NAMING_KEYS.filter(k => k in c).map(k => [k, c[k]]));
 const store = {
@@ -626,12 +628,14 @@ async function loadProject(dir){
   try{
     const txt = await (await (await dir.getFileHandle(PROJ_FILE)).getFile()).text();
     P.lastText = txt;
-    // an empty file is what an interrupted *first* save leaves behind – nothing to protect, treat as "no file yet"
-    const o = txt.trim() ? JSON.parse(txt) : null;
+    // Only a missing file is a new project. An existing empty/truncated file
+    // cannot safely tell us which metadata belongs to the original photos.
+    const o = JSON.parse(txt);
+    if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('Die Datei enthält kein gültiges Projektobjekt');
     d = o ? projFromJson(o) : null;
-    if (o && (o.format || 1) > 1){
+    if (o && o.format !== undefined && o.format !== 1){
       P.readOnly = true;
-      note = `<b>„${PROJ_FILE}“ stammt aus einer neueren Version (${esc(o.version || '?')})</b> – sie wird nicht überschrieben. Bitte die aktuelle Version von FotoKit verwenden.`;
+      note = `<b>„${PROJ_FILE}“ verwendet ein nicht unterstütztes Projektformat (${esc(String(o.format))}).</b> Die Datei wird nicht überschrieben.`;
     } else if (o && o.version && verCmp(o.version, APP_VERSION) > 0){
       note = `Hinweis: Dieses Projekt wurde zuletzt mit Version ${esc(o.version)} gespeichert, du nutzt ${APP_VERSION}. Bitte die aktuelle Version vom gemeinsamen Speicherort verwenden.`;
     }
@@ -656,6 +660,7 @@ async function loadProject(dir){
     d.settings = pickNaming(cfg);
   }
   if (imported){ P.dirty = true; await flushProject(); note = `Bisherige Angaben zu ${imported} Bild(ern) aus dem Browser übernommen und in „${PROJ_FILE}“ im Projektordner gespeichert.`; }
+  if (P.readOnly) note += '<br>' + esc(PROTECTED_PROJECT);
   return note;
 }
 document.addEventListener('visibilitychange', () => {
@@ -871,7 +876,7 @@ async function loadPJ(){
   return '';
 }
 function queuePJ(m){
-  if (!S.proj || !PJ.data) return;
+  if (P.readOnly || !S.proj || !PJ.data) return;
   for (const [k, pk] of PJ_MAP){
     const v = (m[k] || '').trim();
     if (v !== (PJ.sent[pk] || '')){ PJ.pending[pk] = v; PJ.sent[pk] = v; }
@@ -1415,7 +1420,7 @@ function recompute(){
     const res = it.el.querySelector('.res');
     if (it.discard){
       res.className = 'res discard';
-      res.textContent = moving ? `✕ wird nach ${DISCARD_DIR}/ verschoben` : '✕ aussortiert – bleibt unverändert im Ordner';
+      res.textContent = P.readOnly ? '✕ nur in dieser Sitzung aussortiert – Original bleibt unverändert' : moving ? `✕ wird nach ${DISCARD_DIR}/ verschoben` : '✕ aussortiert – bleibt unverändert im Ordner';
     } else {
       res.className = 'res' + (it.conflict ? ' conflict' : changed ? ' change' : '');
       res.textContent = it.conflict ? '⚠ ' + it.final + ' (Name doppelt / existiert)' : changed ? '→ ' + it.final : 'bleibt unverändert';
@@ -1427,8 +1432,9 @@ function recompute(){
   if (discarded) s += ` · <b>${discarded}</b> aussortiert`;
   if (conflicts) s += ` · <span class="bad">${conflicts} Konflikte</span>`;
   if (tooLong) s += ` · <span class="bad">${tooLong} Namen sehr lang</span>`;
-  $('stats').innerHTML = s;
-  $('btnRename').disabled = !(changes || moves) || conflicts > 0 || S.busy;
+  $('stats').innerHTML = P.readOnly ? `<b>${S.view.length - discarded}</b> Bilder · geschützter Modus – Originalfotos unverändert` : s;
+  $('btnRename').disabled = P.readOnly || !(changes || moves) || conflicts > 0 || S.busy;
+  if ($('bUndo')) $('bUndo').disabled = P.readOnly;
   $('btnZip').disabled = $('btnPdf').disabled = !(S.view.length - discarded) || conflicts > 0 || S.busy;
   const parts = [];
   if (changes) parts.push(`${changes} umbenennen`);
@@ -1524,6 +1530,9 @@ document.addEventListener('keydown', e => {
 });
 
 /* ---------- renaming ---------- */
+function assertOriginalsWritable(){
+  if (P.readOnly) throw new Error(PROTECTED_PROJECT);
+}
 async function exists(dir, name){ try{ await dir.getFileHandle(name); return true; }catch(e){ return false; } }
 // A lookup of an invalid name throws TypeError; a merely missing file throws NotFoundError.
 async function assertNameOk(dir, name){
@@ -1540,9 +1549,11 @@ const browserVer = (navigator.userAgent.match(/(Edg|OPR|Chrome)\/[\d.]+/) || ['u
    1st choice: native handle.move(). If the browser reports success but the disk
    says otherwise (or move is unsupported), switch to copy + verify + delete. */
 async function transfer(src, dst, from, to){
+  assertOriginalsWritable();
   if (await exists(dst, to)) throw new Error('Zieldatei existiert bereits: ' + to);
   const h = await src.getFileHandle(from);
   if (!moveBroken && typeof h.move === 'function'){
+    assertOriginalsWritable();
     try{
       if (src === dst) await h.move(to); else await h.move(dst, to);
     }catch(e){
@@ -1558,19 +1569,28 @@ async function transfer(src, dst, from, to){
   }
   usedCopy = true;
   const f = await (await src.getFileHandle(from)).getFile();
+  assertOriginalsWritable();
   const nh = await dst.getFileHandle(to, { create:true });
-  const w = await nh.createWritable(); await w.write(f); await w.close();
+  assertOriginalsWritable();
+  const w = await nh.createWritable();
+  try{
+    assertOriginalsWritable(); await w.write(f);
+    assertOriginalsWritable(); await w.close();
+  }catch(e){ try{ await w.abort(); }catch(_){} throw e; }
   const copy = await nh.getFile();
   if (copy.size !== f.size){
+    assertOriginalsWritable();
     try{ await dst.removeEntry(to); }catch(_){}
     throw new Error('Kopie unvollständig, Original bleibt erhalten: ' + from);
   }
   await dst.getFileHandle(to);                                          // throws if the copy is not there
+  assertOriginalsWritable();
   await src.removeEntry(from);
   if (await exists(src, from)) throw new Error(`„${from}“ konnte nicht entfernt werden – ist die Datei in einem anderen Programm geöffnet?`);
 }
 const renameFile = (dir, from, to) => transfer(dir, dir, from, to);
 async function runPairs(pairs, onStep){
+  assertOriginalsWritable();
   const dir = S.dir, stamp = Date.now().toString(36);
   const P = pairs.map((p, i) => ({ ...p, tmp: `${TMP_PREFIX}${stamp}_${i}${extOf(p.from)}` }));
   // pre-flight: let the browser vet every name BEFORE any file is touched
@@ -1599,6 +1619,7 @@ async function freeName(dir, name){
   for (let n = 2; ; n++){ const c = `${base}_${n}${ext}`; if (!(await exists(dir, c))) return c; }
 }
 async function runMoves(moves, onStep){
+  assertOriginalsWritable();
   const sub = await S.dir.getDirectoryHandle(DISCARD_DIR, { create:true });
   const done = [];
   try{
@@ -1612,6 +1633,7 @@ async function runMoves(moves, onStep){
   }
 }
 async function undoMoves(moves){
+  assertOriginalsWritable();
   const sub = await S.dir.getDirectoryHandle(DISCARD_DIR);
   for (const m of moves) await moveBetween(sub, S.dir, m.to, m.from);
 }
@@ -1627,6 +1649,7 @@ function plan(){
 }
 
 $('btnRename').onclick = () => {
+  if (P.readOnly){ banner('err', esc(PROTECTED_PROJECT)); return false; }
   const { pairs, moves } = plan();
   if (!pairs.length && !moves.length) return;
   let list = '';
@@ -1640,6 +1663,7 @@ $('btnRename').onclick = () => {
 };
 
 async function doRename(pairs, moves){
+  if (P.readOnly){ banner('err', esc(PROTECTED_PROJECT)); return false; }
   flushDrafts(); saveExtra();
   const itemsBefore = S.items.slice();
   S.busy = true; usedCopy = false;
@@ -1712,6 +1736,7 @@ async function doRename(pairs, moves){
 }
 
 async function undo(){
+  if (P.readOnly){ banner('err', esc(PROTECTED_PROJECT)); return false; }
   const run = S.lastRun; if (!run) return;
   const rev = run.pairs.map(p => ({ from:p.to, to:p.from }));
   S.busy = true;
@@ -1981,7 +2006,7 @@ function buildTxt(m, items, now, exp){
 }
 
 function runButtonsHtml(){
-  return S.lastRun ? `<button id="bCsv">Bildverzeichnis (CSV) im Ordner speichern</button><button id="bUndo">Rückgängig</button>` : '';
+  return S.lastRun ? `<button id="bCsv">Bildverzeichnis (CSV) im Ordner speichern</button><button id="bUndo"${P.readOnly ? ' disabled' : ''}>Rückgängig</button>` : '';
 }
 function wireRunButtons(){
   if ($('bCsv')) $('bCsv').onclick = saveCsv;
@@ -2185,6 +2210,9 @@ async function doZip(meta){
   const parts = [];
   let writable = null;
   try{
+    // A ZIP target selected by the user must not replace an original photo or
+    // either protected project file, even if the picker returns such a handle.
+    if (P.readOnly && handle && (IMG_EXT.includes(extOf(handle.name).slice(1).toLowerCase()) || [PROJ_FILE, PJ_FILE].some(n => n.toLowerCase() === handle.name.toLowerCase()))) throw new Error(PROTECTED_PROJECT);
     writable = handle ? await handle.createWritable() : null;
     const zw = new ZipWriter(writable ? { write: d => writable.write(d) } : { write: async d => { parts.push(d); } });
     let n = 0;
