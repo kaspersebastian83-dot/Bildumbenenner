@@ -104,7 +104,8 @@ let browser, server;
         assert.equal(await page.locator('#list .desc').first().inputValue(), key + ' Beschreibung');
         for (const a of await page.locator('#mosaikLeiste a.ml-step, #mosaikLeiste a.ml-weiter').all()) {
           const url = new URL(await a.getAttribute('href'), page.url());
-          assert.equal(url.searchParams.get('projekt'), projects[key]);
+          assert.equal(url.searchParams.has('projekt'), false);
+          assert.equal(new URLSearchParams(url.hash.slice(1)).get('projekt'), projects[key]);
         }
       };
       const stillA = async description => {
