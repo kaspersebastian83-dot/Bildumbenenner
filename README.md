@@ -2,7 +2,7 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.9.2**
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.9.3**
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
@@ -31,6 +31,16 @@ Die bisherigen Benennungsoptionen liegen unter **„Dateibenennung und weitere E
 ## Leiste mit Projekt und Arbeitsschritten (ab 1.7)
 
 Oben steht dieselbe schmale Leiste wie in LabelKit, PlanKit und BelegKit: das geöffnete Projekt mit Wechsel zu den zuletzt geöffneten, die vier Arbeitsschritte (LabelKit, FotoKit, PlanKit, BelegKit) mit Haken bei erledigten Schritten und „Weiter: …“ zum nächsten offenen Schritt im selben Projekt. Die Leiste liest den Projektordner nur und schreibt nie hinein. Projektdaten aus `_Projekt.json` werden beim Zurückkehren ins Fenster neu gelesen (ab 1.6.3), damit Änderungen aus der Projektzentrale auch in PDF und ZIP landen.
+
+## Eindeutiger Projektkontext (ab 1.9.3)
+
+Nach einem erfolgreichen Öffnen oder Wechsel verwenden FotoKit, die Spektron-Leiste und der URL-Parameter `projekt` denselben tatsächlich geöffneten Projektordner. Andere URL-Parameter und der Anker bleiben erhalten; die Aktualisierung lädt die Seite nicht neu. Ein Projekt aus der Projektzentrale wird erst nach erfolgreichem Öffnen als aktives Projekt in der Leiste angezeigt.
+
+Während ausstehende Änderungen gespeichert oder die neuen Fotos gelesen werden, bleibt die bisherige Projektanzeige bestehen. Schlägt die Speicherung oder das Öffnen fehl, bleiben das bisherige Projekt, seine Eingaben und seine Zuordnung erhalten. Die Speicherabsicherung aus 1.8.2 und der geschützte Projektmodus aus 1.8.3 gelten weiterhin.
+
+Bei einem nicht zuordenbaren **Fotos**-Ordner verschwindet die alte aktive Projektkennung aus Leiste und URL. FotoKit zeigt **Projekt unbekannt** und bietet weiterhin **Projekt zuordnen …**. Nach erfolgreicher Zuordnung stimmen die Anzeigen wieder überein; Beschreibungen und weitere Bildinformationen bleiben erhalten. Eine Zuordnung nur aus einem alten URL-Parameter oder aus manuell eingetragenen Projektdaten wird nicht erfunden.
+
+Zum erneuten Öffnen über die URL benötigen die Apps wie bisher den passenden Projektordner im gemeinsamen Archiv und dessen Zugriffsberechtigung. Ein manuell außerhalb des Archivs geöffnetes Projekt wird dadurch nicht ins Archiv kopiert.
 
 ## Ergebnistabelle für das Gutachten
 
@@ -80,6 +90,7 @@ Bei einem unbekannten Projektformat oder einer beschädigten/nicht lesbaren Proj
 ```sh
 node tests/laborwerte.cjs   # Laborwerte der Ergebnistabelle: Zahlen und Qualifikatoren wie in PlanKit
 node tests/projektdaten-browser.cjs [chromium|webkit]   # _Projekt.json: Neu-Lesen beim Fensterwechsel, Sperre beim Speichern (braucht Playwright)
+node tests/projektkontext-browser.cjs [chromium|webkit]   # Zentrale, manuelle Wechsel, Fehler/Verzögerungen, unbekannter Ordner, Zuordnung und URL/Navigation
 node tests/leiste-browser.cjs [chromium|webkit]   # Leiste mit Projekt, Arbeitsschritten und „Weiter“ (braucht Playwright)
 node tests/sortierung-export-browser.cjs [chromium|webkit]   # Projektzuordnung, Abschnittssortierung, PDF-Dateinamen
 node tests/sicherer-projektwechsel-browser.cjs [chromium|webkit]   # Speicherfehler, Retry, verzögerte Writes, Einlesen/Update/Browser-Reload
