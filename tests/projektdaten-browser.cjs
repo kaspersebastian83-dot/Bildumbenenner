@@ -92,12 +92,40 @@ const PROJ = '26.0142 Teststadt';
   await page.locator('#zCancel').click();
   await page.waitForTimeout(1500);
   assert.equal((await datei()).objekt, 'EFH, Neuweg 2', 'unter fremder Sperre wird nicht geschrieben');
+  // Hold the real native close while the app owns the project lock. An unlocked
+  // polling read could obtain a File snapshot here that close() invalidates
+  // before text() consumes it (NotReadableError). Do not hide missing files or
+  // read failures with retries: read the committed file under the same lock.
+  await page.evaluate(() => {
+    const create = FileSystemFileHandle.prototype.createWritable;
+    window.__pjCloseBlocked = false; window.__pjReadStarted = false;
+    FileSystemFileHandle.prototype.createWritable = async function (...args) {
+      const w = await create.apply(this, args);
+      if (this.name === '_Projekt.json') {
+        const close = w.close.bind(w);
+        w.close = async () => {
+          window.__pjCloseBlocked = true;
+          await new Promise(r => { window.__releasePJClose = r; });
+          return close();
+        };
+      }
+      return w;
+    };
+  });
   await page.evaluate(() => window.__freigeben());
-  await page.waitForFunction(async proj => {
+  await page.waitForFunction(() => window.__pjCloseBlocked);
+  assert.equal((await datei()).objekt, 'EFH, Neuweg 2', 'vor close bleibt der alte Dateiinhalt erhalten');
+  const committed = page.evaluate(proj => navigator.locks.request('mosaik:projekt:' + proj, async () => {
+    window.__pjReadStarted = true;
     const p = await (await (await navigator.storage.getDirectory()).getDirectoryHandle('Mosaik Archivordner')).getDirectoryHandle(proj);
-    return JSON.parse(await (await (await p.getFileHandle('_Projekt.json')).getFile()).text()).objekt === 'EFH, Lokal 3';
-  }, PROJ);
-  const d = await datei();
+    return JSON.parse(await (await (await p.getFileHandle('_Projekt.json')).getFile()).text());
+  }), PROJ);
+  // Confirm that the reader is queued, rather than relying on a fixed delay.
+  await page.waitForFunction(async () => (await navigator.locks.query()).pending.some(l => l.name.startsWith('mosaik:projekt:')));
+  assert.equal(await page.evaluate(() => window.__pjReadStarted), false, 'Dateiprüfung wartet auf den Abschluss des Schreibvorgangs');
+  await page.evaluate(() => window.__releasePJClose());
+  const d = await committed;
+  assert.equal(d.objekt, 'EFH, Lokal 3', 'tatsächlich gespeicherter Inhalt nach close');
   assert.equal(d.hinweis, 'Gemeinsame Projektdaten (Projektzentrale, FotoKit, PlanKit, LabelKit). Bitte nicht löschen oder umbenennen.');
   assert.equal(d.notizen, 'bleibt', 'unbekannte Felder bleiben');
   const version = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').match(/APP_VERSION = '([\d.]+)'/)[1];

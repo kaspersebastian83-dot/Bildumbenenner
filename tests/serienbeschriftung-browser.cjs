@@ -152,7 +152,7 @@ let browser, server;
       const start = Date.now();
       for (let i = 0; i < count; i++) {
         await focused(i);
-        await page.keyboard.press('Control+a'); await page.keyboard.insertText(`Serie ${i + 1}`); await page.keyboard.press('Enter');
+        await page.keyboard.press(process.platform === 'darwin' ? 'Meta+a' : 'Control+a'); await page.keyboard.insertText(`Serie ${i + 1}`); await page.keyboard.press('Enter');
       }
       await focused(count - 1); await page.keyboard.press('Enter'); await focused(count - 1); await preview(count - 1);
       assert.deepEqual(await desc.evaluateAll(es => es.map(e => e.value)), Array.from({ length: count }, (_, i) => `Serie ${i + 1}`));
