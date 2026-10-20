@@ -58,3 +58,5 @@ jobs:
         run: node tests/oberflaeche-browser.cjs ${{ matrix.browser }}
       - name: Series labelling with 5, 50 and 150 images, keyboard and preview races
         run: node tests/serienbeschriftung-browser.cjs ${{ matrix.browser }}
+      - name: Active project context stays consistent across URL, FotoKit and suite navigation
+        run: node tests/projektkontext-browser.cjs ${{ matrix.browser }}

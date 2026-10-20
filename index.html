@@ -219,13 +219,13 @@ progress{width:100%}
   .keys{display:none}
   #btnPdf{margin-left:auto}
 }
+/* Long active project names must leave the suite actions reachable at any width. */
+#mosaikLeiste .ml-proj{min-width:0;flex-shrink:1}
+#mosaikLeiste .ml-proj b{min-width:0;overflow:hidden;text-overflow:ellipsis}
+#mosaikLeiste .ml-steps,#mosaikLeiste .ml-home,#mosaikLeiste .ml-weiter{flex-shrink:0}
 /* Narrow windows may scroll vertically; the photo list keeps useful working space. */
 @media (max-width:860px){
   header,footer,#banner{flex-shrink:0}
-  /* Local sizing only; shared Spektron navigation and project handling stay intact. */
-  #mosaikLeiste .ml-proj{min-width:0;flex-shrink:1}
-  #mosaikLeiste .ml-proj b{min-width:0;overflow:hidden;text-overflow:ellipsis}
-  #mosaikLeiste .ml-steps,#mosaikLeiste .ml-home,#mosaikLeiste .ml-weiter{flex-shrink:0}
   .appbar{height:auto;min-height:52px;flex-wrap:wrap;padding:8px 12px;gap:8px}
   .appbar .spacer{display:none}
   .appbar .projbadge{max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.4}
@@ -429,9 +429,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.9.2';
+const APP_VERSION = '1.9.3';
 const APP_DATE = '2026-10-20';
 const CHANGELOG = [
+  ['1.9.3', '20.10.2026', 'Projektkontext: FotoKit, URL und Spektron-Leiste verwenden erst nach erfolgreichem Öffnen dieselbe Projektzuordnung. Fehlgeschlagene Wechsel erhalten das bisherige Projekt. Unbekannte Fotoordner entfernen eine alte Zuordnung; nachträgliches Zuordnen erhält die Bildinformationen. Bestehende Speicherabsicherung und geschützter Modus bleiben erhalten.'],
   ['1.9.2', '20.10.2026', 'Serienbeschriftung: zuverlässiger Fokus und Vorschauwechsel ohne doppelte Lesevorgänge; verspätete Vorschaufehler beeinflussen kein anderes Bild. Tastenkürzel für Bilder sind bei geöffnetem Dialog, Vollbild und während einer IME-Komposition ausgesetzt; Pfeiltasten im Abschnitts- und Probenfeld bleiben für die Eingabe frei. Der wirksame Abschnitt wird als eingetragen oder von vorherigem Bild übernommen erklärt. Bestehende Übernahme-, Speicher-, Schutz- und Exportfunktionen bleiben erhalten.'],
   ['1.9.1', '20.10.2026', 'Responsive Oberfläche: Kopfzeile, Projektangaben und Aktionen passen sich schmalen Fenstern an. Die Bildliste behält ausreichend Höhe; die Vorschau lässt sich auf schmalen Fenstern per Tastatur ein- und ausklappen. Auswahl und Beschreibung bleiben erhalten. Desktopaufteilung und Datei-, Speicher-, Schutz- und Exportfunktionen bleiben unverändert.'],
   ['1.9.0', '20.10.2026', 'Übersichtlichere Oberfläche: „Dateibenennung und weitere Einstellungen“ ist zunächst eingeklappt; die Dateinamen-Vorschau bleibt sichtbar. Projekt-/Fotoaktionen, Sortierung und Exporte sind gruppiert. „Bilddokumentation erstellen …“ hebt den PDF-Abschluss hervor; Umbenennen bleibt eine eigenständige Aktion. Einstellungen, Speicherfunktionen und Schutzmaßnahmen bleiben unverändert.'],
@@ -1024,6 +1025,22 @@ async function withSavedProject(action, next){
   }
 }
 
+// Only a successfully loaded folder may publish a project to suite navigation.
+let activeProjectName = '';
+function syncProjectContext(){
+  const name = S.proj ? S.proj.name : '';
+  const url = new URL(location.href);
+  if (name) url.searchParams.set('projekt', name);
+  else url.searchParams.delete('projekt');
+  if (url.href !== location.href) history.replaceState(history.state, '', url);
+  activeProjectName = name;
+  showProject(S.dir, S.proj);
+  if (window.MosaikLeiste) MosaikLeiste.aktualisieren();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  MosaikLeiste.start('fotos', { projektName: () => activeProjectName });
+});
+
 /* reading aid in the header: which project (folder „26.0123 Köln“) is open */
 function showProject(dir, proj){
   const b = $('projBadge'), f = $('folderName');
@@ -1069,7 +1086,7 @@ async function openProject(projDir){
     if (!confirm(`Im Projekt „${projDir.name}“ gibt es keinen Unterordner „${FOTOS_DIR}“. Jetzt anlegen?`)) return;
     fotos = await projDir.getDirectoryHandle(FOTOS_DIR, { create: true });
   }
-  await openDir(fotos, { dir: projDir, name: projDir.name, nr: p ? p.nr : '', ort: p ? p.ort : '' });
+  return openDir(fotos, { dir: projDir, name: projDir.name, nr: p ? p.nr : '', ort: p ? p.ort : '' });
 }
 /* called with ?projekt=<Ordnername> from Projektzentrale */
 async function openFromZentrale(name){
@@ -1080,7 +1097,6 @@ async function openFromZentrale(name){
     try{
       const projDir = await archiv.getDirectoryHandle(name);
       await openProject(projDir);
-      try{ window.MosaikLeiste && MosaikLeiste.aktualisieren(); }catch(e2){}
     }catch(e){ banner('err', `Projekt „${esc(name)}“ nicht gefunden in „${esc(archiv.name)}“: ${esc(e.message)}`); }
   };
   const st = await archiv.queryPermission({ mode: 'readwrite' }).catch(() => 'prompt');
@@ -1130,56 +1146,64 @@ async function openDir(dir, proj = null){
   if (!proj && parseProjName(dir.name) && await findSubdir(dir, FOTOS_DIR)) return openProject(dir);   // a whole project folder was chosen
   if (!proj) proj = await projectOf(dir, dir.name.normalize('NFC').toLowerCase() === FOTOS_DIR.toLowerCase());
   return withSavedProject('Der Projektwechsel', async () => {
-    S.dir = dir; S.proj = proj; S.lastRun = null;
-    let note = await loadProject(dir);
-    const pjNote = await loadPJ();
-    if (pjNote) note = note ? note + '<br>' + pjNote : pjNote;
-    showProject(dir, proj);
-    $('btnReload').disabled = false;
-    $('btnMeta').disabled = false;
-    $('btnLab').disabled = false; LAB.rep = null; LAB.err = '';
-    hideBanner();
-    await loadItems();
-    if (note) banner(P.readOnly ? 'err' : 'info', note);
+    const previous = { dir: S.dir, proj: S.proj, lastRun: S.lastRun, p: { ...P }, pj: { ...PJ }, cfg: { ...cfg } };
+    try{
+      S.dir = dir; S.proj = proj; S.lastRun = null;
+      let note = await loadProject(dir);
+      const pjNote = await loadPJ();
+      if (pjNote) note = note ? note + '<br>' + pjNote : pjNote;
+      await loadItems();
+      syncProjectContext();
+      $('btnReload').disabled = false;
+      $('btnMeta').disabled = false;
+      $('btnLab').disabled = false; LAB.rep = null; LAB.err = '';
+      if (note) banner(P.readOnly ? 'err' : 'info', note);
+    }catch(e){
+      S.dir = previous.dir; S.proj = previous.proj; S.lastRun = previous.lastRun;
+      Object.assign(P, previous.p); Object.assign(PJ, previous.pj);
+      cfg = previous.cfg; applyCfgToUI();
+      throw e;
+    }
   });
 }
 
 async function loadItems(){
   const dir = S.dir; if (!dir) return;
-  S.items.forEach(it => it.thumbUrl && URL.revokeObjectURL(it.thumbUrl));
-  S.items = []; S.otherNames = new Set(); S.focus = -1;
-  $('list').innerHTML = '';
+  // Read the candidate first: an unreadable target must not clear the current list.
+  const items = [], otherNames = new Set();
   banner('info', 'Lese Ordner …');
   const drafts = projGet('drafts', {});
-  ROT = projGet('rot', {});
-  HASH = projGet('hash', {});
-  EXTRA = projGet('extra', {});
-  ORIG = projGet('orig', {});
+  const rot = projGet('rot', {}), hash = projGet('hash', {});
+  const extra = projGet('extra', {}), orig = projGet('orig', {});
   const discards = new Set(projGet('discard', []));
   const handles = [];
   for await (const h of dir.values()){
     if (h.kind !== 'file') continue;
     const ext = extOf(h.name).slice(1).toLowerCase();
     if (IMG_EXT.includes(ext) && !h.name.startsWith(TMP_PREFIX) && !h.name.startsWith('~umb_')) handles.push(h);
-    else S.otherNames.add(h.name.toLowerCase());
+    else otherNames.add(h.name.toLowerCase());
   }
   let n = 0;
   for (const h of handles){
     const f = await h.getFile();
     const exif = /^jpe?g$/.test(extOf(h.name).slice(1).toLowerCase()) ? await readExifDate(f) : null;
-    const og = ORIG[h.name];
+    const og = orig[h.name];
     const kept = og && typeof og === 'object' && og.d && og.s !== 'Dateidatum' ? { d: new Date(og.d), s: og.s } : null;  // date from before renaming
     const fromName = exif || kept ? null : dateFromName(h.name);
     const date = exif || (kept && kept.d) || fromName || new Date(f.lastModified);
-    S.items.push({
+    items.push({
       handle:h, name:h.name, ext:extOf(h.name), size:f.size,
       date, dateSrc: exif ? 'EXIF' : kept ? kept.s : fromName ? 'Dateiname' : 'Dateidatum',
       desc: drafts[h.name] || '', discard: discards.has(h.name),
-      sec: (EXTRA[h.name] || {}).sec || '', probe: (EXTRA[h.name] || {}).probe || '', orig: og ? (typeof og === 'object' ? og.o : og) : '', secEff: '',
+      sec: (extra[h.name] || {}).sec || '', probe: (extra[h.name] || {}).probe || '', orig: og ? (typeof og === 'object' ? og.o : og) : '', secEff: '',
       thumbUrl:null, thumbState:0, el:null, final:h.name, conflict:false
     });
     if (++n % 20 === 0) banner('info', `Lese Ordner … ${n} / ${handles.length}`);
   }
+  S.items.forEach(it => it.thumbUrl && URL.revokeObjectURL(it.thumbUrl));
+  S.items = items; S.otherNames = otherNames; S.focus = -1;
+  ROT = rot; HASH = hash; EXTRA = extra; ORIG = orig;
+  $('list').innerHTML = '';
   hideBanner();
   if (!S.items.length){
     banner('info', 'Keine Bilddateien in diesem Ordner gefunden.');
@@ -3343,7 +3367,8 @@ updateExample();
    Teilt sich mit den anderen Apps nur den Browser-Speicher: IndexedDB „mosaik-suite“ / „kv“, Schlüssel „archiv“ (Ordner-Handle)
    und „zuletzt“ (Liste der zuletzt geöffneten Projektnamen). Liest den Ordner nur, schreibt nie hinein und fragt nie selbst
    nach Ordnerrechten – ohne Recht (oder ohne Ordnerzugriff, z. B. Safari) fehlen nur die Haken. Aufruf: MosaikLeiste.start('label'|'fotos'|'plan'|'beleg'[, {kompakt: true}]),
-   danach MosaikLeiste.aktualisieren() nach dem Öffnen oder Wechseln eines Projekts. */
+   danach MosaikLeiste.aktualisieren() nach dem Öffnen oder Wechseln eines Projekts.
+   FotoKit kann mit opt.projektName eine bestätigte Projektzuordnung statt der angeforderten URL liefern. */
 (function(){
   if (window.MosaikLeiste) return;
   var APPS = [
@@ -3353,7 +3378,7 @@ updateExample();
     ['beleg', 'BelegKit',  'aufwandkit',     '../aufwandkit/',     '#2f7d6d']
   ];
   var ZENTRALE = '../Projektzentrale/', MAX = 6;
-  var ich = '', kompakt = false, name = '', stand = null, zuletzt = [], bar = null, pop = null, timer = 0, lauf = 0;
+  var ich = '', kompakt = false, projektName = null, name = '', stand = null, zuletzt = [], bar = null, pop = null, timer = 0, lauf = 0;
   var nfc = function(s){ try{ return String(s).normalize('NFC'); }catch(e){ return String(s); } };
   var h = function(tag, attrs){
     var el = document.createElement(tag);
@@ -3384,7 +3409,7 @@ updateExample();
       catch(e){ res(false); }
     }); });
   }
-  function urlName(){ try{ return new URLSearchParams(location.search).get('projekt') || ''; }catch(e){ return ''; } }
+  function urlName(){ try{ return projektName ? projektName() || '' : new URLSearchParams(location.search).get('projekt') || ''; }catch(e){ return ''; } }
   function href(app, projekt){ return (app[0] === ich ? '' : app[3]) + (projekt ? '?projekt=' + encodeURIComponent(projekt) : ''); }   // die eigene App relativ zur aktuellen Seite (auch ohne den Pfad /<App>/)
 
   /* Ordnerstand: nur Namen prüfen, Fotos nur über die eine Datei (der Ordner kann tausende Bilder enthalten) */
@@ -3525,8 +3550,10 @@ updateExample();
     }
   }
   async function aktualisieren(){
-    if (pop) return;   // Menü offen: nicht neu zeichnen (würde es schließen); der nächste Durchlauf holt das nach
-    var mein = ++lauf, n = urlName();
+    var n = urlName();
+    if (pop && n === name) return;   // Unveränderter Kontext: offenes Menü erhalten.
+    if (pop) schliessePop();
+    var mein = ++lauf;
     if (n !== name){ name = n; stand = null; }
     try{ zuletzt = (await kvGet('zuletzt')) || []; if (!Array.isArray(zuletzt)) zuletzt = []; }catch(e){ zuletzt = []; }
     if (name && nfc(zuletzt[0] || '') !== nfc(name)){
@@ -3543,6 +3570,7 @@ updateExample();
   }
   function start(appId, opt){
     ich = appId; kompakt = !!(opt && opt.kompakt);
+    projektName = opt && typeof opt.projektName === 'function' ? opt.projektName : null;
     var los = function(){
       aktualisieren();
       window.addEventListener('focus', aktualisieren);
@@ -3557,7 +3585,6 @@ updateExample();
   window.MosaikLeiste = { start: start, aktualisieren: aktualisieren };
 })();
 /* ===== Ende MOSAIK-LEISTE v1 ===== */
-MosaikLeiste.start('fotos');
 </script>
 <!-- MOSAIK-LEISTE:END -->
 </body>
