@@ -476,7 +476,7 @@ const TMP_PREFIX = 'umb-tmp_';
 const PROJ_FILE = '_Bildumbenenner.json';
 const PROJ_KINDS = ['drafts', 'discard', 'rot', 'extra', 'orig', 'hash', 'order', 'meta'];
 const NAMING_KEYS = ['prefix', 'date', 'num', 'start', 'digits', 'sep', 'spaces', 'uml', 'lower', 'probe', 'discard', 'sort'];
-const P = { loading: false, session: null, data: null, base: null, lastText: null, timer: null, writing: Promise.resolve(true), writes: 0, dirty: false, failed: false, readOnly: false };
+const P = { loading: false, session: null, onSaved: null, data: null, base: null, lastText: null, timer: null, writing: Promise.resolve(true), writes: 0, dirty: false, failed: false, readOnly: false };
 const PROTECTED_PROJECT = 'Dieses Projekt kann mit der aktuellen FotoKit-Version nicht sicher bearbeitet werden. Die Originalfotos sind deshalb vor Umbenennung und Verschieben geschützt. Für eine Bearbeitung ist eine kompatible FotoKit-Version beziehungsweise eine lesbare Projektdatei erforderlich. Änderungen in dieser Sitzung werden nicht im Projekt gespeichert.';
 const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
 const pickNaming = c => Object.fromEntries(NAMING_KEYS.filter(k => k in c).map(k => [k, c[k]]));
@@ -568,7 +568,7 @@ function flushProject(){
       logProblem('Speichern ' + PROJ_FILE + ': ' + e.message);
       return false;
     }finally{
-      if (P.session === session) P.writes--;
+      if (P.session === session){ P.writes--; completePendingSave(); }
     }
   });
   return P.writing;
@@ -692,7 +692,7 @@ async function importLegacy(dir){
 }
 
 async function loadProject(dir){
-  P.session = {};
+  P.session = {}; P.onSaved = null;
   clearTimeout(P.timer); P.dirty = false; P.failed = false; P.readOnly = false;
   let d = null, note = '';
   P.lastText = null; P.base = null;
@@ -986,25 +986,30 @@ function flushPJ(){
       if (!PJ.failed){ PJ.failed = true; saveError(`Gemeinsame Projektdaten („${PJ_FILE}“) konnten nicht gespeichert werden: ${esc(e.message)}.`); }
       return false;
     }finally{
-      PJ.writes--;
+      PJ.writes--; completePendingSave();
     }
   });
   return PJ.writing;
 }
 
+// A failed file operation's save can recover through Retry, autosave, or the
+// transition gate. Complete it only once the current project's queues are clear.
+function completePendingSave(){
+  if (!P.onSaved || P.failed || P.dirty || P.writes || PJ.failed || PJ.writes || Object.keys(PJ.pending).length) return;
+  const complete = P.onSaved;
+  P.onSaved = null;
+  complete();
+}
 function saveError(detail, onSaved = null){
+  if (onSaved) P.onSaved = onSaved;
   banner('err', `${detail} Deine Eingaben sind weiterhin geöffnet. Bitte prüfe den Projektordner und versuche erneut zu speichern. Änderungen gehen beim Schließen verloren. <button id="bSaveRetry">Erneut speichern</button>`);
-  const session = P.session;
-  const retry = async () => {
-    const ok = await withSavedProject('Das Speichern', async () => {
-      if (onSaved) onSaved();
+  $('bSaveRetry').onclick = () => {
+    const pending = !!P.onSaved;
+    return withSavedProject('Das Speichern', async () => {
+      if (pending) completePendingSave();
       else banner('ok', 'Die Änderungen wurden im Projektordner gespeichert. Du kannst jetzt weiterarbeiten oder das Projekt wechseln.');
     });
-    // The save gate creates a new error banner on failure. Keep the completion
-    // action through repeated retries, without repeating the physical file work.
-    if (!ok && P.session === session && onSaved && $('bSaveRetry')) $('bSaveRetry').onclick = retry;
   };
-  $('bSaveRetry').onclick = retry;
 }
 
 // The same gate protects every in-app replacement of the current project state.
