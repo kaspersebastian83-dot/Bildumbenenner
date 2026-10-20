@@ -79,6 +79,22 @@ const A = '26.0142 Teststadt', B = '26.0150 Köln';
   assert.equal(await leiste.locator('a.ml-step').count(), 3);
   assert.equal(await leiste.locator('input, textarea').count(), 0);
 
+  // FotoKit: project menu and all navigation actions stay reachable in narrow windows.
+  for (const width of [768, 390, 320]) {
+    await page.setViewportSize({width, height: 900});
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `Keine Überbreite mit aktiver Suite bei ${width}px`);
+    for (const selector of ['.ml-home', '.ml-proj', '.ml-step', '.ml-weiter']) {
+      for (const action of await leiste.locator(selector).all()) {
+        const b = await action.boundingBox();
+        assert.ok(b && b.x >= 0 && b.x + b.width <= width + 1, `${selector} erreichbar bei ${width}px`);
+      }
+    }
+    await leiste.locator('.ml-proj').click();
+    assert.equal(await page.locator('#mosaikLeistePop').isVisible(), true);
+    await page.keyboard.press('Escape');
+  }
+  await page.setViewportSize({width: 1400, height: 900});
+
   // 3) Projektwechsel: zuletzt benutzte Projekte, Wechsel bleibt in dieser App
   await leiste.locator('.ml-proj').click();
   const pop = page.locator('#mosaikLeistePop');
