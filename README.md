@@ -63,6 +63,8 @@ Originalbilder werden **nur umbenannt** bzw. nach `_aussortiert/` verschoben –
 
 Ordnerwechsel, „Neu einlesen“ und App-Updates warten auf die Speicherung aller ausstehenden Änderungen, einschließlich der gemeinsamen Projektdaten. Schlägt sie fehl, bleibt das bisherige Projekt mit den Eingaben geöffnet. Nach Prüfen des Projektordners mit **„Erneut speichern“** wiederholen und anschließend den Wechsel erneut auslösen. Beim Schließen oder Neuladen über den Browser warnt FotoKit auch vor noch laufenden Schreibvorgängen; ein erzwungenes Schließen oder das Bestätigen von „Seite verlassen“ kann ungesicherte Änderungen weiterhin verwerfen.
 
+Nach Umbenennen oder Rückgängig werden Speicherfehler ebenfalls angezeigt. Die Dateinamen können dann bereits geändert sein; die zugehörigen Bildinformationen bleiben in der geöffneten Sitzung erhalten. **„Erneut speichern“** sichert sie unter den aktuellen Dateinamen, ohne die Dateiaktion zu wiederholen. Erst nach erfolgreicher Speicherung erscheint die Erfolgsmeldung.
+
 Bei einem unbekannten Projektformat oder einer beschädigten/nicht lesbaren Projektdatei arbeitet FotoKit im **geschützten Modus**: Originalfotos können weder umbenannt noch verschoben werden, auch nicht über Rückgängig. Beide Projektdateien bleiben unverändert. Ansicht und sichere PDF-/ZIP-Ausgaben sind weiterhin möglich; Anpassungen für eine Ausgabe gelten nur in dieser Sitzung. Eine kompatible FotoKit-Version beziehungsweise eine lesbare Projektdatei ist erforderlich, um das Projekt wieder dauerhaft zu bearbeiten.
 
 ## Bekannte Grenzen

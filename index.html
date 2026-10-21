@@ -450,7 +450,7 @@ const APP_NAME = 'FotoKit';   // display name (technical names – web address, 
 const APP_VERSION = '1.9.4';
 const APP_DATE = '2026-10-20';
 const CHANGELOG = [
-  ['1.9.4', '20.10.2026', 'Projektzentrale und Spektron-Leiste übergeben Projekte jetzt über #projekt im Fragment. Sonderzeichen bleiben erhalten; alte ?projekt-Links funktionieren weiterhin und werden nach dem Laden bereinigt. Projektwechsel laden auch bereits geöffnete App-Fenster neu; eine Warnung vor ungesicherten Eingaben kann den Wechsel abbrechen.'],
+  ['1.9.4', '20.10.2026', 'Projektzentrale und Spektron-Leiste übergeben Projekte jetzt über #projekt im Fragment. Sonderzeichen bleiben erhalten; alte ?projekt-Links funktionieren weiterhin und werden nach dem Laden bereinigt. Projektwechsel laden auch bereits geöffnete App-Fenster neu; eine Warnung vor ungesicherten Eingaben kann den Wechsel abbrechen. Speicherfehler nach Umbenennen oder Rückgängig bleiben sichtbar. Erneut speichern sichert die Metadaten unter den bereits geänderten Dateinamen, einschließlich neuer Eingaben; die Dateiaktion wird dabei nicht wiederholt. Eine Erfolgsmeldung erscheint erst nach erfolgreicher Speicherung.'],
   ['1.9.3', '20.10.2026', 'Projektkontext: FotoKit, URL und Spektron-Leiste verwenden erst nach erfolgreichem Öffnen dieselbe Projektzuordnung. Fehlgeschlagene Wechsel erhalten das bisherige Projekt. Unbekannte Fotoordner entfernen eine alte Zuordnung; nachträgliches Zuordnen erhält die Bildinformationen. Bestehende Speicherabsicherung und geschützter Modus bleiben erhalten.'],
   ['1.9.2', '20.10.2026', 'Serienbeschriftung: zuverlässiger Fokus und Vorschauwechsel ohne doppelte Lesevorgänge; verspätete Vorschaufehler beeinflussen kein anderes Bild. Tastenkürzel für Bilder sind bei geöffnetem Dialog, Vollbild und während einer IME-Komposition ausgesetzt; Pfeiltasten im Abschnitts- und Probenfeld bleiben für die Eingabe frei. Der wirksame Abschnitt wird als eingetragen oder von vorherigem Bild übernommen erklärt. Bestehende Übernahme-, Speicher-, Schutz- und Exportfunktionen bleiben erhalten.'],
   ['1.9.1', '20.10.2026', 'Responsive Oberfläche: Kopfzeile, Projektangaben und Aktionen passen sich schmalen Fenstern an. Die Bildliste behält ausreichend Höhe; die Vorschau lässt sich auf schmalen Fenstern per Tastatur ein- und ausklappen. Auswahl und Beschreibung bleiben erhalten. Desktopaufteilung und Datei-, Speicher-, Schutz- und Exportfunktionen bleiben unverändert.'],
@@ -494,7 +494,7 @@ const TMP_PREFIX = 'umb-tmp_';
 const PROJ_FILE = '_Bildumbenenner.json';
 const PROJ_KINDS = ['drafts', 'discard', 'rot', 'extra', 'orig', 'hash', 'order', 'meta'];
 const NAMING_KEYS = ['prefix', 'date', 'num', 'start', 'digits', 'sep', 'spaces', 'uml', 'lower', 'probe', 'discard', 'sort'];
-const P = { loading: false, session: null, data: null, base: null, lastText: null, timer: null, writing: Promise.resolve(true), writes: 0, dirty: false, failed: false, readOnly: false };
+const P = { loading: false, session: null, onSaved: null, data: null, base: null, lastText: null, timer: null, writing: Promise.resolve(true), writes: 0, dirty: false, failed: false, readOnly: false };
 const PROTECTED_PROJECT = 'Dieses Projekt kann mit der aktuellen FotoKit-Version nicht sicher bearbeitet werden. Die Originalfotos sind deshalb vor Umbenennung und Verschieben geschützt. Für eine Bearbeitung ist eine kompatible FotoKit-Version beziehungsweise eine lesbare Projektdatei erforderlich. Änderungen in dieser Sitzung werden nicht im Projekt gespeichert.';
 const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
 const pickNaming = c => Object.fromEntries(NAMING_KEYS.filter(k => k in c).map(k => [k, c[k]]));
@@ -586,7 +586,7 @@ function flushProject(){
       logProblem('Speichern ' + PROJ_FILE + ': ' + e.message);
       return false;
     }finally{
-      if (P.session === session) P.writes--;
+      if (P.session === session){ P.writes--; completePendingSave(); }
     }
   });
   return P.writing;
@@ -710,7 +710,7 @@ async function importLegacy(dir){
 }
 
 async function loadProject(dir){
-  P.session = {};
+  P.session = {}; P.onSaved = null;
   clearTimeout(P.timer); P.dirty = false; P.failed = false; P.readOnly = false;
   let d = null, note = '';
   P.lastText = null; P.base = null;
@@ -1004,17 +1004,30 @@ function flushPJ(){
       if (!PJ.failed){ PJ.failed = true; saveError(`Gemeinsame Projektdaten („${PJ_FILE}“) konnten nicht gespeichert werden: ${esc(e.message)}.`); }
       return false;
     }finally{
-      PJ.writes--;
+      PJ.writes--; completePendingSave();
     }
   });
   return PJ.writing;
 }
 
-function saveError(detail){
+// A failed file operation's save can recover through Retry, autosave, or the
+// transition gate. Complete it only once the current project's queues are clear.
+function completePendingSave(){
+  if (!P.onSaved || P.failed || P.dirty || P.writes || PJ.failed || PJ.writes || Object.keys(PJ.pending).length) return;
+  const complete = P.onSaved;
+  P.onSaved = null;
+  complete();
+}
+function saveError(detail, onSaved = null){
+  if (onSaved) P.onSaved = onSaved;
   banner('err', `${detail} Deine Eingaben sind weiterhin geöffnet. Bitte prüfe den Projektordner und versuche erneut zu speichern. Änderungen gehen beim Schließen verloren. <button id="bSaveRetry">Erneut speichern</button>`);
-  $('bSaveRetry').onclick = () => withSavedProject('Das Speichern', async () => {
-    banner('ok', 'Die Änderungen wurden im Projektordner gespeichert. Du kannst jetzt weiterarbeiten oder das Projekt wechseln.');
-  });
+  $('bSaveRetry').onclick = () => {
+    const pending = !!P.onSaved;
+    return withSavedProject('Das Speichern', async () => {
+      if (pending) completePendingSave();
+      else banner('ok', 'Die Änderungen wurden im Projektordner gespeichert. Du kannst jetzt weiterarbeiten oder das Projekt wechseln.');
+    });
+  };
 }
 
 // The same gate protects every in-app replacement of the current project state.
@@ -1866,18 +1879,27 @@ async function doRename(pairs, moves){
       const moved = new Set(moves.map(m => m.from));
       projSet('discard', projGet('discard', []).filter(n => !moved.has(n)));
     }
-    await flushProject();                     // project file now matches the renamed files
-    S.busy = false;
+    const saved = await flushProject();
+    // Physical file changes have already happened. Rebuild from the remapped
+    // in-memory metadata so retries and new edits use the current file names.
     await loadItems();
+    S.busy = false; recompute();
     const msg = [];
     if (pairs.length) msg.push(`${pairs.length} umbenannt`);
     if (moves.length) msg.push(`${moves.length} nach ${DISCARD_DIR}/ verschoben`);
-    banner('ok', `✓ ${msg.join(', ')} – im Ordner geprüft.${usedCopy ? ' (Kopiermodus: dein Browser benennt nicht direkt um, darum wurde kopiert, geprüft und das Original entfernt.)' : ''}
+    const complete = () => {
+      banner('ok', `✓ ${msg.join(', ')} – im Ordner geprüft.${usedCopy ? ' (Kopiermodus: dein Browser benennt nicht direkt um, darum wurde kopiert, geprüft und das Original entfernt.)' : ''}
       <span class="spacer"></span>
       <button id="bCsv">Bildverzeichnis (CSV) im Ordner speichern</button>
       <button id="bUndo">Rückgängig</button>`);
-    $('bCsv').onclick = saveCsv;
-    $('bUndo').onclick = undo;
+      $('bCsv').onclick = saveCsv;
+      $('bUndo').onclick = undo;
+    };
+    if (saved === false || P.failed){
+      saveError('Die Dateien wurden bereits umbenannt oder verschoben, ihre Projektdaten konnten aber noch nicht gespeichert werden.', complete);
+      return false;
+    }
+    complete();
   }catch(e){
     if (movesDone){ try{ await undoMoves(moves); }catch(_){} }
     closeDialog(); S.busy = false;
@@ -1913,10 +1935,17 @@ async function undo(){
     run.moves.forEach(m => disc.add(m.from));
     projSet('discard', [...disc]);
     saveOrder(run.rows.map(r => r.from).concat(run.discardRows.map(r => r.from)));
-    await flushProject();
-    S.lastRun = null; S.busy = false;
+    const saved = await flushProject();
+    // The reverse file operation must not run again when only its save failed.
+    S.lastRun = null;
     await loadItems();
-    banner('ok', '↺ Rückgängig gemacht. Beschreibungen und Aussortierung sind wieder eingetragen.');
+    S.busy = false; recompute();
+    const complete = () => banner('ok', '↺ Rückgängig gemacht. Beschreibungen und Aussortierung sind wieder eingetragen.');
+    if (saved === false || P.failed){
+      saveError('Die Dateinamen wurden bereits zurückgesetzt, ihre Projektdaten konnten aber noch nicht gespeichert werden.', complete);
+      return false;
+    }
+    complete();
   }catch(e){
     closeDialog(); S.busy = false; await loadItems();
     banner('err', 'Rückgängig fehlgeschlagen: ' + esc(e.message));
