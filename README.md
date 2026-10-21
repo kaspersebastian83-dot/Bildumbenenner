@@ -2,11 +2,21 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.9.4**
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.9.5**
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
 Die Webadresse, die Projektdatei `_Bildumbenenner.json` und die gespeicherten Einstellungen behalten den alten Namen – so funktionieren bestehende Projekte, Lesezeichen und installierte Apps weiter. Die aktuelle Version steht oben links in der blauen Kopfzeile (Klick darauf: Änderungen, Problem melden). Daneben öffnet „? Kurzanleitung“ (oder F1) die Kurzanleitung – auch zum Ausdrucken.
+
+## Neu in 1.9.5 · 21.10.2026
+
+Alle aktiven Bilder erhalten in Listenreihenfolge eine **Dokumentationsnummer ab 1**, auch Bilder ohne Beschreibung. Aussortierte Bilder zählen nicht mit. Liste, Vorschau, PDF, ZIP-Bildverzeichnis, CSV und Fotoreferenzen der Labortabelle verwenden dieselben Nummern. Die Auswahl „nur Bilder mit Beschreibung“ behält die Listennummern bei und kann deshalb Lücken enthalten.
+
+Die **Dateinummer** beginnt weiterhin bei der eingestellten Startnummer; Stellenzahl, Präfix und die übrigen Benennungsoptionen bleiben erhalten. Sie folgt der Position in der aktiven Liste (Startnummer + Bildnummer − 1). Ohne Beschreibung bleibt der Dateiname unverändert. Beispiel: Bild 3 mit Startnummer 7 erhält die Dateinummer 009 bei drei Stellen, auch wenn Bild 2 keine Beschreibung hat.
+
+Aktueller Dateiname, gegebenenfalls Originalname und geplanter Dateiname sind sichtbar. Sortieren und Aussortieren ändern keine physischen Dateinamen. Stimmen Dateinamen und Plan nicht überein, zeigt FotoKit dies an; erst **„Ausführen“** und **„Jetzt ausführen“** bestätigen die Dateiaktion. Nach dem Umbenennen bleibt die Dokumentationsreihenfolge als manuelle Sortierung erhalten, auch nach erneutem Öffnen. Rückgängig bleibt wie bisher in der laufenden Sitzung verfügbar.
+
+Für die Analyse des bisherigen Verhaltens und den Prüfnachweis siehe [Bildnummerierung 1.9.5](docs/bildnummerierung-1.9.5.md).
 
 ## Neu in 1.9.4 · 20.10.2026
 
@@ -95,6 +105,7 @@ Bei einem unbekannten Projektformat oder einer beschädigten/nicht lesbaren Proj
 
 ```sh
 node tests/laborwerte.cjs   # Laborwerte der Ergebnistabelle: Zahlen und Qualifikatoren wie in PlanKit
+node tests/bildnummerierung-browser.cjs [chromium|webkit]   # 5/50/150 Bilder: echte Aktionen und gespeicherte PDF-/CSV-/ZIP-Inhalte
 node tests/projektdaten-browser.cjs [chromium|webkit]   # _Projekt.json: Neu-Lesen beim Fensterwechsel, Sperre beim Speichern (braucht Playwright)
 node tests/projektkontext-browser.cjs [chromium|webkit]   # Zentrale, manuelle Wechsel, Fehler/Verzögerungen, unbekannter Ordner, Zuordnung und URL/Navigation
 node tests/leiste-browser.cjs [chromium|webkit]   # Leiste mit Projekt, Arbeitsschritten und „Weiter“ (braucht Playwright)

@@ -353,8 +353,8 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
     <span class="lbl title">Benennung</span>
     <label>Präfix <input type="text" id="oPrefix" placeholder="z. B. P2026-114"></label>
     <label><input type="checkbox" id="oDate"> Datum voranstellen</label>
-    <label><input type="checkbox" id="oNum"> Nummerieren</label>
-    <label>ab <input type="number" id="oStart" min="0" value="1"></label>
+    <label><input type="checkbox" id="oNum"> Dateinummer</label>
+    <label title="Startnummer der Dateinamen; die Dokumentation zählt aktive Bilder immer ab 1.">ab <input type="number" id="oStart" min="0" value="1"></label>
     <label>Stellen <input type="number" id="oDigits" min="1" max="5" value="2"></label>
     <label>Trenner
       <select id="oSep"><option value="_">_</option><option value="-">-</option><option value=" ">Leerz.</option></select>
@@ -447,9 +447,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.9.4';
-const APP_DATE = '2026-10-20';
+const APP_VERSION = '1.9.5';
+const APP_DATE = '2026-10-21';
 const CHANGELOG = [
+  ['1.9.5', '21.10.2026', 'Einheitliche Bildnummern: Alle aktiven Bilder zählen in Listenreihenfolge ab 1, auch ohne Beschreibung. Vorschau, PDF, ZIP, CSV und Labor-Fotoreferenzen verwenden dieselben Nummern; eine Exportauswahl behält diese bei. Die Dateinummer folgt mit der eingestellten Startnummer derselben Position. Originalname und geplanter Dateiname sind sichtbar. Sortieren ändert keine Dateien; geplante Änderungen müssen ausdrücklich ausgeführt werden. Umbenennen erhält die Dokumentationsreihenfolge als manuelle Sortierung.'],
   ['1.9.4', '20.10.2026', 'Projektzentrale und Spektron-Leiste übergeben Projekte jetzt über #projekt im Fragment. Sonderzeichen bleiben erhalten; alte ?projekt-Links funktionieren weiterhin und werden nach dem Laden bereinigt. Projektwechsel laden auch bereits geöffnete App-Fenster neu; eine Warnung vor ungesicherten Eingaben kann den Wechsel abbrechen. Speicherfehler nach Umbenennen oder Rückgängig bleiben sichtbar. Erneut speichern sichert die Metadaten unter den bereits geänderten Dateinamen, einschließlich neuer Eingaben; die Dateiaktion wird dabei nicht wiederholt. Eine Erfolgsmeldung erscheint erst nach erfolgreicher Speicherung.'],
   ['1.9.3', '20.10.2026', 'Projektkontext: FotoKit, URL und Spektron-Leiste verwenden erst nach erfolgreichem Öffnen dieselbe Projektzuordnung. Fehlgeschlagene Wechsel erhalten das bisherige Projekt. Unbekannte Fotoordner entfernen eine alte Zuordnung; nachträgliches Zuordnen erhält die Bildinformationen. Bestehende Speicherabsicherung und geschützter Modus bleiben erhalten.'],
   ['1.9.2', '20.10.2026', 'Serienbeschriftung: zuverlässiger Fokus und Vorschauwechsel ohne doppelte Lesevorgänge; verspätete Vorschaufehler beeinflussen kein anderes Bild. Tastenkürzel für Bilder sind bei geöffnetem Dialog, Vollbild und während einer IME-Komposition ausgesetzt; Pfeiltasten im Abschnitts- und Probenfeld bleiben für die Eingabe frei. Der wirksame Abschnitt wird als eingetragen oder von vorherigem Bild übernommen erklärt. Bestehende Übernahme-, Speicher-, Schutz- und Exportfunktionen bleiben erhalten.'],
@@ -1341,8 +1342,8 @@ function buildRows(){
         <div class="ord"><button class="up" title="nach oben">▲</button><button class="x" title="Aussortieren (Alt+X)">✕</button><button class="down" title="nach unten">▼</button></div>`;
       it.el = r;
       const thumb = r.querySelector('.thumb'); thumb._item = it;
-      r.querySelector('.orig').textContent = `${it.name} · ${fmtDate(it.date)} ${it.dateSrc==='EXIF' ? fmtTime(it.date) : ''}`;
-      r.querySelector('.orig').title = `${it.name} – Datum aus ${it.dateSrc}`;
+      r.querySelector('.orig').textContent = `${it.name}${it.orig && it.orig !== it.name ? ' · Original: ' + it.orig : ''} · ${fmtDate(it.date)} ${it.dateSrc==='EXIF' ? fmtTime(it.date) : ''}`;
+      r.querySelector('.orig').title = `${it.name}${it.orig && it.orig !== it.name ? ' · Original: ' + it.orig : ''} – Datum aus ${it.dateSrc}`;
       const inp = r.querySelector('.desc');
       inp.setAttribute('aria-label', 'Beschreibung zu ' + it.name);
       const sectionStatus = r.querySelector('.section-status');
@@ -1541,10 +1542,12 @@ function recompute(){
   const dl = $('secList');
   if (dl.dataset.k !== [...secs].join('|')){ dl.dataset.k = [...secs].join('|'); dl.innerHTML = [...secs].map(v => `<option value="${esc(v)}">`).join(''); }
   const moving = cfg.discard === 'move';
-  let nr = cfg.start;
+  // Derived only: never persist a second order/number in the project format.
+  let docNr = 0;
   S.view.forEach(it => {
+    it.docNr = it.discard ? null : ++docNr;
     it.nr = null;
-    if (!it.discard && sanitize(it.desc)){ it.nr = nr++; it.final = buildName(it, it.nr); }
+    if (!it.discard && sanitize(it.desc)){ it.nr = cfg.start + it.docNr - 1; it.final = buildName(it, it.nr); }
     else it.final = it.name;
   });
   // names that will occupy the folder afterwards
@@ -1552,7 +1555,7 @@ function recompute(){
   const count = new Map();
   staying.forEach(it => { const k = it.final.toLowerCase(); count.set(k, (count.get(k)||0) + 1); });
   let changes = 0, conflicts = 0, tooLong = 0, discarded = 0;
-  S.view.forEach((it, i) => {
+  S.view.forEach(it => {
     const k = it.final.toLowerCase();
     const gone = it.discard && moving;
     it.conflict = !gone && (count.get(k) > 1 || (it.final !== it.name && S.otherNames.has(k)));
@@ -1562,14 +1565,15 @@ function recompute(){
     if (it.conflict) conflicts++;
     if (it.final.length > 180) tooLong++;
     if (!it.el) return;
-    it.el.querySelector('.nr .n').textContent = it.discard ? '–' : i + 1;
+    it.el.querySelector('.nr .n').textContent = it.docNr ?? '–';
+    it.el.querySelector('.nr .n').title = it.discard ? 'Aussortiert – keine Bildnummer' : `Bild ${it.docNr} in der Dokumentation`;
     const res = it.el.querySelector('.res');
     if (it.discard){
       res.className = 'res discard';
       res.textContent = P.readOnly ? '✕ nur in dieser Sitzung aussortiert – Original bleibt unverändert' : moving ? `✕ wird nach ${DISCARD_DIR}/ verschoben` : '✕ aussortiert – bleibt unverändert im Ordner';
     } else {
       res.className = 'res' + (it.conflict ? ' conflict' : changed ? ' change' : '');
-      res.textContent = it.conflict ? '⚠ ' + it.final + ' (Name doppelt / existiert)' : changed ? '→ ' + it.final : 'bleibt unverändert';
+      res.textContent = it.conflict ? '⚠ ' + it.final + ' (Name doppelt / existiert)' : changed ? 'Geplant: → ' + it.final : 'Dateiname bleibt: ' + it.name;
     }
     res.title = it.final;
   });
@@ -1578,6 +1582,7 @@ function recompute(){
   if (discarded) s += ` · <b>${discarded}</b> aussortiert`;
   if (conflicts) s += ` · <span class="bad">${conflicts} Konflikte</span>`;
   if (tooLong) s += ` · <span class="bad">${tooLong} Namen sehr lang</span>`;
+  if (changes) s += ' · Dateinamen passen noch nicht zum Plan – nur „Ausführen“ ändert Dateien';
   $('stats').innerHTML = P.readOnly ? `<b>${S.view.length - discarded}</b> Bilder · geschützter Modus – Originalfotos unverändert` : s;
   $('btnRename').disabled = P.readOnly || !(changes || moves) || conflicts > 0 || S.busy;
   if ($('bUndo')) $('bUndo').disabled = P.readOnly;
@@ -1639,11 +1644,12 @@ function updatePreviewMeta(){
   const active = S.view.filter(x => !x.discard).length;
   $('pvName').textContent = it.name;
   $('pvInfo').textContent = [
-    it.discard ? 'aussortiert' : `Bild ${S.focus+1} von ${active}`,
+    it.discard ? 'aussortiert' : `Bild ${it.docNr} von ${active}`,
+    it.orig && it.orig !== it.name ? `Original: ${it.orig}` : '',
     `${fmtDate(it.date)} ${it.dateSrc==='EXIF' ? fmtTime(it.date) : ''} (${it.dateSrc})`,
     fmtSize(it.size), it.dim || '', rotOf(it) ? `↻ ${rotOf(it)}° (nur im Export)` : ''
   ].filter(Boolean).join(' · ');
-  $('pvNew').textContent = it.discard ? '' : it.final !== it.name ? '→ ' + it.final : '';
+  $('pvNew').textContent = it.discard ? '' : it.final !== it.name ? 'Geplant: → ' + it.final : 'Dateiname bleibt: ' + it.name;
   const b = $('pvDiscard');
   b.textContent = it.discard ? '↺ Wiederherstellen' : '✕ Aussortieren';
   b.classList.toggle('on', it.discard);
@@ -1836,7 +1842,7 @@ async function doRename(pairs, moves){
   showDialog(`<h3>Führe aus …</h3><progress id="prog" max="${total}" value="0"></progress>`);
   const fmtD = it => it.date ? `${fmtDate(it.date)} ${it.dateSrc==='EXIF' ? fmtTime(it.date) : ''}`.trim() : '';
   const snapshot = S.view.filter(it => !it.discard).map(it => ({
-    nr: it.nr ?? '', from: it.name, to: it.final, desc: it.desc.trim(), date: fmtD(it), sec: it.secEff, probe: it.probe.trim(), orig: it.orig || it.name
+    nr: it.docNr, from: it.name, to: it.final, desc: it.desc.trim(), date: fmtD(it), sec: it.secEff, probe: it.probe.trim(), orig: it.orig || it.name
   }));
   const discardRows = S.view.filter(it => it.discard).map(it => ({ from: it.name, date: fmtD(it) }));
   let movesDone = false;
@@ -1860,6 +1866,8 @@ async function doRename(pairs, moves){
     }
     closeDialog();
     S.lastRun = { rows: snapshot, pairs, moves, discardRows, when: new Date() };
+    // New physical names must not re-sort the documentation on loadItems/reopen.
+    cfg.sort = 'manual'; $('sort').value = 'manual'; store.set('bu-settings', cfg);
     saveOrder(snapshot.map(r => r.to).concat(moves.length ? [] : discardRows.map(r => r.from)));
     remapKeys('drafts', pairs);       // descriptions stay with the renamed file
     remapKeys('extra', pairs);
@@ -1928,8 +1936,11 @@ async function undo(){
     remapKeys('extra', back);
     remapKeys('hash', back);
     moveRotKeys(back);
-    const og = projGet('orig', {});
-    for (const p of run.pairs){ const o = og[p.to]; delete og[p.to]; const on = o && (typeof o === 'object' ? o.o : o); if (on && on !== p.from) og[p.from] = o; }
+    const og = projGet('orig', {}), before = { ...og };
+    // Delete all source keys first: swapped filenames must not overwrite an
+    // original reference that the next pair still needs to read.
+    for (const p of run.pairs) delete og[p.to];
+    for (const p of run.pairs){ const o = before[p.to]; const on = o && (typeof o === 'object' ? o.o : o); if (on && on !== p.from) og[p.from] = o; }
     projSet('orig', og);
     const disc = new Set(projGet('discard', []));
     run.moves.forEach(m => disc.add(m.from));
@@ -2157,10 +2168,10 @@ function buildTxt(m, items, now, exp){
   if (hasSec) L.push('Zeilen "=== Abschnitt: … ===" markieren Zwischenüberschriften in der Dokumentation.', '');
   let lastSec = null;
   const probes = new Map();
-  items.forEach((it, i) => {
+  items.forEach(it => {
     if (hasSec && it.secEff !== lastSec){ L.push(`=== Abschnitt: ${it.secEff || '(ohne Abschnitt)'} ===`, ''); lastSec = it.secEff; }
-    for (const pn of it.probe.split(/[,;\/]+/).map(x => x.trim()).filter(Boolean)){ if (!probes.has(pn)) probes.set(pn, []); probes.get(pn).push(i + 1); }
-    L.push(`Bild ${i + 1}`);
+    for (const pn of it.probe.split(/[,;\/]+/).map(x => x.trim()).filter(Boolean)){ if (!probes.has(pn)) probes.set(pn, []); probes.get(pn).push(it.docNr); }
+    L.push(`Bild ${it.docNr}`);
     const ex = exp && exp.get(it);
     L.push(`    Datei:         ${ex ? ex.name : it.final}`);
     L.push(`    Beschreibung:  ${it.desc.trim() || '(keine Beschreibung)'}`);
@@ -2266,7 +2277,7 @@ function openMetaDialog(mode){
       const est = items.reduce((a, it) => a + (canRotate(it) ? (r.img.shrink ? Math.min(it.size, 850000 * Math.pow(r.img.edge / 2000, 2) * qf) : it.size) : (forPdf ? 0 : it.size)), 0);
       const nRot = items.filter(it => rotOf(it)).length;
       $('zEdge').disabled = $('zQ').disabled = !r.img.shrink;
-      const notIn = (active.length - items.length ? ` · ${active.length - items.length} ohne Beschreibung nicht enthalten` : '') + (S.view.length - active.length ? ' · Aussortierte nicht enthalten' : '');
+      const notIn = (active.length - items.length ? ` · ${active.length - items.length} ohne Beschreibung nicht enthalten; Bildnummern wie in der Liste (mit Lücken)` : '') + (S.view.length - active.length ? ' · Aussortierte nicht enthalten' : '');
       if (forZip){
         html += `Inhalt: <b>${items.length}</b> Bilder (${r.img.shrink ? `Original ${fmtSize(bytes)} → ca. <b>${fmtSize(est)}</b> geschätzt` : fmtSize(bytes)}) + <b>${TXT_NAME}</b>` +
           (nRot ? ` · ${nRot} gedrehte(s) Bild(er) werden ausgerichtet` : '') + ` + <b>${SUM_NAME}</b>` + notIn +
@@ -2595,11 +2606,11 @@ async function buildAnnex(meta, items, progress){
     const heading = hasSec && sec && sec !== lastSec ? sec : null;
     if (hasSec) lastSec = sec;
     if (!cur || cur.length >= opt.perPage || (heading && opt.secPage && cur.length)){ cur = []; imgPages.push(cur); }
-    cur.push({ i, n: i + 1, it, heading });
+    cur.push({ i, n: it.docNr, it, heading });
   });
   // 3) sampling points
   const probeRows = [];
-  items.forEach((it, i) => it.probe.split(/[,;\/]+/).map(x => x.trim()).filter(Boolean).forEach(p => probeRows.push({ p, n: i + 1, sec: it.secEff || '', desc: it.desc.trim() })));
+  items.forEach(it => it.probe.split(/[,;\/]+/).map(x => x.trim()).filter(Boolean).forEach(p => probeRows.push({ p, n: it.docNr, sec: it.secEff || '', desc: it.desc.trim() })));
   probeRows.sort((a, b) => a.p.localeCompare(b.p, 'de', { numeric: true }) || a.n - b.n);
 
   const headL = meta.anlage ? `${meta.anlage} – Bilddokumentation` : 'Bilddokumentation';
@@ -2976,9 +2987,9 @@ function rate(scale, v){
 }
 function photoNumbers(){        // Probe-Nr. → picture numbers as in the PDF / Bildverzeichnis
   const map = new Map();
-  zipSelection(loadMeta().onlyDesc).forEach((it, i) => {
+  zipSelection(loadMeta().onlyDesc).forEach(it => {
     it.probe.split(/[,;\/]+/).map(x => x.trim()).filter(Boolean).map(normProbe)
-      .forEach(p => { if (!map.has(p)) map.set(p, []); map.get(p).push(i + 1); });
+      .forEach(p => { if (!map.has(p)) map.set(p, []); map.get(p).push(it.docNr); });
   });
   return map;
 }
@@ -3288,7 +3299,7 @@ const HELP_HTML = `
 <h4>In 5 Schritten zur Bilddokumentation</h4>
 <ol>
   <li><b>Projekt öffnen:</b> in der Projektzentrale „Fotos bearbeiten → FotoKit“ – oder hier „Projekt öffnen …“ und den Projektordner (z. B. <code>26.0123 Köln</code>) wählen. Oben in der blauen Leiste stehen dann Projektnummer und Ort. Wurde nur der Ordner <code>Fotos</code> gewählt, oben „Projekt zuordnen …“ klicken. Neue Fotos in diesen Ordner kopieren und „Fotos neu einlesen“ wählen.</li>
-  <li><b>Dateibenennung:</b> „Dateibenennung und weitere Einstellungen“ klappt die bisherigen Optionen auf. Alle Werte bleiben beim Ein-/Ausklappen erhalten; die Vorschau bleibt sichtbar.</li>
+  <li><b>Dateibenennung:</b> „Dateibenennung und weitere Einstellungen“ klappt die bisherigen Optionen auf. Die Bildnummer zählt aktive Bilder in Listenreihenfolge ab 1; die Dateinummer folgt derselben Position mit der eingestellten Startnummer. Ohne Beschreibung bleibt der Dateiname erhalten. Sortieren ändert keine Dateien: Geplante Namen werden erst mit „Ausführen“ und „Jetzt ausführen“ übernommen.</li>
   <li><b>Bilder beschreiben:</b> links ein Bild anklicken, rechts erscheint die Vorschau. Beschreibung eintippen, <kbd>Enter</kbd> springt zum nächsten Bild. Darunter optional <b>Abschnitt</b> (z. B. „Küche“ – gilt für die folgenden Bilder mit) und <b>Probe-Nr.</b> (z. B. „P1“).</li>
   <li><b>Aufräumen:</b> unbrauchbare Bilder mit ✕ aussortieren (sie wandern ans Ende, nichts wird gelöscht). Reihenfolge per Ziehen ändern oder mit Sortierung „nach Abschnitt (Begehung)“ nach Räumen ordnen, schiefe Bilder mit ↻ drehen.</li>
   <li><b>Projektdaten prüfen:</b> „Projektdaten …“ – Anlagen-Nr., Objekt, Schadenereignis, Daten, Sachverständiger. Was in der Projektzentrale schon eingetragen ist, steht hier bereits.</li>
