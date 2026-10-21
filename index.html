@@ -7,6 +7,24 @@
 <title>FotoKit</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<script>
+// Projektübergabe: Fragment hat Vorrang; alte Query-Links früh und ohne Anfrage bereinigen.
+const PROJEKT_URL = (() => {
+  const start = new URL(location.href);
+  const projekt = new URLSearchParams(start.hash.slice(1)).get('projekt') ?? start.searchParams.get('projekt');
+  function setzen(name){
+    const url = new URL(location.href);
+    // Fremde Fragmentbestandteile (auch reine Anker wie #fotos) unverändert erhalten.
+    const teile = url.hash.slice(1).split('&').filter(t => t && !new URLSearchParams(t).has('projekt'));
+    if (name !== null) teile.push('projekt=' + encodeURIComponent(name));
+    url.searchParams.delete('projekt');
+    url.hash = teile.join('&');
+    if (url.href !== location.href) try{ history.replaceState(history.state, '', url); }catch(e){}
+  }
+  if (start.searchParams.has('projekt')) setzen(projekt);
+  return { projekt, setzen };
+})();
+</script>
 <meta name="theme-color" content="#4179b2">
 <style>
 /* Look: angelehnt an LabelKit (gleiche Farben, Schrift IBM Plex – eingebettet, damit es offline gleich aussieht).
@@ -301,7 +319,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 <header>
   <div class="appbar">
     <div class="brand"><span class="hex">⬡</span> FotoKit <small>Bilddokumentation</small></div>
-    <button id="btnInfo" class="hbadge" title="Version, Speicherorte, Änderungen, Problem melden">v1.0.0</button>
+    <button id="btnInfo" class="hbadge" title="Version, Speicherorte, Änderungen, Problem melden">v1.9.4</button>
     <button id="btnHelp" class="hbadge help" title="Kurzanleitung (F1)"><b>?</b> Kurzanleitung</button>
     <button id="btnUpd" class="upd" hidden title="Neu laden lädt die neue Version – ungespeicherte Änderungen werden vorher gesichert">Update verfügbar – neu laden</button>
     <span class="spacer"></span>
@@ -432,7 +450,7 @@ const APP_NAME = 'FotoKit';   // display name (technical names – web address, 
 const APP_VERSION = '1.9.4';
 const APP_DATE = '2026-10-20';
 const CHANGELOG = [
-  ['1.9.4', '20.10.2026', 'Speicherfehler nach Umbenennen oder Rückgängig bleiben sichtbar. Erneut speichern sichert die Metadaten unter den bereits geänderten Dateinamen, einschließlich neuer Eingaben; die Dateiaktion wird dabei nicht wiederholt. Eine Erfolgsmeldung erscheint erst nach erfolgreicher Speicherung.'],
+  ['1.9.4', '20.10.2026', 'Projektzentrale und Spektron-Leiste übergeben Projekte jetzt über #projekt im Fragment. Sonderzeichen bleiben erhalten; alte ?projekt-Links funktionieren weiterhin und werden nach dem Laden bereinigt. Projektwechsel laden auch bereits geöffnete App-Fenster neu; eine Warnung vor ungesicherten Eingaben kann den Wechsel abbrechen. Speicherfehler nach Umbenennen oder Rückgängig bleiben sichtbar. Erneut speichern sichert die Metadaten unter den bereits geänderten Dateinamen, einschließlich neuer Eingaben; die Dateiaktion wird dabei nicht wiederholt. Eine Erfolgsmeldung erscheint erst nach erfolgreicher Speicherung.'],
   ['1.9.3', '20.10.2026', 'Projektkontext: FotoKit, URL und Spektron-Leiste verwenden erst nach erfolgreichem Öffnen dieselbe Projektzuordnung. Fehlgeschlagene Wechsel erhalten das bisherige Projekt. Unbekannte Fotoordner entfernen eine alte Zuordnung; nachträgliches Zuordnen erhält die Bildinformationen. Bestehende Speicherabsicherung und geschützter Modus bleiben erhalten.'],
   ['1.9.2', '20.10.2026', 'Serienbeschriftung: zuverlässiger Fokus und Vorschauwechsel ohne doppelte Lesevorgänge; verspätete Vorschaufehler beeinflussen kein anderes Bild. Tastenkürzel für Bilder sind bei geöffnetem Dialog, Vollbild und während einer IME-Komposition ausgesetzt; Pfeiltasten im Abschnitts- und Probenfeld bleiben für die Eingabe frei. Der wirksame Abschnitt wird als eingetragen oder von vorherigem Bild übernommen erklärt. Bestehende Übernahme-, Speicher-, Schutz- und Exportfunktionen bleiben erhalten.'],
   ['1.9.1', '20.10.2026', 'Responsive Oberfläche: Kopfzeile, Projektangaben und Aktionen passen sich schmalen Fenstern an. Die Bildliste behält ausreichend Höhe; die Vorschau lässt sich auf schmalen Fenstern per Tastatur ein- und ausklappen. Auswahl und Beschreibung bleiben erhalten. Desktopaufteilung und Datei-, Speicher-, Schutz- und Exportfunktionen bleiben unverändert.'],
@@ -1050,10 +1068,7 @@ async function withSavedProject(action, next){
 let activeProjectName = '';
 function syncProjectContext(){
   const name = S.proj ? S.proj.name : '';
-  const url = new URL(location.href);
-  if (name) url.searchParams.set('projekt', name);
-  else url.searchParams.delete('projekt');
-  if (url.href !== location.href) history.replaceState(history.state, '', url);
+  PROJEKT_URL.setzen(name || null);
   activeProjectName = name;
   showProject(S.dir, S.proj);
   if (window.MosaikLeiste) MosaikLeiste.aktualisieren();
@@ -2912,8 +2927,6 @@ function labQualifier(raw){
 }
 /* LABZAHL-ENDE */
 const labNum = r => labQualifier(r) === 'measured' ? labNumber(r) : NaN;   // nur gemessene Werte werden bewertet
-/** Anzeige in der Tabelle: „< BG“ nur bei echter Unterschreitung, n.n./n.b. bleiben, was sie sind; sonst der Wert wie im Bericht. */
-const labShow = r => ({ below: '< BG', notDetected: 'n.n.', notDetermined: 'n.b.' })[labQualifier(r)] || r;
 function parseLabXml(text, fileName){
   const doc = new DOMParser().parseFromString(text, 'application/xml');
   if (doc.getElementsByTagName('parsererror').length) throw new Error('Die Datei ist kein gültiges XML.');
@@ -2976,6 +2989,17 @@ const numRange = ns => {
   return out.length ? 'Bild ' + out.join(', ') : '';
 };
 const shortParam = p => p.replace(/^Summe 16 EPA-PAK.*$/i, 'Σ16 EPA-PAK').replace(/^Benzo\[a\]pyren$/i, 'BaP');
+// Nur eine tatsächlich gemeinsame Einheit gehört in die Überschrift; fehlend ist nicht gleich bekannt.
+const labCommonUnit = lines => {
+  const units = [...new Set(lines.filter(Boolean).map(l => l.unit))];
+  return units.length === 1 ? units[0] : '';
+};
+const labCell = (l, withUnit) => {
+  if (!l) return '–';
+  const unit = withUnit ? (l.unit ? ' ' + l.unit : ' (Einheit fehlt)') : '';
+  const bgUnit = withUnit && l.unit ? ' ' + l.unit : '';
+  return (l.result || '–') + unit + (l.loq ? ` (BG ${l.loq}${bgUnit})` : '');
+};
 
 function labTables(rep, o){
   const scales = loadScales(), photos = photoNumbers(), warn = [];
@@ -2993,15 +3017,17 @@ function labTables(rep, o){
   const tables = [], noPhoto = [];
   let tno = +o.startNr || 1;
   for (const g of groups.values()){
-    const scale = scales[scaleKey(p1, g.unit)];
-    const u2 = (g.proben.map(pr => line(pr, p2)).find(Boolean) || {}).unit || '';
+    const scale = g.unit ? scales[scaleKey(p1, g.unit)] : null;
+    const u2 = labCommonUnit(g.proben.map(pr => line(pr, p2)));
     if (o.mode === 'einzel'){
       const params = [];
-      g.proben.forEach(pr => pr.lines.forEach(l => { if (!params.some(x => x.param === l.param)) params.push({ param: l.param, unit: l.unit, loq: l.loq }); }));
+      // Unterschiedliche Einheiten/BG erhalten eigene Zeilen im bisherigen schmalen Layout.
+      const same = (a, b) => a.param === b.param && a.unit === b.unit && a.loq === b.loq;
+      g.proben.forEach(pr => pr.lines.forEach(l => { if (!params.some(x => same(x, l))) params.push({ param: l.param, unit: l.unit, loq: l.loq }); }));
       const head = ['Parameter', 'Einheit', 'BG', ...g.proben.map(pr => pr.label)];
       const rows = [];
       if (o.cFoto) rows.push({ cells: ['Foto', '', '', ...g.proben.map(pr => numRange(photos.get(pr.label) || []) || '–')] });
-      params.forEach(pa => rows.push({ cells: [pa.param, pa.unit, pa.loq, ...g.proben.map(pr => { const l = line(pr, pa.param); return l ? l.result : '–'; })],
+      params.forEach(pa => rows.push({ cells: [pa.param, pa.unit, pa.loq, ...g.proben.map(pr => { const l = pr.lines.find(l => same(l, pa)); return l ? l.result : '–'; })],
                                        strong: /^summe/i.test(pa.param) }));
       tables.push({ title: `Tabelle ${tno++}: ${o.title || 'Analysenergebnisse'}${groups.size > 1 ? ' – ' + g.art : ''} (alle Einzelwerte)`, head, rows, unit: g.unit, scale: null, group: g,
                     legend: g.proben.map(pr => `${pr.label}: ${pr.desc}`) });
@@ -3009,15 +3035,15 @@ function labTables(rep, o){
     }
     const head = ['Probe', 'Probenahmestelle'];
     if (o.cFlaeche) head.push('Fläche');
-    head.push(`${shortParam(p1)} [${g.unit}]`);
-    if (p2) head.push(`${shortParam(p2)} [${u2}]`);
+    head.push(shortParam(p1) + (g.unit ? ` [${g.unit}]` : ''));
+    if (p2) head.push(shortParam(p2) + (u2 ? ` [${u2}]` : ''));
     if (o.cRating && scale) head.push('Bewertung');
     if (o.cFoto) head.push('Foto');
     const rows = g.proben.map(pr => {
       const l1 = line(pr, p1), l2 = p2 ? line(pr, p2) : null;
       let desc = pr.desc;
       if (o.cFlaeche && pr.flaeche) desc = desc.replace(new RegExp(',?\\s*' + pr.flaeche.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$'), '');
-      const v1 = l1 ? labShow(l1.result) : '–';
+      const v1 = labCell(l1, !g.unit);
       const cat = l1 ? rate(scale, labNum(l1.result)) : '';
       const ph = numRange(photos.get(pr.label) || []);
       if (!l1) warn.push(`${pr.label}: kein Wert für „${p1}“ im Prüfbericht.`);
@@ -3026,7 +3052,7 @@ function labTables(rep, o){
       const cells = [pr.label, desc];
       if (o.cFlaeche) cells.push(pr.flaeche || '–');
       cells.push(v1);
-      if (p2) cells.push(l2 ? labShow(l2.result) : '–');
+      if (p2) cells.push(labCell(l2, !u2));
       if (o.cRating && scale) cells.push(cat || '–');
       if (o.cFoto) cells.push(ph || '–');
       return { cells, strong: !!(scale && cat && scale.cats.length > 1 && cat === scale.cats[scale.cats.length - 1].name) };
@@ -3041,9 +3067,8 @@ function labTables(rep, o){
     tables.push({ title: `Tabelle ${tno++}: ${o.title || 'Analysenergebnisse'}${groups.size > 1 ? ' – ' + g.art : ''}`, head, rows, unit: g.unit, scale, group: g, summary });
   }
   if (noPhoto.length) warn.push(`Ohne Foto mit passender Probe-Nr.: ${noPhoto.join(', ')} – in der Liste bei „Probe-Nr.“ eintragen oder Spalte „Foto“ abwählen.`);
-  const loqs = [...new Set(rep.proben.flatMap(pr => pr.lines.filter(l => l.loq && (l.unit === groups.values().next().value.unit)).map(l => l.loq)))];
   const foot = [];
-  if (o.mode !== 'einzel') foot.push(`< BG = unterhalb der Bestimmungsgrenze${loqs.length === 1 ? ` (BG ${loqs[0]} ${[...groups.values()][0].unit} je Einzelstoff)` : ''}; bei Summen: alle Einzelstoffe unterhalb der BG.`);
+  if (o.mode !== 'einzel') foot.push('BG = Bestimmungsgrenze des jeweiligen Laborwerts, soweit im Prüfbericht angegeben. „<“ / „unter BG“ = unterhalb der Bestimmungsgrenze.');
   if (o.mode !== 'einzel' && o.cRating && tables.some(t => t.scale)) foot.push('Werte unterhalb der BG, n.n. (nicht nachgewiesen) und n.b. (nicht bestimmt) erhalten keine Bewertung (–).');
   else foot.push('BG = Bestimmungsgrenze.');
   foot.push(`Prüfbericht ${rep.labor ? rep.labor + ' ' : ''}${rep.bericht}${rep.datum ? ' vom ' + rep.datum : ''}${rep.vorlaeufig ? ' (vorläufig)' : ''}.`);
@@ -3405,7 +3430,7 @@ window.addEventListener('beforeunload', e => {
 applyCfgToUI();
 updateExample();
 {
-  const projekt = new URLSearchParams(location.search).get('projekt');
+  const projekt = PROJEKT_URL.projekt;
   if (projekt && supported) openFromZentrale(projekt);
 }
 })();
@@ -3436,8 +3461,31 @@ updateExample();
     var el = document.createElement(tag);
     for (var k in (attrs || {})){ if (k === 'text') el.textContent = attrs[k]; else el.setAttribute(k, attrs[k]); }
     for (var i = 2; i < arguments.length; i++) if (arguments[i]) el.appendChild(arguments[i]);
+    if (tag === 'a' && attrs && typeof attrs.href === 'string' && attrs.href.includes('#projekt=')){
+      el.addEventListener('click', function(ev){
+        if (ev.button !== 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+        ev.preventDefault();
+        projektNavigation(el.href, el.target);
+      });
+    }
     return el;
   };
+  function projektNavigation(href, target){
+    const ziel = new URL(href, location.href);
+    const fenster = target ? window.open('', target) : window;
+    if (!fenster) return;
+    let bisher; try{ bisher = new URL(fenster.location.href); }catch(e){}
+    // Gleicher Einstieg mit anderem Fragment wäre sonst nur ein Wechsel innerhalb des Dokuments.
+    if (bisher && ziel.origin === bisher.origin && ziel.pathname === bisher.pathname && ziel.search === bisher.search){
+      if (ziel.protocol === 'file:'){
+        ziel.search = ziel.search.endsWith('&') ? ziel.search.slice(0, -1) : ziel.search + '&';
+      } else {
+        ziel.pathname = ziel.pathname.endsWith('/index.html') ? ziel.pathname.slice(0, -10) : ziel.pathname + (ziel.pathname.endsWith('/') ? 'index.html' : '/index.html');
+      }
+    }
+    fenster.location.assign(ziel.href);
+    if (target) fenster.focus();
+  }
   function idb(){
     return new Promise(function(res){
       try{
@@ -3462,7 +3510,7 @@ updateExample();
     }); });
   }
   function urlName(){ try{ return projektName ? projektName() || '' : new URLSearchParams(location.search).get('projekt') || ''; }catch(e){ return ''; } }
-  function href(app, projekt){ return (app[0] === ich ? '' : app[3]) + (projekt ? '?projekt=' + encodeURIComponent(projekt) : ''); }   // die eigene App relativ zur aktuellen Seite (auch ohne den Pfad /<App>/)
+  function href(app, projekt){ return (app[0] === ich ? '' : app[3]) + (projekt ? '#projekt=' + encodeURIComponent(projekt) : ''); }   // die eigene App relativ zur aktuellen Seite (auch ohne den Pfad /<App>/)
 
   /* Ordnerstand: nur Namen prüfen, Fotos nur über die eine Datei (der Ordner kann tausende Bilder enthalten) */
   function unterordner(proj, wunsch){

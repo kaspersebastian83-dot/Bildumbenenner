@@ -5,7 +5,7 @@ const http = require('node:http');
 const path = require('node:path');
 const playwright = require('playwright');
 const name = process.argv[2] || 'chromium';
-const projects = {A: '26.0901 Kontext A', B: '26.0902 Kontext B', U: '26.0904 Kontext U'};
+const projects = {A: '26.0901 Köln & Süd + 50% #Hof', B: '26.0902 Kontext B', U: '26.0904 Kontext U'};
 let browser, server;
 (async () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'));
@@ -99,18 +99,19 @@ let browser, server;
       };
       const contextIs = async key => {
         await page.waitForFunction(([key, n]) => !document.body.inert && document.querySelector('#projBadge').textContent.includes(n.split(' ')[0]) && document.querySelector('#mosaikLeiste .ml-proj b')?.textContent === n, [key, projects[key]]);
-        assert.equal(new URL(page.url()).searchParams.get('projekt'), projects[key]);
-        assert.match(await page.locator('#folderName').textContent(), new RegExp(projects[key]));
+        assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('projekt'), projects[key]);
+        assert.ok((await page.locator('#folderName').textContent()).includes(projects[key]));
         assert.equal(await page.locator('#list .desc').first().inputValue(), key + ' Beschreibung');
         for (const a of await page.locator('#mosaikLeiste a.ml-step, #mosaikLeiste a.ml-weiter').all()) {
           const url = new URL(await a.getAttribute('href'), page.url());
-          assert.equal(url.searchParams.get('projekt'), projects[key]);
+          assert.equal(url.searchParams.has('projekt'), false);
+          assert.equal(new URLSearchParams(url.hash.slice(1)).get('projekt'), projects[key]);
         }
       };
       const stillA = async description => {
         assert.match(await page.locator('#projBadge').textContent(), /26\.0901/);
         assert.equal(await page.locator('#mosaikLeiste .ml-proj b').textContent(), projects.A);
-        assert.equal(new URL(page.url()).searchParams.get('projekt'), projects.A);
+        assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('projekt'), projects.A);
         assert.equal(await page.locator('#list .desc').first().inputValue(), description);
       };
       const disk = key => page.evaluate(async ([key, n]) => {
@@ -130,13 +131,21 @@ let browser, server;
   }
 
   const supported = await scenario('Zentrale A → manueller Wechsel B → Navigation und Reload', async ({page, start, open, contextIs, disk}) => {
-    await start();const beforeB = await disk('B'), historyLength = await page.evaluate(() => history.length);
+    await start();
+    assert.equal(new URL(page.url()).searchParams.has('projekt'), false, 'Query-Link früh bereinigt');
+    await page.goto(base + '?projekt=falsch&ansicht=liste&extra=1&extra=2#fotos&projekt=' + encodeURIComponent(projects.A));
+    await contextIs('A');
+    assert.equal(new URL(page.url()).searchParams.has('projekt'), false, 'Fragment gewinnt vor Query');
+    await page.goto(base + '?ansicht=liste&extra=1&extra=2#fotos&projekt=' + encodeURIComponent(projects.A));
+    await contextIs('A');
+    await page.evaluate(() => history.replaceState({synthetic: 'erhalten'}, '', location.href));
+    const beforeB = await disk('B'), historyLength = await page.evaluate(() => history.length);
     let navigations = 0;page.on('load', () => navigations++);
     await open('B');
     await page.waitForFunction(() => !document.body.inert && document.getElementById('projBadge').textContent.includes('26.0902'));
-    assert.equal(new URL(page.url()).searchParams.get('projekt'), projects.B, 'Erfolgreich geöffnetes B bestimmt die URL');
+    assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('projekt'), projects.B, 'Erfolgreich geöffnetes B bestimmt die URL');
     await contextIs('B');
-    const url = new URL(page.url());assert.equal(url.searchParams.get('ansicht'), 'liste');assert.deepEqual(url.searchParams.getAll('extra'), ['1', '2']);assert.equal(url.hash, '#fotos');
+    const url = new URL(page.url());assert.equal(url.searchParams.get('ansicht'), 'liste');assert.deepEqual(url.searchParams.getAll('extra'), ['1', '2']);assert.ok(url.hash.startsWith('#fotos&'));assert.equal(url.searchParams.has('projekt'), false);
     assert.deepEqual(await page.evaluate(() => history.state), {synthetic: 'erhalten'});assert.equal(await page.evaluate(() => history.length), historyLength);assert.equal(navigations, 0);
     assert.deepEqual(await disk('B'), beforeB, 'Bloßes Öffnen erzeugt weder Projektkopie noch Speichervorgang');
     await page.reload();await contextIs('B');assert.equal(navigations, 1);
@@ -186,7 +195,7 @@ let browser, server;
       await page.evaluate(failure => io[failure] = false, failure);assert.deepEqual(await disk('B'), b);
       await page.locator('#list .desc').fill('A nach Lesefehler');
       await page.waitForFunction(async () => {
-        const root = await navigator.storage.getDirectory(), a = await (await root.getDirectoryHandle('Archiv')).getDirectoryHandle('26.0901 Kontext A');
+        const root = await navigator.storage.getDirectory(), a = await (await root.getDirectoryHandle('Archiv')).getDirectoryHandle('26.0901 Köln & Süd + 50% #Hof');
         const data = JSON.parse(await (await (await (await a.getDirectoryHandle('Fotos')).getFileHandle('_Bildumbenenner.json')).getFile()).text());
         return data.bilder['A_01.jpg'].beschreibung === 'A nach Lesefehler';
       });
@@ -296,16 +305,16 @@ let browser, server;
   await scenario('Unbekannten Fotos-Ordner öffnen und nachträglich richtig zuordnen', async ({page, start, open, disk}) => {
     await start();const beforeU = await disk('U');await open('unknown');
     await page.waitForFunction(() => !document.body.inert && document.getElementById('btnAssign'));
-    assert.equal(new URL(page.url()).searchParams.has('projekt'), false);assert.equal(new URL(page.url()).searchParams.get('ansicht'), 'liste');
+    assert.equal(new URL(page.url()).searchParams.has('projekt'), false);assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).has('projekt'), false);assert.equal(new URL(page.url()).searchParams.get('ansicht'), 'liste');
     assert.equal(await page.locator('#projBadge').isVisible(), false);assert.equal(await page.locator('#mosaikLeiste .ml-proj b').count(), 0);
     assert.match(await page.locator('#folderName').textContent(), /Projekt unbekannt/);assert.equal(await page.locator('#mosaikLeiste a.ml-step').count(), 0);
     await page.locator('#list .desc').fill('U nachträgliche Beschreibung');
     await page.evaluate(() => window.nextFolder = 'A');await page.locator('#btnAssign').click();
     await page.waitForFunction(() => document.getElementById('banner').textContent.includes('nicht der Projektordner'));
-    assert.equal(new URL(page.url()).searchParams.has('projekt'), false);
+    assert.equal(new URL(page.url()).searchParams.has('projekt'), false);assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).has('projekt'), false);
     await page.evaluate(() => window.nextFolder = 'U');await page.locator('#btnAssign').click();
     await page.waitForFunction(() => !document.body.inert && document.querySelector('#mosaikLeiste .ml-proj b')?.textContent === '26.0904 Kontext U');
-    assert.equal(new URL(page.url()).searchParams.get('projekt'), projects.U);assert.match(await page.locator('#projBadge').textContent(), /26\.0904/);
+    assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('projekt'), projects.U);assert.match(await page.locator('#projBadge').textContent(), /26\.0904/);
     assert.equal(await page.locator('#list .desc').inputValue(), 'U nachträgliche Beschreibung');
     const u = await disk('U');assert.deepEqual(u.bytes, beforeU.bytes);
     assert.deepEqual(u.json.bilder['U_01.jpg'], {...beforeU.json.bilder['U_01.jpg'], beschreibung: 'U nachträgliche Beschreibung'});
