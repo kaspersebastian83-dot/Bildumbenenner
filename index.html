@@ -2898,8 +2898,6 @@ function labQualifier(raw){
 }
 /* LABZAHL-ENDE */
 const labNum = r => labQualifier(r) === 'measured' ? labNumber(r) : NaN;   // nur gemessene Werte werden bewertet
-/** Anzeige in der Tabelle: „< BG“ nur bei echter Unterschreitung, n.n./n.b. bleiben, was sie sind; sonst der Wert wie im Bericht. */
-const labShow = r => ({ below: '< BG', notDetected: 'n.n.', notDetermined: 'n.b.' })[labQualifier(r)] || r;
 function parseLabXml(text, fileName){
   const doc = new DOMParser().parseFromString(text, 'application/xml');
   if (doc.getElementsByTagName('parsererror').length) throw new Error('Die Datei ist kein gültiges XML.');
@@ -2962,6 +2960,17 @@ const numRange = ns => {
   return out.length ? 'Bild ' + out.join(', ') : '';
 };
 const shortParam = p => p.replace(/^Summe 16 EPA-PAK.*$/i, 'Σ16 EPA-PAK').replace(/^Benzo\[a\]pyren$/i, 'BaP');
+// Nur eine tatsächlich gemeinsame Einheit gehört in die Überschrift; fehlend ist nicht gleich bekannt.
+const labCommonUnit = lines => {
+  const units = [...new Set(lines.filter(Boolean).map(l => l.unit))];
+  return units.length === 1 ? units[0] : '';
+};
+const labCell = (l, withUnit) => {
+  if (!l) return '–';
+  const unit = withUnit ? (l.unit ? ' ' + l.unit : ' (Einheit fehlt)') : '';
+  const bgUnit = withUnit && l.unit ? ' ' + l.unit : '';
+  return (l.result || '–') + unit + (l.loq ? ` (BG ${l.loq}${bgUnit})` : '');
+};
 
 function labTables(rep, o){
   const scales = loadScales(), photos = photoNumbers(), warn = [];
@@ -2979,15 +2988,17 @@ function labTables(rep, o){
   const tables = [], noPhoto = [];
   let tno = +o.startNr || 1;
   for (const g of groups.values()){
-    const scale = scales[scaleKey(p1, g.unit)];
-    const u2 = (g.proben.map(pr => line(pr, p2)).find(Boolean) || {}).unit || '';
+    const scale = g.unit ? scales[scaleKey(p1, g.unit)] : null;
+    const u2 = labCommonUnit(g.proben.map(pr => line(pr, p2)));
     if (o.mode === 'einzel'){
       const params = [];
-      g.proben.forEach(pr => pr.lines.forEach(l => { if (!params.some(x => x.param === l.param)) params.push({ param: l.param, unit: l.unit, loq: l.loq }); }));
+      // Unterschiedliche Einheiten/BG erhalten eigene Zeilen im bisherigen schmalen Layout.
+      const same = (a, b) => a.param === b.param && a.unit === b.unit && a.loq === b.loq;
+      g.proben.forEach(pr => pr.lines.forEach(l => { if (!params.some(x => same(x, l))) params.push({ param: l.param, unit: l.unit, loq: l.loq }); }));
       const head = ['Parameter', 'Einheit', 'BG', ...g.proben.map(pr => pr.label)];
       const rows = [];
       if (o.cFoto) rows.push({ cells: ['Foto', '', '', ...g.proben.map(pr => numRange(photos.get(pr.label) || []) || '–')] });
-      params.forEach(pa => rows.push({ cells: [pa.param, pa.unit, pa.loq, ...g.proben.map(pr => { const l = line(pr, pa.param); return l ? l.result : '–'; })],
+      params.forEach(pa => rows.push({ cells: [pa.param, pa.unit, pa.loq, ...g.proben.map(pr => { const l = pr.lines.find(l => same(l, pa)); return l ? l.result : '–'; })],
                                        strong: /^summe/i.test(pa.param) }));
       tables.push({ title: `Tabelle ${tno++}: ${o.title || 'Analysenergebnisse'}${groups.size > 1 ? ' – ' + g.art : ''} (alle Einzelwerte)`, head, rows, unit: g.unit, scale: null, group: g,
                     legend: g.proben.map(pr => `${pr.label}: ${pr.desc}`) });
@@ -2995,15 +3006,15 @@ function labTables(rep, o){
     }
     const head = ['Probe', 'Probenahmestelle'];
     if (o.cFlaeche) head.push('Fläche');
-    head.push(`${shortParam(p1)} [${g.unit}]`);
-    if (p2) head.push(`${shortParam(p2)} [${u2}]`);
+    head.push(shortParam(p1) + (g.unit ? ` [${g.unit}]` : ''));
+    if (p2) head.push(shortParam(p2) + (u2 ? ` [${u2}]` : ''));
     if (o.cRating && scale) head.push('Bewertung');
     if (o.cFoto) head.push('Foto');
     const rows = g.proben.map(pr => {
       const l1 = line(pr, p1), l2 = p2 ? line(pr, p2) : null;
       let desc = pr.desc;
       if (o.cFlaeche && pr.flaeche) desc = desc.replace(new RegExp(',?\\s*' + pr.flaeche.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$'), '');
-      const v1 = l1 ? labShow(l1.result) : '–';
+      const v1 = labCell(l1, !g.unit);
       const cat = l1 ? rate(scale, labNum(l1.result)) : '';
       const ph = numRange(photos.get(pr.label) || []);
       if (!l1) warn.push(`${pr.label}: kein Wert für „${p1}“ im Prüfbericht.`);
@@ -3012,7 +3023,7 @@ function labTables(rep, o){
       const cells = [pr.label, desc];
       if (o.cFlaeche) cells.push(pr.flaeche || '–');
       cells.push(v1);
-      if (p2) cells.push(l2 ? labShow(l2.result) : '–');
+      if (p2) cells.push(labCell(l2, !u2));
       if (o.cRating && scale) cells.push(cat || '–');
       if (o.cFoto) cells.push(ph || '–');
       return { cells, strong: !!(scale && cat && scale.cats.length > 1 && cat === scale.cats[scale.cats.length - 1].name) };
@@ -3027,9 +3038,8 @@ function labTables(rep, o){
     tables.push({ title: `Tabelle ${tno++}: ${o.title || 'Analysenergebnisse'}${groups.size > 1 ? ' – ' + g.art : ''}`, head, rows, unit: g.unit, scale, group: g, summary });
   }
   if (noPhoto.length) warn.push(`Ohne Foto mit passender Probe-Nr.: ${noPhoto.join(', ')} – in der Liste bei „Probe-Nr.“ eintragen oder Spalte „Foto“ abwählen.`);
-  const loqs = [...new Set(rep.proben.flatMap(pr => pr.lines.filter(l => l.loq && (l.unit === groups.values().next().value.unit)).map(l => l.loq)))];
   const foot = [];
-  if (o.mode !== 'einzel') foot.push(`< BG = unterhalb der Bestimmungsgrenze${loqs.length === 1 ? ` (BG ${loqs[0]} ${[...groups.values()][0].unit} je Einzelstoff)` : ''}; bei Summen: alle Einzelstoffe unterhalb der BG.`);
+  if (o.mode !== 'einzel') foot.push('BG = Bestimmungsgrenze des jeweiligen Laborwerts, soweit im Prüfbericht angegeben. „<“ / „unter BG“ = unterhalb der Bestimmungsgrenze.');
   if (o.mode !== 'einzel' && o.cRating && tables.some(t => t.scale)) foot.push('Werte unterhalb der BG, n.n. (nicht nachgewiesen) und n.b. (nicht bestimmt) erhalten keine Bewertung (–).');
   else foot.push('BG = Bestimmungsgrenze.');
   foot.push(`Prüfbericht ${rep.labor ? rep.labor + ' ' : ''}${rep.bericht}${rep.datum ? ' vom ' + rep.datum : ''}${rep.vorlaeufig ? ' (vorläufig)' : ''}.`);
