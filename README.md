@@ -87,13 +87,13 @@ Bei einem unbekannten Projektformat oder einer beschädigten/nicht lesbaren Proj
 
 **„Problem melden“** (im Fehlerhinweis oder im Info-Fenster über die Versionsnummer) kopiert einen kurzen Bericht in die Zwischenablage: Version, Browser, Ordner/Projekt, letzte Meldungen – keine Bilder, keine Beschreibungen. Einfach in eine E-Mail einfügen und kurz beschreiben, was passiert ist.
 
-## Neue Version veröffentlichen (für den Betreuer)
+## Programmstand und sichere Umstellung (N3)
 
-1. In `index.html` `APP_VERSION` erhöhen und einen Eintrag in `CHANGELOG` ergänzen.
-2. Änderung auf `main` bringen (Pull Request mergen) und mit `vX.Y.Z` taggen.
-3. GitHub Pages veröffentlicht automatisch. Geöffnete Apps zeigen innerhalb von 30 Minuten „Update verfügbar – neu laden“; beim nächsten Start wird die neue Version ohnehin geladen.
+Die Kopfzeile zeigt die geladene Version und den kurzen HTML-Build; das Infofenster und der Problembericht enthalten den vollständigen SHA-256-Build. „Programmstand prüfen“ vergleicht mit der Online-Antwort, auch bei gleicher Versionsnummer. Offline/ungültige Antworten bestätigen keinen aktuellen Stand. Ein Service-Worker-Wechsel lädt offene Seiten nicht automatisch neu. „Sicher neu laden“ wartet auf die vorhandene Speicherabsicherung und bricht bei Fehlern oder geschütztem Projektmodus ab.
 
-Ältere Versionen bleiben über die Tags abrufbar. Die App funktioniert auch weiterhin als einzelne lokale Datei (`index.html` herunterladen und in Chrome/Edge öffnen) – dann ohne Offline-Cache und Update-Hinweis.
+**Ein Update sperrt keine alten Clients.** Für die spätere Einführung ist die [verbindliche Büro-Umstellung](docs/N3-Buero-Umstellung.md) einschließlich tatsächlich geprüfter Schreibsperre, aller Browser-/RDP-Profile und externer Vollsicherung erforderlich. [Befund, Angriff und Testgrenzen](docs/N3-Pruefbericht.md). Die gesamte SPEKTRON-Suite bleibt NO-GO bis zum unabhängigen Audit und zur praktischen Windows-/SMB-/RDP-Abnahme.
+
+Für Betreuer: Nach jeder HTML-Änderung `node tools/build-identity.cjs` ausführen, mit `--check` prüfen und den endgültigen Kombinationsstand samt Commit/HTML-/Worker-/Helferhash dokumentieren. Der HTML-Build ist eine Artefaktkennung, keine digitale Signatur oder Bürofreigabe. Dieser Draft führt kein Merge/Deployment aus. Bei einer später autorisierten Veröffentlichung gelten zunächst die Schritte der Umstellungsanleitung. Alte Offlinecaches und Browserdaten werden durch N3 nicht automatisch gelöscht.
 
 ## Dateien
 

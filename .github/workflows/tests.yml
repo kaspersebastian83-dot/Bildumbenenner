@@ -23,6 +23,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+      - run: node tools/build-identity.cjs --check
       - run: node tests/laborwerte.cjs
 
   browser-tests:
@@ -44,6 +45,8 @@ jobs:
           npm install --no-save --no-package-lock --prefix "$RUNNER_TEMP/pw" playwright@1.56.1
           echo "NODE_PATH=$RUNNER_TEMP/pw/node_modules" >> "$GITHUB_ENV"
           "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps ${{ matrix.browser }}
+      - name: Loaded build and safe update UX
+        run: node tests/n3-updates-browser.cjs ${{ matrix.browser }}
       - name: Project data (_Projekt.json) in the real browser
         run: node tests/projektdaten-browser.cjs ${{ matrix.browser }}
       - name: Mosaik bar (project, steps, next step) in the real browser

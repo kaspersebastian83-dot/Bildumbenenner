@@ -1,0 +1,10 @@
+// Synthetic handles shared across isolated profiles. Not native SMB permission semantics.
+module.exports=async function(context,PROJECT){
+ await context.addInitScript(({PROJECT})=>{
+  const io=async a=>{const r=await window.__n3io(a);if(r?.missing)throw new DOMException('Missing','NotFoundError');return r;};
+  class Handle{constructor(rel,kind){this.rel=rel;this.kind=kind;this.name=rel.split('/').at(-1)||'N2 Testarchiv';}async queryPermission(){return'granted';}async requestPermission(){return'granted';}async isSameEntry(h){return h.rel===this.rel;}}
+  class FH extends Handle{constructor(rel){super(rel,'file');}async getFile(){return new File([Uint8Array.from(await io({op:'read',rel:this.rel}))],this.name,{lastModified:1});}async move(dst,name){const parent=typeof dst==='string'?this.rel.split('/').slice(0,-1).join('/'):dst.rel;name=typeof dst==='string'?dst:name;const to=parent+'/'+name;await io({op:'move',rel:this.rel,to});this.rel=to;this.name=name;}async createWritable(){let bytes;return{write:async v=>{await io({op:'before',rel:this.rel});bytes=typeof v==='string'?new TextEncoder().encode(v):v instanceof Blob?new Uint8Array(await v.arrayBuffer()):new Uint8Array(v);},close:async()=>io({op:'write',rel:this.rel,bytes:Array.from(bytes)}),abort:async()=>{}};}}
+  class DH extends Handle{constructor(rel){super(rel,'directory');}child(n){return(this.rel?this.rel+'/':'')+n;}async getDirectoryHandle(n,o={}){const rel=this.child(n);await io({op:'dir',rel,create:o.create});return new DH(rel);}async getFileHandle(n,o={}){const rel=this.child(n);await io({op:'file',rel,create:o.create});return new FH(rel);}async removeEntry(n,o={}){return io({op:'remove',rel:this.child(n),recursive:o.recursive});}async *entries(){for(const e of await io({op:'list',rel:this.rel}))yield[e.name,e.kind==='directory'?new DH(this.child(e.name)):new FH(this.child(e.name))];}async *values(){for await(const[,h]of this.entries())yield h;}async resolve(h){const prefix=this.rel?this.rel+'/':'';return h.rel.startsWith(prefix)?h.rel.slice(prefix.length).split('/'):null;}}
+  window.showDirectoryPicker=async()=>new DH(PROJECT);
+ },{PROJECT});
+};
