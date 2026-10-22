@@ -952,15 +952,19 @@ function applyPJ(meta){
   }
   return changed;
 }
-async function loadPJ(){
-  PJ.data = null; PJ.sent = {}; PJ.pending = {}; PJ.failed = false;
+function mountPJRecovery(){
   $('pjRecovery').replaceChildren();
-  if (!S.proj) return '';
+  PJ.recoveryRefresh=null;
+  if (!S.proj) return;
   const proj=S.proj;
   PJ.recoveryRefresh=ProjectStore.recoveryButton($('pjRecovery'),proj.dir,proj.name,{
     before: async()=>{ await flushPJ(); if(S.proj!==proj || PJ.failed || Object.keys(PJ.pending).length || P.readOnly) throw Error('Bitte offene Eingaben zuerst speichern oder das Projekt bewusst neu öffnen. Geschützte Projekte bleiben unverändert.'); },
-    after: async()=>{ if(S.proj===proj){ await loadPJ(); banner('ok','Die ausgewählte vollständige Projektfassung wurde wiederhergestellt.'); } }
+    after: async()=>{ if(S.proj===proj){ await loadPJ(); mountPJRecovery(); banner('ok','Die ausgewählte vollständige Projektfassung wurde wiederhergestellt.'); } }
   });
+}
+async function loadPJ(){
+  PJ.data = null; PJ.sent = {}; PJ.pending = {}; PJ.failed = false;
+  if (!S.proj) return '';
   try{ PJ.data = await readPJ(S.proj.dir); }
   catch(e){ return `„${PJ_FILE}“ ist nicht lesbar (${esc(e.message)}) – gemeinsame Projektdaten werden in dieser Sitzung nicht übernommen.`; }
   for (const [, pk] of PJ_MAP) PJ.sent[pk] = (PJ.data[pk] || '').trim();
@@ -1069,6 +1073,7 @@ function syncProjectContext(){
   PROJEKT_URL.setzen(name || null);
   activeProjectName = name;
   showProject(S.dir, S.proj);
+  mountPJRecovery();
   if (window.MosaikLeiste) MosaikLeiste.aktualisieren();
 }
 document.addEventListener('DOMContentLoaded', () => {
