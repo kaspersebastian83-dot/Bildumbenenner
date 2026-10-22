@@ -80,15 +80,17 @@ evidence.afterOldSave=damaged;
 evidence.beforeOldSave=written;
 evidence.events.push({step:'A saved after actual SW activation',topFieldRemoved:true,imageFieldRemoved:true,originalExtensionRemoved:true,controllerChanges:await A.p.evaluate(()=>window.n3ControllerChanges)});
 console.log('PASS N3 ATTACK: real pre-F6 tab survives SW update and removes unknown fields');
-await B.context.close();const restarted=await page();
+// Recovery requires stopping old writers; the attack has already completed.
+await A.context.close();await B.context.close();const restarted=await page();
 // Finish load-time normalization through the real UI before taking a recovery revision.
 await restarted.p.locator('#btnReload').click();await restarted.p.waitForFunction(()=>!document.body.inert);
 await openRecovery(restarted.p,confirmedB);assert.equal(await disk(),confirmedB);
 console.log('PASS N3 RECOVERY: confirmed B snapshot remains discoverable and restores exact bytes after restart');
 // Hold an old-client writable until the authority denies commits, not only opens.
 let arrived;const atCommit=new Promise(r=>arrived=r);heldClose=arrived;
-await A.p.locator('#list .desc').nth(0).fill('A existing writable denied');await atCommit;const beforeFence=await disk();fenced=true;heldClose=null;releaseClose();
-await A.p.locator('#banner').filter({hasText:/nicht gespeichert|konnte nicht gespeichert/}).waitFor();assert.equal(await disk(),beforeFence);
+serving=old;const A2=await page();serving=root;
+await A2.p.locator('#list .desc').nth(0).fill('A existing writable denied');await atCommit;const beforeFence=await disk();fenced=true;heldClose=null;releaseClose();
+await A2.p.locator('#banner').filter({hasText:/nicht gespeichert|konnte nicht gespeichert/}).waitFor();assert.equal(await disk(),beforeFence);
 evidence.events.push({step:'external synthetic authority denies commit on existing stream',unchanged:true});
 console.log('PASS N3 FENCE MODEL: external commit denial blocks existing old-client stream; native SMB still requires acceptance');
 // Old offline cache in another, independent browser profile remains runnable.
