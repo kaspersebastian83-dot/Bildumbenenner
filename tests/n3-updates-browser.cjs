@@ -4,7 +4,7 @@ const root=path.resolve(__dirname,'..'),engine=process.argv[2]||'chromium',html=
 const build=/const APP_BUILD = '(sha256:[a-f0-9]{64})'/.exec(html)[1];
 const other='sha256:'+(build.endsWith('0')?'1':'0').repeat(64);let mode='same',browser,server;
 (async()=>{
-server=http.createServer((req,res)=>{const u=new URL(req.url,'http://x');res.setHeader('Content-Type','text/html; charset=utf-8');if(u.searchParams.has('fotokit-update')){if(mode==='error'){res.statusCode=503;return res.end('offline');}if(mode==='invalid')return res.end('no build');return res.end(mode==='different'?html.replace(build,other):html);}res.end(html);});
+server=http.createServer((req,res)=>{const u=new URL(req.url,'http://x');if(!['/','/index.html'].includes(u.pathname)){const f=path.resolve(root,'.'+u.pathname);if(!f.startsWith(root+path.sep)||!fs.existsSync(f)){res.statusCode=404;return res.end();}res.setHeader('Content-Type',f.endsWith('.js')?'application/javascript':'application/octet-stream');return res.end(fs.readFileSync(f));}res.setHeader('Content-Type','text/html; charset=utf-8');if(u.searchParams.has('fotokit-update')){if(mode==='error'){res.statusCode=503;return res.end('offline');}if(mode==='invalid')return res.end('no build');return res.end(mode==='different'?html.replace(build,other):html);}res.end(html);});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));browser=await pw[engine].launch();const context=await browser.newContext({serviceWorkers:'block',viewport:{width:1400,height:1000}}),p=await context.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
 try{
 await p.goto('http://localhost:'+server.address().port+'/index.html');// Keep the loaded identity across update checks.

@@ -16,13 +16,13 @@ const tmp=await fs.mkdtemp(path.join(os.tmpdir(),'n3-attack-')),contexts=[],evid
 await fs.mkdir(path.join(tmp,PROJECT,'Fotos'),{recursive:true});await fs.writeFile(path.join(tmp,FILE),JSON.stringify(initial));
 const image=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64');
 for(const n of ['a.jpg','b.jpg'])await fs.writeFile(path.join(tmp,PROJECT,'Fotos',n),image);
-let serving=old,fenced=false,heldClose=null,releaseClose;
-const server=http.createServer(async(req,res)=>{try{const name=new URL(req.url,'http://x').pathname.replace(/^\/+/, '')||'index.html',f=path.resolve(serving,name);if(!f.startsWith(serving+path.sep))throw Error('path');res.setHeader('Content-Type',f.endsWith('.html')?'text/html; charset=utf-8':f.endsWith('.js')?'application/javascript':'application/octet-stream');res.setHeader('Cache-Control','no-store');res.end(await fs.readFile(f));}catch{res.statusCode=404;res.end();}});
+let serving=old,fenced=false,heldClose=null,releaseClose,networkDown=false;
+const server=http.createServer(async(req,res)=>{if(networkDown){req.socket.destroy();return;}try{const name=new URL(req.url,'http://x').pathname.replace(/^\/+/, '')||'index.html',f=path.resolve(serving,name);if(!f.startsWith(serving+path.sep))throw Error('path');res.setHeader('Content-Type',f.endsWith('.html')?'text/html; charset=utf-8':f.endsWith('.js')?'application/javascript':'application/octet-stream');res.setHeader('Cache-Control','no-store');res.end(await fs.readFile(f));}catch{res.statusCode=404;res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://localhost:'+server.address().port+'/index.html';
 const browser=await pw[engine].launch();
 async function until(fn){const end=Date.now()+20000;while(Date.now()<end){if(await fn())return;await new Promise(r=>setTimeout(r,40));}throw Error('condition timed out');}
 const disk=()=>fs.readFile(path.join(tmp,FILE),'utf8'),json=async()=>JSON.parse(await disk());
-async function page(){
+async function page(openProject=true){
  const context=await browser.newContext({viewport:{width:1400,height:1000}});contexts.push(context);
  await context.exposeBinding('__n3io',async(_,arg)=>{
   const f=path.resolve(tmp,arg.rel||'.');if(f!==tmp&&!f.startsWith(tmp+path.sep))throw Error('outside synthetic folder');
@@ -35,11 +35,11 @@ async function page(){
    case'list':return(await fs.readdir(f,{withFileTypes:true})).map(e=>({name:e.name,kind:e.isDirectory()?'directory':'file'}));
    case'read':return Array.from(await fs.readFile(f));
    case'before':return true;
-   case'write':await fs.writeFile(f,Buffer.from(arg.bytes));return true;
+   case'write':{const candidate=f+'.stream-'+require('node:crypto').randomUUID();await fs.writeFile(candidate,Buffer.from(arg.bytes));await fs.rename(candidate,f);return true;}
    case'remove':await fs.rm(f,{recursive:!!arg.recursive});return true;
   }}catch(e){if(e.code==='ENOENT')return{missing:true};throw e;}
  });
- await bridge(context,PROJECT);const p=await context.newPage();p.on('pageerror',e=>pageErrors.push(e.message));await p.goto(base);await p.locator('#btnOpen').click();await p.waitForFunction(()=>!document.body.inert&&!document.getElementById('btnMeta').disabled);return{p,context};
+ await bridge(context,PROJECT);const p=await context.newPage();p.on('pageerror',e=>pageErrors.push(e.message));await p.goto(base);if(openProject){await p.locator('#btnOpen').click();await p.waitForFunction(()=>!document.body.inert&&!document.getElementById('btnMeta').disabled);}return{p,context};
 }
 async function openRecovery(p,exact){
  await p.locator('#btnVersions').click();await p.locator('[data-photo-version]').first().waitFor();let found=false;
@@ -61,7 +61,7 @@ const extended=structuredClone(initial);extended.extension={opaque:['F6',false,{
 await fs.writeFile(path.join(tmp,FILE),JSON.stringify(extended));serving=root;
 const B=await page();await B.p.locator('#list .desc').nth(1).fill('B F6 bestätigt');
 let confirmedB;
-await until(async()=>{for(const n of await fs.readdir(path.join(tmp,ARCHIVE)).catch(()=>[])){if(!n.startsWith('bestaetigt_'))continue;const text=await fs.readFile(path.join(tmp,ARCHIVE,n),'utf8');if(JSON.parse(text).bilder['b.jpg'].beschreibung==='B F6 bestätigt'){confirmedB=text;return true;}}return false;});
+await until(async()=>{for(const n of await fs.readdir(path.join(tmp,ARCHIVE)).catch(()=>[])){if(!n.startsWith('bestaetigt_'))continue;const text=await fs.readFile(path.join(tmp,ARCHIVE,n),'utf8');let value;try{value=JSON.parse(text);}catch(e){if(e instanceof SyntaxError)continue;throw e;}if(value.bilder['b.jpg'].beschreibung==='B F6 bestätigt'){confirmedB=text;return true;}}return false;});
 const written=JSON.parse(confirmedB);assert.deepEqual(written.extension,extended.extension);assert.deepEqual(written.bilder['a.jpg'].future,extended.bilder['a.jpg'].future);evidence.confirmedB=hash(confirmedB);
 // The real old registration fetches and activates the NEW sw.js; A stays open.
 await A.p.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();window.n3ControllerChanges=0;navigator.serviceWorker.addEventListener('controllerchange',()=>window.n3ControllerChanges++);await r.update();});
@@ -85,10 +85,17 @@ await A.p.locator('#banner').filter({hasText:/nicht gespeichert|konnte nicht ges
 evidence.events.push({step:'external synthetic authority denies commit on existing stream',unchanged:true});
 console.log('PASS N3 FENCE MODEL: external commit denial blocks existing old-client stream; native SMB still requires acceptance');
 // Old offline cache in another, independent browser profile remains runnable.
-serving=old;const C=await page();await C.p.evaluate(()=>navigator.serviceWorker.ready);await C.p.waitForFunction(()=>!!navigator.serviceWorker.controller);await C.context.setOffline(true);await C.p.reload();assert.equal(await C.p.locator('#buildStatus').count(),0);assert.equal(await C.p.locator('#btnInfo').textContent(),aIdentity);
+serving=old;const C=await page(false);await C.p.evaluate(()=>navigator.serviceWorker.ready);await C.p.waitForFunction(()=>!!navigator.serviceWorker.controller);if(engine==='webkit')networkDown=true;else await C.context.setOffline(true);await C.p.reload();assert.equal(await C.p.locator('#buildStatus').count(),0);assert.equal(await C.p.locator('#btnInfo').textContent(),aIdentity);
 console.log('PASS N3 OFFLINE OLD PROFILE: cached old app runs independently and has no N3 check');
-serving=root;const D=await page();assert.match(await D.p.locator('#btnInfo').textContent(),/sha256|[a-f0-9]{12}/);await D.p.locator('#btnCheckUpdate').click();await D.p.locator('#buildStatus').filter({hasText:/stimmt mit der Online-Antwort/}).waitFor();
+networkDown=false;serving=root;const D=await page();assert.match(await D.p.locator('#btnInfo').textContent(),/sha256|[a-f0-9]{12}/);await D.p.locator('#btnCheckUpdate').click();await D.p.locator('#buildStatus').filter({hasText:/stimmt mit der Online-Antwort/}).waitFor();
 console.log('PASS N3 NEW PROFILE: new tab loads current HTML build and verifies online response');
+await D.p.locator('#list .desc').nth(0).fill('D unsaved during update');
+await D.p.locator('#bSaveRetry').waitFor();await D.p.evaluate(()=>document.getElementById('btnUpd').hidden=false);
+let navigations=0;D.p.on('framenavigated',()=>navigations++);await D.p.locator('#btnUpd').click();
+await D.p.locator('#banner').filter({hasText:/Update wurde deshalb abgebrochen/}).waitFor();
+assert.equal(navigations,0);assert.equal(await D.p.locator('#list .desc').nth(0).inputValue(),'D unsaved during update');assert.equal(await disk(),beforeFence);
+console.log('PASS N3 UNSAVED: failed update retains actual typed input and primary bytes');
+evidence.events.push({step:'offline old profile',method:engine==='webkit'?'origin sockets disconnected (WebKit offline emulation cannot navigate SW cache)':'browserContext.setOffline(true)'});
 for(const n of ['a.jpg','b.jpg'])assert.deepEqual(await fs.readFile(path.join(tmp,PROJECT,'Fotos',n)),image);
 assert.equal(await disk(),beforeFence);evidence.events.push({step:'originals and fenced primary unchanged',passed:true});
 assert.deepEqual(pageErrors,[],'no uncaught browser errors');
