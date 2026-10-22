@@ -9,13 +9,13 @@ function resolve(file,choose,expected=1){
  assert.equal(count,expected,'reviewed composition conflict count in '+file);fs.writeFileSync(file,resolved);git('add',file);
 }
 function commit(message){git('-c','user.name=N2 Compatibility','-c','user.email=n2@example.invalid','commit','-m',message);}
-try{git('merge','--no-commit','--no-ff',F6);}catch(e){
+try{git('-c','user.name=N2 Compatibility','-c','user.email=n2@example.invalid','merge','--no-commit','--no-ff',F6);}catch(e){
  assert.deepEqual(git('diff','--name-only','--diff-filter=U').trim().split('\n').sort(),['.github/workflows/tests.yml','index.html']);
  resolve('index.html',(ours,theirs)=>{if(!ours.trim()){assert.equal(theirs.trim(),"else if (kind === 'hash') v = t[k];            // checksum cache: either one is fine");return ours;}assert.ok((ours.includes('photoCommit(')||ours.includes("photoBackup(dir, 'ausgang'"))&&theirs.includes('requireWritableProject(o)'));return ours;},3);
  resolve('.github/workflows/tests.yml',(ours,theirs)=>{assert.ok(ours.includes('n2-speichersicherheit.cjs')&&theirs.includes('unknown-fields.cjs'));return ours+theirs;});
 }
 commit('TEMP integration: retain N2 and pinned F6');
-try{git('merge','--no-commit','--no-ff',F3);}catch(e){
+try{git('-c','user.name=N2 Compatibility','-c','user.email=n2@example.invalid','merge','--no-commit','--no-ff',F3);}catch(e){
  assert.deepEqual(git('diff','--name-only','--diff-filter=U').trim().split('\n').sort(),['.github/workflows/tests.yml','index.html']);
  resolve('index.html',(ours,theirs)=>{assert.ok(ours.includes('btnVersions')&&theirs.includes('pjRecovery'));return ours.replace('</button>\n','</button><span id="pjRecovery"></span>\n');});
  resolve('.github/workflows/tests.yml',(ours,theirs)=>{assert.ok(theirs.includes('project-store'));return ours+theirs;},2);
