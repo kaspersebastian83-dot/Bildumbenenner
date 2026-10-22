@@ -92,6 +92,6 @@ Vor einer Bürofreigabe sind mindestens unabhängige Windows-/RDP-Sitzungen am t
 | N2- und F3-UI über synthetische gemeinsame Handles | Chromium und WebKit vollständig bestanden |
 | Gemeinsame F3-Datei mit Projektzentrale | Unverändert; UI-Abläufe beider Anwendungen geprüft |
 | SPEKTRON einschließlich Sicherheitsfällen A/B/C | Alle 10 Prüfstationen bestanden; Originalassertions plus eng begrenzte Archiv-Inventarergänzung |
-| Entfernte GitHub-Checks | Kein abgeschlossener CI-Nachweis; GitHub-API-Freigabe erforderlich |
+| Entfernte GitHub-Checks | Maßgeblich sind die tatsächlichen [Checks des Draft-PRs #33](https://github.com/kaspersebastian83-dot/Bildumbenenner/pull/33/checks); lokale Ergebnisse werden gesondert ausgewiesen |
 
 Frühere fehlgeschlagene Inventarläufe bleiben als Diagnose erhalten. Der ergänzte Oberflächentest verlangt PDF und ZIP in demselben vollständigen Inspektionslauf und prüft anschließend weiterhin deren ursprüngliche Bytesignaturen. Wiederholte oder übersprungene native Dateiprüfungen sind keine eigenständigen zusätzlichen Erfolgsfälle.
