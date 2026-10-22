@@ -555,7 +555,6 @@ function requireWritableProject(o){
 function projFromJson(o){
   if (!jsonObject(o)) throw new Error('Die Datei enthält kein gültiges Projektobjekt');
   for (const k of ['bilder', 'projekt', 'benennung']) if (o[k] !== undefined && !jsonObject(o[k])) throw new Error('Ungültiges Projektfeld: ' + k);
-  if (o.reihenfolge !== undefined && (!Array.isArray(o.reihenfolge) || o.reihenfolge.some(n => typeof n !== 'string'))) throw new Error('Ungültige Bildreihenfolge');
   const extensions = unknownFields(o, ['app', 'format', 'version', 'hinweis', 'gespeichert', 'projekt', 'benennung', 'reihenfolge', 'bilder']);
   const imageExtensions = Object.fromEntries(Object.entries(o.bilder || {}).map(([n, v]) => {
     if (!jsonObject(v)) throw new Error('Ungültiger Bildeintrag: ' + n);
