@@ -75,17 +75,25 @@ let browser, server;
         window.showSaveFilePicker = async opts => (await (await r.getDirectoryHandle(projects[window.testNext])).getDirectoryHandle('Fotos')).getFileHandle(opts.suggestedName, { create: true });
       }, { projects, protectedProject });
       const snapshot = async (key, required = []) => {
-        const h = await page.waitForFunction(async ([key, projects, required]) => {
-          try { const p = await (await navigator.storage.getDirectory()).getDirectoryHandle(projects[key]), files = {};
-            const walk = async (d, prefix) => { for await (const [n, entry] of d.entries()) {
-              if (entry.kind === 'directory') { files[prefix + n + '/'] = 'directory'; await walk(entry, prefix + n + '/'); }
-              else files[prefix + n] = Array.from(new Uint8Array(await (await entry.getFile()).arrayBuffer()));
-            } }; await walk(p, '');
-            if (required.some(ext => !Object.keys(files).some(n => n.endsWith(ext)))) return false;
-            return files;
-          } catch (e) { if (e.name === 'NotReadableError' || e.name === 'NotFoundError') return false; throw e; }
-        }, [key, projects, required]);
-        try { return await h.jsonValue(); } finally { await h.dispose(); }
+        // Playwright 1.56.1 treats an async predicate's Promise as truthy before
+        // it resolves. A false result from a transient read is not polled again.
+        // Await each complete scan explicitly and retry under a bounded deadline.
+        const deadline = Date.now() + 30000;
+        while (Date.now() < deadline) {
+          const value = await page.evaluate(async ([key, projects, required]) => {
+            try { const p = await (await navigator.storage.getDirectory()).getDirectoryHandle(projects[key]), files = {};
+              const walk = async (d, prefix) => { for await (const [n, entry] of d.entries()) {
+                if (entry.kind === 'directory') { files[prefix + n + '/'] = 'directory'; await walk(entry, prefix + n + '/'); }
+                else files[prefix + n] = Array.from(new Uint8Array(await (await entry.getFile()).arrayBuffer()));
+              } }; await walk(p, '');
+              if (required.some(ext => !Object.keys(files).some(n => n.endsWith(ext)))) return false;
+              return files;
+            } catch (e) { if (e.name === 'NotReadableError' || e.name === 'NotFoundError') return false; throw e; }
+          }, [key, projects, required]);
+          if (value) return value;
+          await page.waitForTimeout(25);
+        }
+        throw new Error('No complete readable project snapshot within 30 seconds: ' + key);
       };
       const open = async key => {
         await page.evaluate(key => { window.testNext = key; }, key); await page.getByRole('button', { name: 'Projekt öffnen …', exact: true }).first().click();
