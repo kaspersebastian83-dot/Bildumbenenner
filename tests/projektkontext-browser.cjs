@@ -9,7 +9,12 @@ const projects = {A: '26.0901 Köln & Süd + 50% #Hof', B: '26.0902 Kontext B', 
 let browser, server;
 (async () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'));
-  server = http.createServer((req, res) => {res.writeHead(200, {'content-type': 'text/html; charset=utf-8'});res.end(html);});
+  server = http.createServer((req, res) => {
+    if(new URL(req.url,'http://x').pathname === '/project-store.js'){
+      res.writeHead(200,{'content-type':'application/javascript'});res.end(fs.readFileSync(path.join(__dirname,'..','project-store.js')));return;
+    }
+    res.writeHead(200, {'content-type': 'text/html; charset=utf-8'});res.end(html);
+  });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}/index.html`;
   browser = await playwright[name].launch();
