@@ -35,8 +35,14 @@ function check(data,expected){
  return pdf;
 }
 const meta=()=>({anlage:'Anlage B1',proj:'26.0101',objekt:'Fiktives Objekt \u00c4\u00d6\u00dc \u00df \u20ac',ereignis:'Synthetischer Test',sdatum:'2026-10-12',ort:'2026-10-22',sv:'Dipl.-Ing. Beispiel',img:{shrink:false,edge:1600,q:90},pdf:{perPage:2,maxMB:14,secPage:false}});
-const items=n=>Array.from({length:n},(_,i)=>({name:`Bild_${i}.jpg`,final:`Bild_${i}.jpg`,ext:'.jpg',desc:`Motiv ${i+1} \u00e4\u00f6\u00fc \u00df \u20ac (Details)`,secEff:i<2?'Au�en':'Innen',probe:'',docNr:i+1,date:new Date('2026-10-22T09:30:00Z'),dateSrc:'Datei',handle:{getFile:async()=>({i})}}));
+const items=n=>Array.from({length:n},(_,i)=>({name:`Bild_${i}.jpg`,final:`Bild_${i}.jpg`,ext:'.jpg',desc:`Motiv ${i+1} \u00e4\u00f6\u00fc \u00df \u20ac (Details)`,secEff:i<2?'Au\u00dfen':'Innen',probe:'',docNr:i+1,date:new Date('2026-10-22T09:30:00Z'),dateSrc:'Datei',handle:{getFile:async()=>({i})}}));
 function harness(renderJpeg){const c={Blob,TextEncoder,Uint8Array,atob,APP_NAME:'FotoKit',APP_VERSION:'1.9.4',store:{get:()=>({})},docBaseName:()=> 'Muster',fmtDate:()=> '22.10.2026',fmtTime:()=> '09:30',deDate:x=>x,renderJpeg,canRotate:()=>true,rotOf:()=>0};vm.runInNewContext(html.slice(start,end)+'\nthis.build=buildAnnex;',c);return c.build;}
+const LONG_TEXT_MARKERS = ['ENDEBILD', 'ENDEABSCHNITT', 'ENDEOBJEKT'];
+function assertLongText(text){
+ for(const marker of LONG_TEXT_MARKERS)assert.ok(text.includes(marker),`Missing long-text marker: ${marker}`);
+ // Independent from the completeness assertions above.
+ assert.ok(text.includes('\u00c4\u00d6\u00dc'),'German special characters retained');
+}
 async function run(){
  const cp=require('node:child_process'),baseline=cp.execFileSync('git',['show','b616164f5ab24faa5371f4eb714276f6080a8bf3:index.html'],{cwd:root,encoding:'utf8'});
  if(!process.env.PDF_COMBINED)assert.equal(outside(html),outside(baseline),'Every byte outside PDF block unchanged from main');
@@ -45,7 +51,15 @@ async function run(){
  const test=async(title,fn)=>{await fn();cases++;console.log('OK PDF: '+title);};
  for(const n of[1,5,50,150])await test(n+' photos; two orientations, shared logo, page numbers, original JPEG bytes',async()=>{const m=meta(),its=items(n),before=JSON.stringify(its),r=await build(m,its,()=>{});assert.equal(r.parts.length,1);const p=check(await r.parts[0].blob.arrayBuffer(),its.map(i=>i.docNr));assert.equal(p.photos.length,n);for(const b of p.photos)assert.deepEqual(b,jpeg);assert.equal(JSON.stringify(its),before);assert.ok(p.b.length<60000+n*8000,'Bounded logo and layout overhead');});
  await test('Selected document numbers and one photo per page',async()=>{const m=meta();m.pdf.perPage=1;const a=items(3);a.forEach((i,k)=>i.docNr=[1,3,7][k]);const r=await build(m,a,()=>{});const p=check(await r.parts[0].blob.arrayBuffer(),[1,3,7]);assert.ok(p.pages.every(p=>(p.ops.match(/\/Im\d+ Do/g)||[]).length<=1));});
- await test('Long captions, project fields and section names flow without losing final markers',async()=>{const m=meta(),a=items(2);a[0].desc=('Lange Beschreibung \u00c4\u00d6\u00dc \u00df \u20ac '.repeat(500))+'ENDEBILD';a[0].secEff=('Abschnitt '.repeat(80))+'ENDEABSCHNITT';a[0].probe='P1';m.objekt=('Objektadresse '.repeat(200))+'ENDEOBJEKT';const r=await build(m,a,()=>{}),p=check(await r.parts[0].blob.arrayBuffer(),[1,2]),t=p.pages.flatMap(p=>p.text).join(' ');for(const marker of['ENDEBILD','ENDEABSCHNITT','ENDEOBJEKT'])assert.ok(t.includes('\u00c4\u00d6\u00dc'));assert.ok(t.includes('\u00c4\u00d6\u00dc'));});
+ await test('Long captions, project fields and section names flow without losing final markers',async()=>{const m=meta(),a=items(2);a[0].desc=('Lange Beschreibung \u00c4\u00d6\u00dc \u00df \u20ac '.repeat(500))+'ENDEBILD';a[0].secEff=('Abschnitt '.repeat(80))+'ENDEABSCHNITT';a[0].probe='P1';m.objekt=('Objektadresse '.repeat(200))+'ENDEOBJEKT';const r=await build(m,a,()=>{}),p=check(await r.parts[0].blob.arrayBuffer(),[1,2]),t=p.pages.flatMap(p=>p.text).join(' ');assertLongText(t);
+ for(const marker of LONG_TEXT_MARKERS){
+  const incomplete=t.replaceAll(marker,'');
+  for(const other of LONG_TEXT_MARKERS.filter(value=>value!==marker))assert.ok(incomplete.includes(other));
+  assert.ok(incomplete.includes('\u00c4\u00d6\u00dc'),'Mutation retains special characters');
+  assert.throws(()=>assertLongText(incomplete),{code:'ERR_ASSERTION',message:`Missing long-text marker: ${marker}`});
+  console.log(`OK PDF mutation: removing ${marker} from exported text triggers its own assertion`);
+ }
+});
  await test('Existing image preparation options unchanged',async()=>{calls=[];const m=meta();m.img={shrink:true,edge:2000,q:80};await build(m,items(1),()=>{});assert.deepEqual(calls,[[0,0,2000,.8]]);calls=[];m.img.shrink=false;await build(m,items(1),()=>{});assert.deepEqual(calls,[[0,0,null,.92]]);});
  await test('Unreadable image produces visible placeholder and preserves list number',async()=>{const a=items(1);a[0].final='X'.repeat(5000)+'ENDEDATENAME';const r=await harness(async()=>null)(meta(),a,()=>{});assert.equal(r.failed.length,1);const p=check(await r.parts[0].blob.arrayBuffer(),[]);assert.ok(p.pages.flatMap(p=>p.text).join(' ').includes('Bilddatei'));assert.ok(p.pages.flatMap(p=>p.text).includes('Bild 1'));assert.ok(p.pages.flatMap(p=>p.text).join(' ').includes('ENDEDATENAME'),'Full filename retained in flowing details');});
  await test('Real byte limit splits parts; no photo lost',async()=>{const m=meta();m.pdf.maxMB=1;const a=items(8),r=await harness(async()=>({data:Buffer.alloc(240000),w:800,h:600}))(m,a,()=>{});assert.ok(r.parts.length>1);let total=0;for(const p of r.parts){assert.ok(p.blob.size<=1e6);total+=parse(await p.blob.arrayBuffer()).photos.length;}assert.equal(total,8);});

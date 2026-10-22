@@ -2698,11 +2698,11 @@ async function buildAnnex(meta, items, progress){
       // The complete section name remains in the flowing cover index; repeated headings stay compact.
       if(hl.length>4)hl=[...hl.slice(0,3),...wrapWords(words('… (vollständig im Inhalt)','R'),9,PDF_CW)];
       const caption=[...words(it.desc.trim(),'R'),...(probes.length?words(`${it.desc.trim()?'– ':''}Probenahmestelle${probes.length>1?'n':''} ${probes.join(', ')}`,'R'):[])];
-      const caps=wrapWords(caption,9.6,PDF_CW-73),details=wrapWords(words([it.final,dateLine(it)].filter(Boolean).join(' · '),'R'),7.3,PDF_CW-73);
+      const caps=wrapWords(caption,9.6,PDF_CW-73),details=wrapWords(words([it.final,dateLine(it)].filter(Boolean).join(' · '),'R'),8,PDF_CW-73);
       return{sl,it,hl,caps,details};
     });
     const headH=Math.max(0,...prepared.map(p=>p.hl.length?14*p.hl.length+10:0));
-    const capH=Math.max(30,...prepared.map(p=>p.caps.length*12+p.details.length*9+26+(p.caps.length&&p.details.length?4:0)));
+    const capH=Math.max(30,...prepared.map(p=>p.caps.length*12+p.details.length*10+26+(p.caps.length&&p.details.length?4:0)));
     if(slots.length>1&&slotH-headH-capH<180){
       return slots.flatMap((sl,k)=>imagePage([sl],k===0?cont:sl.it.secEff?`${sl.it.secEff} (Fortsetzung)`:null));
     }
@@ -2726,7 +2726,7 @@ async function buildAnnex(meta, items, progress){
       }
       let cy=imageBottom-18;
       pg.rect(PDF_M,cy-5,59,19,null,PDF_CD.wash);pg.text(PDF_M+8,cy,`Bild ${sl.n}`,'B',9.3,PDF_CD.blue);
-      const lines=[...caps.map(l=>({l,size:9.6,lead:12,before:0,color:PDF_CD.ink})),...details.map((l,i)=>({l,size:7.3,lead:9,before:i===0&&caps.length?4:0,color:PDF_CD.muted}))];
+      const lines=[...caps.map(l=>({l,size:9.6,lead:12,before:0,color:PDF_CD.ink})),...details.map((l,i)=>({l,size:8,lead:10,before:i===0&&caps.length?4:0,color:PDF_CD.muted}))];
       let at=0;
       while(at<lines.length&&cy-lines[at].before>=bottom+10){const t=lines[at++];cy-=t.before;pg.wrapped(PDF_M+73,cy,t.l,t.size,t.color);cy-=t.lead;}
       while(at<lines.length){
