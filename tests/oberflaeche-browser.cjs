@@ -74,15 +74,17 @@ let browser, server;
         window.testNext = 'A'; window.showDirectoryPicker = () => r.getDirectoryHandle(projects[window.testNext]);
         window.showSaveFilePicker = async opts => (await (await r.getDirectoryHandle(projects[window.testNext])).getDirectoryHandle('Fotos')).getFileHandle(opts.suggestedName, { create: true });
       }, { projects, protectedProject });
-      const snapshot = async key => {
-        const h = await page.waitForFunction(async ([key, projects]) => {
+      const snapshot = async (key, required = []) => {
+        const h = await page.waitForFunction(async ([key, projects, required]) => {
           try { const p = await (await navigator.storage.getDirectory()).getDirectoryHandle(projects[key]), files = {};
             const walk = async (d, prefix) => { for await (const [n, entry] of d.entries()) {
               if (entry.kind === 'directory') { files[prefix + n + '/'] = 'directory'; await walk(entry, prefix + n + '/'); }
               else files[prefix + n] = Array.from(new Uint8Array(await (await entry.getFile()).arrayBuffer()));
-            } }; await walk(p, ''); return files;
-          } catch (e) { if (e.name === 'NotReadableError') return false; throw e; }
-        }, [key, projects]);
+            } }; await walk(p, '');
+            if (required.some(ext => !Object.keys(files).some(n => n.endsWith(ext)))) return false;
+            return files;
+          } catch (e) { if (e.name === 'NotReadableError' || e.name === 'NotFoundError') return false; throw e; }
+        }, [key, projects, required]);
         try { return await h.jsonValue(); } finally { await h.dispose(); }
       };
       const open = async key => {
@@ -205,7 +207,10 @@ let browser, server;
         await page.getByRole('button', { name: 'ZIP exportieren …', exact: true }).click();
         assert.equal(await page.locator('#zEdge').inputValue(), '2500'); assert.equal(await page.locator('#zQ').inputValue(), '90');
         await page.locator('#zOk').click(); await page.waitForFunction(() => document.querySelector('#banner').textContent.includes('ZIP gespeichert'));
-        files = await snapshot('A');
+        // Directory enumeration is not a transaction while N2 snapshots are
+        // appended. Require both exports in the same completed inspector scan;
+        // the original byte/signature assertions below still run unchanged.
+        files = await snapshot('A', ['.pdf', '.zip']);
         const pdf = Object.keys(files).find(n => n.endsWith('.pdf')), zip = Object.keys(files).find(n => n.endsWith('.zip'));
         assert.ok(pdf && zip); assert.equal(Buffer.from(files[pdf]).subarray(0, 4).toString(), '%PDF'); assert.equal(Buffer.from(files[zip]).readUInt32LE(), 0x04034b50);
         await page.locator('#list .desc').first().fill('Letzte Eingabe vor Projektwechsel'); await open('B');

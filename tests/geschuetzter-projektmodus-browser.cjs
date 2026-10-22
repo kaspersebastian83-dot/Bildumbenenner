@@ -121,6 +121,23 @@ let browser, server;
     } finally { await ctx.close(); }
   }
 
+  // N2 adds permanent metadata snapshots. Retain the original exact inventory
+  // assertion for all other paths, and validate every added archive entry.
+  function assertInventoryWithVersions(after, before, prefix){
+    const archive = prefix + '_FotoKit_Fassungen/';
+    const added = Object.keys(after).filter(n => !(n in before));
+    assert.ok(added.length > 1, 'Verified N2 snapshots exist');
+    for (const n of added){
+      assert.ok(n.startsWith(archive), 'No unexpected added file: ' + n);
+      if (n === archive){ assert.equal(after[n], 'directory'); continue; }
+      assert.match(n.slice(archive.length), /^(ausgang|vorher|kandidat|bestaetigt)_\d{8}T\d{9}Z_[0-9a-f-]{36}\.json$/);
+      const saved = JSON.parse(Buffer.from(after[n]).toString('utf8'));
+      assert.equal(saved.app, 'Bildumbenenner'); assert.equal(saved.format, 1);
+      assert.ok(saved.bilder && typeof saved.bilder === 'object');
+    }
+    assert.deepEqual(Object.keys(after).filter(n => !added.includes(n)).sort(), Object.keys(before).sort(), 'No original path lost; no temporary image files');
+  }
+
   if (!(await scenario('Unterstütztes Projekt: Umbenennen, Aussortieren und Rückgängig', 'normal', async ({ page, open, snapshot, before }) => {
     await open('A'); await page.locator('#list .desc').first().fill('Neu beschrieben');
     await page.locator('#list .row').nth(1).locator('.x').click();
@@ -135,7 +152,7 @@ let browser, server;
     await page.locator('#bUndo').click(); await page.waitForFunction(() => document.querySelector('#banner').textContent.includes('Rückgängig gemacht'));
     files = await snapshot();
     for (const [n, bytes] of Object.entries(before)) if (!n.endsWith('_Bildumbenenner.json')) assert.deepEqual(files[n], bytes, n);
-    assert.deepEqual(Object.keys(files).sort(), Object.keys(before).sort(), 'Keine temporären Bilddateien');
+    assertInventoryWithVersions(files, before, prefix);
     assert.equal(JSON.parse(Buffer.from(files[prefix + '_Bildumbenenner.json']).toString()).bilder['IMG_0001.jpg'].beschreibung, 'Neu beschrieben');
   }))) return;
 
@@ -146,7 +163,7 @@ let browser, server;
     assert.match(await page.locator('#banner').textContent(), /Kopiermodus/);
     await page.locator('#bUndo').click(); await page.waitForFunction(() => document.querySelector('#banner').textContent.includes('Rückgängig gemacht'));
     const after = await snapshot();
-    assert.deepEqual(Object.keys(after).sort(), Object.keys(before).sort());
+    assertInventoryWithVersions(after, before, projects.A + '/Fotos/');
     for (const [n, bytes] of Object.entries(before)) if (!n.endsWith('_Bildumbenenner.json')) assert.deepEqual(after[n], bytes, n);
   });
 
@@ -206,7 +223,9 @@ let browser, server;
             // wiederholen noch die Fortsetzung für einen späteren Erfolg verlieren.
             await page.locator('#bSaveRetry').click();
             await page.waitForFunction(() => !document.body.inert && document.querySelector('#bSaveRetry'));
-            assert.deepEqual(await snapshot(), failed);
+            const retried = await snapshot();
+            assertInventoryWithVersions(retried, failed, prefix);
+            for (const [n, bytes] of Object.entries(failed)) assert.deepEqual(retried[n], bytes, 'Retry preserves every existing byte: ' + n);
             await page.evaluate(() => window.failMetadataSave = false);
             await page.locator('#list .desc').first().fill('Neu nach Speicherfehler');
             if (recovery === 'retry') await page.locator('#bSaveRetry').click();
