@@ -24,6 +24,7 @@ jobs:
         with:
           node-version: 24
       - run: node tests/laborwerte.cjs
+      - run: node tests/unknown-fields.cjs
 
   browser-tests:
     name: Browser tests (${{ matrix.browser }})
@@ -46,6 +47,8 @@ jobs:
           "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps ${{ matrix.browser }}
       - name: Project data (_Projekt.json) in the real browser
         run: node tests/projektdaten-browser.cjs ${{ matrix.browser }}
+      - name: F6 unknown JSON fields, editing, retry, exports and future-version protection
+        run: node tests/unknown-fields-browser.cjs ${{ matrix.browser }}
       - name: Mosaik bar (project, steps, next step) in the real browser
         run: node tests/leiste-browser.cjs ${{ matrix.browser }}
       - name: Fotos folder → project, sort by section, PDF name without overwriting

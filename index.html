@@ -504,7 +504,7 @@ const store = {
   set(k, v){
     try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){}
     if (k === 'bu-settings' && P.data){          // naming is also part of the project, so renaming is reproducible for everyone
-      const n = pickNaming(v);
+      const n = { ...P.data.settings, ...pickNaming(v) };
       if (JSON.stringify(P.data.settings) !== JSON.stringify(n)){ P.data.settings = n; scheduleProjSave(); }
     }
   }
@@ -516,26 +516,59 @@ function projSet(kind, v){
 }
 
 function projToJson(d = P.data){
-  const imgs = {};
+  // Retain opaque JSON values separately from the editable, normalized fields.
+  const imgs = Object.assign(Object.create(null), clone(d.imageExtensions || {}));
   const at = n => imgs[n] || (imgs[n] = {});
   for (const [n, v] of Object.entries(d.drafts || {})) if (v) at(n).beschreibung = v;
   for (const [n, v] of Object.entries(d.extra || {})){ if (v.sec) at(n).abschnitt = v.sec; if (v.probe) at(n).probe = v.probe; }
   for (const [n, v] of Object.entries(d.rot || {})) if (v) at(n).drehung = v;
   for (const n of d.discard || []) at(n).aussortiert = true;
   for (const [n, v] of Object.entries(d.orig || {})){
-    at(n).original = typeof v === 'object' ? { name: v.o, aufnahme: v.d || '', datumsquelle: v.s || '' } : { name: v };
+    at(n).original = { ...at(n).original, ...(typeof v === 'object' ? { name: v.o, aufnahme: v.d || '', datumsquelle: v.s || '' } : { name: v }) };
   }
-  for (const [n, v] of Object.entries(d.hash || {})) at(n).sha256 = { wert: v.h, bytes: v.s, geaendert: v.m };
+  for (const [n, v] of Object.entries(d.hash || {})) at(n).sha256 = { ...at(n).sha256, wert: v.h, bytes: v.s, geaendert: v.m };
   const sorted = Object.fromEntries(Object.keys(imgs).sort((a, b) => a.localeCompare(b, 'de', { numeric: true })).map(k => [k, imgs[k]]));
   return JSON.stringify({
+    ...clone(d.extensions || {}),
     app: 'Bildumbenenner', format: 1, version: APP_VERSION,
     hinweis: 'Projektdaten von FotoKit (früher Bildumbenenner: Beschreibungen, Abschnitte, Proben, Drehungen, Originalnamen, Prüfsummen). Bitte nicht löschen oder umbenennen.',
     gespeichert: new Date().toISOString(),
     projekt: d.meta || {}, benennung: d.settings || {}, reihenfolge: d.order || [], bilder: sorted
   }, null, 2) + '\n';
 }
+const jsonObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+const unknownFields = (o, known) => Object.fromEntries(Object.entries(o).filter(([k]) => !known.includes(k)).map(([k, v]) => [k, clone(v)]));
+function projectWriteProblem(o){
+  if (o.format !== undefined && o.format !== 1) return 'nicht unterstütztes Projektformat (' + String(o.format) + ')';
+  if (o.version !== undefined && (typeof o.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(o.version) || verCmp(o.version, APP_VERSION) > 0))
+    return 'neuere oder nicht unterstützte FotoKit-Version (' + String(o.version) + ')';
+  return '';
+}
+function requireWritableProject(o){
+  const problem = projectWriteProblem(o);
+  if (!problem) return;
+  P.readOnly = true;
+  banner('err', esc(problem) + '. ' + esc(PROTECTED_PROJECT));
+  recompute();
+  throw new Error(problem + ' – die Datei wird nicht überschrieben');
+}
 function projFromJson(o){
-  const d = { drafts: {}, discard: [], rot: {}, extra: {}, orig: {}, hash: {}, order: o.reihenfolge || [], meta: o.projekt || {}, settings: o.benennung || null };
+  if (!jsonObject(o)) throw new Error('Die Datei enthält kein gültiges Projektobjekt');
+  for (const k of ['bilder', 'projekt', 'benennung']) if (o[k] !== undefined && !jsonObject(o[k])) throw new Error('Ungültiges Projektfeld: ' + k);
+  if (o.reihenfolge !== undefined && (!Array.isArray(o.reihenfolge) || o.reihenfolge.some(n => typeof n !== 'string'))) throw new Error('Ungültige Bildreihenfolge');
+  const extensions = unknownFields(o, ['app', 'format', 'version', 'hinweis', 'gespeichert', 'projekt', 'benennung', 'reihenfolge', 'bilder']);
+  const imageExtensions = Object.fromEntries(Object.entries(o.bilder || {}).map(([n, v]) => {
+    if (!jsonObject(v)) throw new Error('Ungültiger Bildeintrag: ' + n);
+    const rest = unknownFields(v, ['beschreibung', 'abschnitt', 'probe', 'drehung', 'aussortiert', 'original', 'sha256']);
+    for (const [key, known] of [['original', ['name', 'aufnahme', 'datumsquelle']], ['sha256', ['wert', 'bytes', 'geaendert']]]) {
+      if (v[key] === undefined) continue;
+      if (!jsonObject(v[key])) throw new Error('Ungültige Bildmetadaten: ' + key);
+      const nested = unknownFields(v[key], known);
+      if (Object.keys(nested).length) rest[key] = nested;
+    }
+    return [n, rest];
+  }));
+  const d = { extensions, imageExtensions, drafts: {}, discard: [], rot: {}, extra: {}, orig: {}, hash: {}, order: o.reihenfolge || [], meta: o.projekt || {}, settings: o.benennung || null };
   for (const [n, v] of Object.entries(o.bilder || {})){
     if (v.beschreibung) d.drafts[n] = v.beschreibung;
     if (v.abschnitt || v.probe) d.extra[n] = { sec: v.abschnitt || '', probe: v.probe || '' };
@@ -569,8 +602,8 @@ function flushProject(){
       if (P.session !== session) return false;
       if (onDisk.trim() && onDisk !== P.lastText){
         let theirs;
-        try{ theirs = projFromJson(JSON.parse(onDisk)); }
-        catch(e){ throw new Error('die Datei wird gerade von jemand anderem gespeichert oder ist beschädigt – neuer Versuch beim nächsten Speichern'); }
+        try{ const o = JSON.parse(onDisk); theirs = projFromJson(o); requireWritableProject(o); }
+        catch(e){ if (P.readOnly) throw e; throw new Error('die Datei wird gerade von jemand anderem gespeichert oder ist beschädigt – neuer Versuch beim nächsten Speichern'); }
         mergeExternal(theirs);
       }
       const saved = clone(P.data), json = projToJson(saved);
@@ -597,14 +630,16 @@ function flushProject(){
    Changed only by them → take theirs; changed only by us → keep ours; changed by both differently → keep ours, report. */
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function mergeMap(b, o, t, kind, out){
-  b = b || {}; o = o || {}; t = t || {};
-  const r = {};
+  b = Object.assign(Object.create(null), b || {});
+  o = Object.assign(Object.create(null), o || {});
+  t = Object.assign(Object.create(null), t || {});
+  const r = Object.create(null);
   for (const k of new Set([...Object.keys(b), ...Object.keys(o), ...Object.keys(t)])){
     let v;
-    if (same(o[k], b[k])){ v = t[k]; if (!same(t[k], o[k]) && kind !== 'hash') out.theirs.add(kind === 'meta' || kind === 'settings' ? '' : k); }
+    if (same(o[k], b[k])){ v = t[k]; if (!same(t[k], o[k]) && kind !== 'hash') out.theirs.add(['meta', 'settings', 'extensions'].includes(kind) ? '' : k); }
     else if (same(t[k], b[k]) || same(t[k], o[k])) v = o[k];
     else if (kind === 'hash') v = t[k];            // checksum cache: either one is fine
-    else { v = o[k]; out.conflicts.add(kind === 'meta' || kind === 'settings' ? 'Projektdaten' : k); }
+    else { v = o[k]; out.conflicts.add(['meta', 'settings', 'extensions'].includes(kind) ? 'Projektdaten' : k); }
     if (v !== undefined) r[k] = clone(v);
   }
   return r;
@@ -614,7 +649,7 @@ function mergeExternal(theirs){
   flushDrafts(); saveExtra();                         // newest typing is part of "ours"
   const b = P.base || projFromJson({}), o = P.data, out = { theirs: new Set(), conflicts: new Set() };
   const m = {};
-  for (const kind of ['drafts', 'rot', 'extra', 'orig', 'hash', 'meta']) m[kind] = mergeMap(b[kind], o[kind], theirs[kind], kind, out);
+  for (const kind of ['drafts', 'rot', 'extra', 'orig', 'hash', 'meta', 'extensions', 'imageExtensions']) m[kind] = mergeMap(b[kind], o[kind], theirs[kind], kind, out);
   m.settings = theirs.settings || o.settings ? mergeMap(b.settings, o.settings, theirs.settings, 'settings', out) : null;
   m.discard = Object.keys(mergeMap(asSet(b.discard), asSet(o.discard), asSet(theirs.discard), 'discard', out));
   const orderChanged = !same(o.order, b.order) ? false : !same(theirs.order, o.order);
@@ -646,7 +681,8 @@ async function checkExternal(){
   try{
     const onDisk = await (await (await dir.getFileHandle(PROJ_FILE)).getFile()).text();
     if (S.dir !== dir || !onDisk.trim() || onDisk === P.lastText) return;
-    const theirs = projFromJson(JSON.parse(onDisk));
+    const o = JSON.parse(onDisk), theirs = projFromJson(o);
+    requireWritableProject(o);
     mergeExternal(theirs);
     P.lastText = onDisk; P.base = projFromJson(JSON.parse(onDisk));
     if (!same(P.data, P.base)) scheduleProjSave();      // our unsaved changes still have to be written
@@ -723,11 +759,10 @@ async function loadProject(dir){
     const o = JSON.parse(txt);
     if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('Die Datei enthält kein gültiges Projektobjekt');
     d = o ? projFromJson(o) : null;
-    if (o && o.format !== undefined && o.format !== 1){
+    const problem = projectWriteProblem(o);
+    if (problem){
       P.readOnly = true;
-      note = `<b>„${PROJ_FILE}“ verwendet ein nicht unterstütztes Projektformat (${esc(String(o.format))}).</b> Die Datei wird nicht überschrieben.`;
-    } else if (o && o.version && verCmp(o.version, APP_VERSION) > 0){
-      note = `Hinweis: Dieses Projekt wurde zuletzt mit Version ${esc(o.version)} gespeichert, du nutzt ${APP_VERSION}. Bitte die aktuelle Version vom gemeinsamen Speicherort verwenden.`;
+      note = '<b>„' + PROJ_FILE + '“: ' + esc(problem) + '.</b> Die Datei wird nicht überschrieben.';
     }
   }catch(e){
     if (e && e.name === 'NotFoundError') d = null;
@@ -1872,6 +1907,7 @@ async function doRename(pairs, moves){
     remapKeys('drafts', pairs);       // descriptions stay with the renamed file
     remapKeys('extra', pairs);
     remapKeys('hash', pairs);
+    remapKeys('imageExtensions', pairs);
     moveRotKeys(pairs);
     // remember the very first file name and the capture date (it may only have been in the old name)
     const og = projGet('orig', {}), og2 = Object.assign({}, og);
@@ -1935,6 +1971,7 @@ async function undo(){
     projSet('drafts', drafts);
     remapKeys('extra', back);
     remapKeys('hash', back);
+    remapKeys('imageExtensions', back);
     moveRotKeys(back);
     const og = projGet('orig', {}), before = { ...og };
     // Delete all source keys first: swapped filenames must not overwrite an
@@ -2106,7 +2143,7 @@ function saveMeta(m){
   const { sv, template, img, pdf, ...project } = m;
   if (img) store.set('bu-zipimg', img);
   if (pdf) store.set('bu-pdf', pdf);
-  projSet('meta', project);
+  projSet('meta', { ...projGet('meta', {}), ...project });
   const own = store.get('bu-global', {}).sv;
   // inside a project the name belongs to the project (_Projekt.json); the personal default only fills an empty one
   store.set('bu-global', { sv: S.proj && PJ.data && own ? own : sv, template: template === DEFAULT_TEMPLATE ? '' : template });
