@@ -11,6 +11,8 @@ const initial={app:'Bildumbenenner',format:1,version:'1.9.5',projekt:{},benennun
 const oldHTML=await fs.readFile(path.join(old,'index.html'),'utf8');
 assert.ok(oldHTML.includes("const APP_VERSION = '1.9.5'"));assert.ok(!oldHTML.includes('const unknownFields'),'must be real pre-F6 code');
 assert.ok(!oldHTML.includes('const APP_BUILD ='),'old client must not contain N3');
+assert.equal(hash(oldHTML),'44392a52502b309ccd1e5d211929220a1e03e590ef4edac2c5fb1670e14a7a78','exact unmodified pre-F6 HTML');
+assert.equal(hash(await fs.readFile(path.join(old,'sw.js'))),'09f582652e68a236294429653f403befa8cdcb981e6b9a9208a1720fd41499fd','exact unmodified old worker');
 const pageErrors=[];
 const tmp=await fs.mkdtemp(path.join(os.tmpdir(),'n3-attack-')),contexts=[],evidence={engine,oldHTML:hash(oldHTML),events:[]};
 await fs.mkdir(path.join(tmp,PROJECT,'Fotos'),{recursive:true});await fs.writeFile(path.join(tmp,FILE),JSON.stringify(initial));
@@ -35,7 +37,7 @@ async function page(openProject=true){
    case'list':return(await fs.readdir(f,{withFileTypes:true})).map(e=>({name:e.name,kind:e.isDirectory()?'directory':'file'}));
    case'read':return Array.from(await fs.readFile(f));
    case'before':return true;
-   case'write':{const candidate=f+'.stream-'+require('node:crypto').randomUUID();await fs.writeFile(candidate,Buffer.from(arg.bytes));await fs.rename(candidate,f);return true;}
+   case'write':{const candidate=path.join(path.dirname(f),'.n3-stream-'+require('node:crypto').randomUUID());await fs.writeFile(candidate,Buffer.from(arg.bytes));await fs.rename(candidate,f);return true;}
    case'remove':await fs.rm(f,{recursive:!!arg.recursive});return true;
   }}catch(e){if(e.code==='ENOENT')return{missing:true};throw e;}
  });
@@ -48,7 +50,7 @@ async function openRecovery(p,exact){
   await row.locator('button').click();if(await p.locator('#vPreview').textContent()===exact){found=true;await p.locator('#vRestore').click();break;}
   await p.locator('#vBack').click();await p.locator('[data-photo-version]').first().waitFor();
  }
- assert.ok(found,'N2 complete confirmed B version discoverable after old overwrite');await p.locator('#overlay').waitFor({state:'hidden'});await until(async()=>await disk()===exact);
+ assert.ok(found,'N2 complete confirmed B version discoverable after old overwrite');try{await p.locator('#overlay').waitFor({state:'hidden'});}catch(e){throw Error('Recovery did not complete: '+await p.locator('#banner').textContent(),{cause:e});}await until(async()=>await disk()===exact);
 }
 try{
 const A=await page();await A.p.evaluate(async()=>{await navigator.serviceWorker.ready;});await A.p.waitForFunction(()=>!!navigator.serviceWorker.controller);
@@ -60,8 +62,10 @@ const aIdentity=await A.p.locator('#btnInfo').textContent();evidence.events.push
 const extended=structuredClone(initial);extended.extension={opaque:['F6',false,{value:42}]};extended.projekt.custom={keep:true};extended.benennung.custom=7;extended.bilder['a.jpg'].future={nested:['must survive',9]};extended.bilder['b.jpg'].original={name:'b.jpg',custom:9};
 await fs.writeFile(path.join(tmp,FILE),JSON.stringify(extended));serving=root;
 const B=await page();await B.p.locator('#list .desc').nth(1).fill('B F6 bestätigt');
+// The real reload action drains the save queues before the old writer is released.
+await B.p.locator('#btnReload').click();await B.p.waitForFunction(()=>!document.body.inert);
 let confirmedB;
-await until(async()=>{for(const n of await fs.readdir(path.join(tmp,ARCHIVE)).catch(()=>[])){if(!n.startsWith('bestaetigt_'))continue;const text=await fs.readFile(path.join(tmp,ARCHIVE,n),'utf8');let value;try{value=JSON.parse(text);}catch(e){if(e instanceof SyntaxError)continue;throw e;}if(value.bilder['b.jpg'].beschreibung==='B F6 bestätigt'){confirmedB=text;return true;}}return false;});
+await until(async()=>{for(const n of await fs.readdir(path.join(tmp,ARCHIVE)).catch(()=>[])){if(!n.startsWith('bestaetigt_')||!n.endsWith('.json'))continue;const text=await fs.readFile(path.join(tmp,ARCHIVE,n),'utf8');let value;try{value=JSON.parse(text);}catch(e){if(e instanceof SyntaxError)continue;throw e;}if(value.bilder['b.jpg'].beschreibung==='B F6 bestätigt'){confirmedB=text;return true;}}return false;});
 const written=JSON.parse(confirmedB);assert.deepEqual(written.extension,extended.extension);assert.deepEqual(written.bilder['a.jpg'].future,extended.bilder['a.jpg'].future);evidence.confirmedB=hash(confirmedB);
 // The real old registration fetches and activates the NEW sw.js; A stays open.
 await A.p.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();window.n3ControllerChanges=0;navigator.serviceWorker.addEventListener('controllerchange',()=>window.n3ControllerChanges++);await r.update();});
@@ -76,7 +80,10 @@ evidence.afterOldSave=damaged;
 evidence.beforeOldSave=written;
 evidence.events.push({step:'A saved after actual SW activation',topFieldRemoved:true,imageFieldRemoved:true,originalExtensionRemoved:true,controllerChanges:await A.p.evaluate(()=>window.n3ControllerChanges)});
 console.log('PASS N3 ATTACK: real pre-F6 tab survives SW update and removes unknown fields');
-await B.context.close();const restarted=await page();await openRecovery(restarted.p,confirmedB);assert.equal(await disk(),confirmedB);
+await B.context.close();const restarted=await page();
+// Finish load-time normalization through the real UI before taking a recovery revision.
+await restarted.p.locator('#btnReload').click();await restarted.p.waitForFunction(()=>!document.body.inert);
+await openRecovery(restarted.p,confirmedB);assert.equal(await disk(),confirmedB);
 console.log('PASS N3 RECOVERY: confirmed B snapshot remains discoverable and restores exact bytes after restart');
 // Hold an old-client writable until the authority denies commits, not only opens.
 let arrived;const atCommit=new Promise(r=>arrived=r);heldClose=arrived;
