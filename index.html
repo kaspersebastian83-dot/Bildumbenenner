@@ -2721,7 +2721,7 @@ async function buildAnnex(meta, items, progress){
         const x=PDF_M+(PDF_CW-w)/2,iy=imageBottom+(frameH-h)/2;
         pg.image(sl.i,x,iy,w,h);pg.rect(x,iy,w,h,PDF_CD.rule);
       }else{
-        const ls=wrapWords(words(`Bilddatei kann nicht eingebunden werden (Format ${it.ext.slice(1).toUpperCase()}): ${it.final}`,'R'),9,PDF_CW-30);
+        const ls=wrapWords(words(`Bilddatei kann nicht eingebunden werden (Format ${it.ext.slice(1).toUpperCase()}).`,'R'),9,PDF_CW-30);
         ls.forEach((l,j)=>pg.wrapped(PDF_M+15,imageBottom+frameH/2+(ls.length-1)*6-j*12,l,9,PDF_CD.muted));
       }
       let cy=imageBottom-18;
