@@ -33,6 +33,7 @@ jobs:
       - run: node tests/n2-speichersicherheit.cjs
       - run: node tests/n3-await-condition.cjs
       - run: node tests/n3-writer-conflict.cjs
+      - run: node tests/ordnername.cjs
 
   browser-tests:
     name: Browser tests (${{ matrix.browser }})

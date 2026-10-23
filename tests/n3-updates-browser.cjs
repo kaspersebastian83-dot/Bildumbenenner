@@ -2,6 +2,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),crypto=require('node:crypto'),pw=require('playwright');
 const {waitForAsync}=require('./await-condition.cjs');
 const root=path.resolve(__dirname,'..'),engine=process.argv[2]||'chromium',html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const VER=html.match(/const APP_VERSION = '([^']+)'/)[1];   // aktuelle Version aus index.html, damit der Test eine Versionserhöhung übersteht
 const build=/const APP_BUILD = '(sha256:[a-f0-9]{64})'/.exec(html)[1];
 function stamped(text){const re=/const APP_BUILD = 'sha256:[a-f0-9]{64}'/g;const normalized=text.replace(re,"const APP_"+"BUILD = 'sha256:BUILD'");return text.replace(re,"const APP_"+"BUILD = 'sha256:"+crypto.createHash('sha256').update(normalized).digest('hex')+"'");}
 const different=stamped(html.replace('</body>','<!-- synthetic alternate complete build -->\n</body>'));
@@ -15,14 +16,14 @@ server=http.createServer((req,res)=>{
  res.setHeader('Content-Type','text/html; charset=utf-8');if(!u.searchParams.has('fotokit-update'))return res.end(html);
  if(mode==='error'){res.statusCode=503;return res.end('offline');}if(mode==='network'){req.socket.destroy();return;}if(mode==='timeout')return;
  if(mode==='invalid')return res.end('no build');
- if(mode==='declarations')return res.end("const APP_VERSION = '1.9.5'; const APP_BUILD = '"+build+"';");
+ if(mode==='declarations')return res.end("const APP_VERSION = '"+VER+"'; const APP_BUILD = '"+build+"';");
  if(mode==='truncated')return res.end(html.slice(0,-80));
  if(mode==='tampered')return res.end(html.replace('<title>','<title>tampered '));
- if(mode==='duplicate')return res.end(stamped(html.replace('</body>',"<script>const APP_VERSION = '1.9.5';</script></body>")));
+ if(mode==='duplicate')return res.end(stamped(html.replace('</body>',"<script>const APP_VERSION = '"+VER+"';</script></body>")));
  if(mode==='ambiguous')return res.end(stamped(html.replace('</body>',"<script>const APP_BUILD  = 'ambiguous';</script></body>")));
  if(mode==='wrong-type'){res.setHeader('Content-Type','text/plain');return res.end(html);}
- if(mode==='rollback')return res.end(stamped(html.replace("const APP_VERSION = '1.9.5'","const APP_VERSION = '1.0.0'")));
- if(mode==='newer')return res.end(stamped(html.replace("const APP_VERSION = '1.9.5'","const APP_VERSION = '99.0.0'")));
+ if(mode==='rollback')return res.end(stamped(html.replace("const APP_VERSION = '"+VER+"'","const APP_VERSION = '1.0.0'")));
+ if(mode==='newer')return res.end(stamped(html.replace("const APP_VERSION = '"+VER+"'","const APP_VERSION = '99.0.0'")));
  res.end(mode==='different'?different:html);
 });
 await new Promise(r=>server.listen(0,'127.0.0.1',r));browser=await pw[engine].launch();const context=await browser.newContext({serviceWorkers:'block',viewport:{width:1400,height:1000}}),p=await context.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
