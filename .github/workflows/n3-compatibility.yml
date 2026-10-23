@@ -42,7 +42,7 @@ jobs:
           set -euo pipefail
           cd "$RUNNER_TEMP/n3-combined"
           node tools/build-identity.cjs --check
-          for test in tests/laborwerte.cjs tests/n3-await-condition.cjs tests/project-store.cjs tests/unknown-fields.cjs tests/n2-speichersicherheit.cjs tests/pdf-layout.cjs; do
+          for test in tests/laborwerte.cjs tests/n3-await-condition.cjs tests/project-store.cjs tests/unknown-fields.cjs tests/n2-speichersicherheit.cjs tests/n3-writer-conflict.cjs tests/pdf-layout.cjs; do
             node "$test" | tee "$RUNNER_TEMP/n3-results/$(basename "$test").log"
           done
           N3_OLD_ROOT="$RUNNER_TEMP/n3-old" N3_RESULTS="$RUNNER_TEMP/n3-results" node tests/n3-altclient-browser.cjs "${{ matrix.browser }}" | tee "$RUNNER_TEMP/n3-results/old-client.log"

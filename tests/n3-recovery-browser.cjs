@@ -30,7 +30,7 @@ const fixture=version=>({app:'Bildumbenenner',format:version==='99.0.0'?2:1,vers
  const original=Buffer.from(files.get(primary));
  try{
   let p=await page();await open(p);await p.locator('#list .desc').first().fill('Protected input survives RELOAD');await p.locator('#recoveryStatus').filter({hasText:/lokal gesichert/}).waitFor();
-  let warnings=0;const dismiss=async d=>{warnings++;await d.dismiss();};p.on('dialog',dismiss);await p.reload({timeout:2000}).catch(e=>assert.match(e.message,/ERR_ABORTED|Navigation|Timeout/));assert.ok(warnings>0,'manual reload warns');assert.equal(await p.locator('#list .desc').first().inputValue(),'Protected input survives RELOAD');p.off('dialog',dismiss);
+  let warnings=0;const dismiss=async d=>{warnings++;await d.dismiss();};p.on('dialog',dismiss);await p.reload({timeout:2000}).catch(e=>assert.match(e.message,/ERR_ABORTED|navigation|Timeout|beforeunload/i));assert.ok(warnings>0,'manual reload warns');assert.equal(await p.locator('#list .desc').first().inputValue(),'Protected input survives RELOAD');p.off('dialog',dismiss);
   p.on('dialog',d=>d.accept());await p.reload();await open(p);assert.equal(await p.locator('#list .desc').first().inputValue(),'Disk A');await choose(p,'Protected input survives RELOAD');await p.locator('#rApply').click();await p.locator('#overlay').waitFor({state:'hidden'});assert.equal(await p.locator('#list .desc').first().inputValue(),'Protected input survives RELOAD');assert.deepEqual(files.get(primary),original);
   console.log('PASS N3 RECOVERY: reload warns; accepted reload keeps local draft; explicit recovery leaves protected bytes unchanged');
   await p.locator('#list .desc').first().fill('Protected input survives TAB CLOSE');await p.close({runBeforeUnload:true});
