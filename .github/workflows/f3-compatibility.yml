@@ -33,12 +33,18 @@ jobs:
         run: |
           set -euo pipefail
           git fetch origin 5617ff033cd29c0a3fa43bb4246be598830cbfcd
-          git diff b616164f5ab24faa5371f4eb714276f6080a8bf3 5617ff033cd29c0a3fa43bb4246be598830cbfcd -- index.html sw.js project-store.js tests/project-store.cjs tests/project-store-browser.cjs tests/leiste-browser.cjs tests/projektkontext-browser.cjs > "$RUNNER_TEMP/f3.patch"
-          git apply --check "$RUNNER_TEMP/f3.patch"
-          git apply "$RUNNER_TEMP/f3.patch"
+          if ! git merge-base --is-ancestor 5617ff033cd29c0a3fa43bb4246be598830cbfcd HEAD; then
+            git diff b616164f5ab24faa5371f4eb714276f6080a8bf3 5617ff033cd29c0a3fa43bb4246be598830cbfcd -- index.html sw.js project-store.js tests/project-store.cjs tests/project-store-browser.cjs tests/leiste-browser.cjs tests/projektkontext-browser.cjs > "$RUNNER_TEMP/f3.patch"
+            git apply --check "$RUNNER_TEMP/f3.patch"
+            git apply "$RUNNER_TEMP/f3.patch"
+          fi
           mkdir -p test-results
           git diff --stat > test-results/composition.txt
           printf 'F6 HEAD: %s\nF3 HEAD: 5617ff033cd29c0a3fa43bb4246be598830cbfcd\n' "$(git rev-parse HEAD)" >> test-results/composition.txt
+      - name: Immutable old client for integrated N3 attack
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/n4-old" b616164f5ab24faa5371f4eb714276f6080a8bf3
+          echo "N3_OLD_ROOT=$RUNNER_TEMP/n4-old" >> "$GITHUB_ENV"
       - name: Install pinned Playwright
         shell: bash
         run: |

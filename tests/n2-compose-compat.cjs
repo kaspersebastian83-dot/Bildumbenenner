@@ -3,6 +3,7 @@ const cp=require('node:child_process'),fs=require('node:fs'),assert=require('nod
 const F3='5617ff033cd29c0a3fa43bb4246be598830cbfcd',F6='9c7929b6aebca4dc7fe8d95d7b518ea0946a66d0';
 const git=(...args)=>cp.execFileSync('git',args,{encoding:'utf8'});
 assert.equal(git('status','--porcelain').trim(),'','integration checkout must start clean');
+if ([F3,F6].every(sha=>cp.spawnSync('git',['merge-base','--is-ancestor',sha,'HEAD']).status===0)){ console.log('Pinned F3/F6 already contained; retain exact integrated HEAD'); process.exit(0); }
 function resolve(file,choose,expected=1){
  const text=fs.readFileSync(file,'utf8');let count=0;
  const resolved=text.replace(/^<<<<<<< .*\n([\s\S]*?)^=======\n([\s\S]*?)^>>>>>>> .*\n/gm,(_,ours,theirs)=>{count++;return choose(ours,theirs);});

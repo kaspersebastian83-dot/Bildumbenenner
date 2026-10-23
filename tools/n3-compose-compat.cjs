@@ -6,6 +6,12 @@ assert.ok(process.argv[2]&&!fs.existsSync(dest),'explicit new destination requir
 const run=(cwd,command,args,opts={})=>cp.execFileSync(command,args,{cwd,encoding:'utf8',stdio:['pipe','pipe','inherit'],...opts});
 const git=(...args)=>run(dest,'git',args);
 function commit(message){git('add','.');git('-c','user.name=N3 Compatibility','-c','user.email=n3@example.invalid','commit','-m',message);}
+if ([N2,F3,F6,PDF,'40c9704456b1c4f30ee8245bd90574d6e0e2df6e'].every(sha=>cp.spawnSync('git',['merge-base','--is-ancestor',sha,'HEAD'],{cwd:root}).status===0)){
+  run(root,'git',['clone','--no-hardlinks','--no-checkout',root,dest]);
+  git('config','core.autocrlf','false');git('checkout','--detach',run(root,'git',['rev-parse','HEAD']).trim());
+  run(dest,process.execPath,['tools/build-identity.cjs','--check']);
+  console.log(JSON.stringify({mode:'already integrated; exact HEAD retained',combined:git('rev-parse','HEAD').trim()},null,2));process.exit(0);
+}
 run(root,'git',['clone','--no-hardlinks','--no-checkout',root,dest]);
 git('config','core.autocrlf','false');git('config','core.eol','lf');
 git('fetch','https://github.com/kaspersebastian83-dot/Bildumbenenner.git',N2,F3,F6,PDF);git('checkout','--detach',N2);

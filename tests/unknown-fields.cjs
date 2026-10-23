@@ -18,25 +18,11 @@ const fixture = () => ({ app: 'Bildumbenenner', format: 1, version: '1.8.2',
     'b.jpg': { futureFlag: { nested: 'only unknown data' } }, 'empty.jpg': {} } });
 
 function harness(input = fixture()) {
-  let text = JSON.stringify(input), writes = 0, fail = false;
-  const dir = { name: 'Fotos', async getFileHandle() { return {
-    async getFile() { return { text: async () => text }; },
-    async createWritable() { let next; return {
-      async write(s) { if (fail) throw new Error('synthetisch'); next = s; },
-      async close() { text = next; writes++; }, async abort() {} }; }
-  }; } };
-  const ctx = { APP_VERSION: version, S: { dir, items: [], view: [] }, PJ: {}, cfg: {}, defaults: {},
-    window: { addEventListener() {} }, localStorage: { getItem() { return null; }, setItem() {} },
-    setTimeout() { return 0; }, clearTimeout() {}, banner() {}, recompute() {},
-    esc: String, logProblem() {}, saveError() {}, hideBanner() {}, completePendingSave() {},
-    applyCfgToUI() {}, flushDrafts() {}, saveExtra() {}, ROT: {}, EXTRA: {}, ORIG: {}, HASH: {},
-    verCmp(a, b) { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; } };
-  const a = html.indexOf("const PROJ_FILE ="), b = html.indexOf("document.addEventListener('visibilitychange'");
-  assert.ok(a > 0 && b > a);
-  vm.runInNewContext(html.slice(a, b) + '\nthis.api = { P, store, projFromJson, projToJson, projSet, loadProject, flushProject, checkExternal, projectWriteProblem };', ctx);
-  const { api } = ctx;
-  return { ...api, dir, read: () => JSON.parse(text), text: () => text, writes: () => writes,
-    external: value => { text = JSON.stringify(value); }, fail: v => { fail = v; } };
+  const {disk,session,encode}=require('./n2-speichersicherheit.cjs');
+  const d=disk(JSON.stringify(input)),s=session(d);
+  return {...s,dir:d.dir,read:()=>d.json(),text:()=>d.text(),writes:()=>d.writes(),
+    external:value=>d.files.set('_Bildumbenenner.json',encode(JSON.stringify(value))),
+    fail:value=>Object.assign(d.fail,{path:'_Bildumbenenner.json',stage:value?'write':''})};
 }
 
 async function run() {

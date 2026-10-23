@@ -31,7 +31,7 @@ function disk(initial=fixture()) {
 }
 function session(d) {
   const element={classList:{contains:()=>false},disabled:false,value:'',textContent:'',innerHTML:''};
-  const ctx={console,localStorage:{getItem(){return null;},setItem(){}},TextEncoder,TextDecoder,Uint8Array,crypto:webcrypto,DOMException, setTimeout:()=>0, clearTimeout(){}, window:{addEventListener(){}},document:{addEventListener(){}},navigator:{},
+  const ctx={recoveryChanged(){},recoverySaved(){},console,localStorage:{getItem(){return null;},setItem(){}},TextEncoder,TextDecoder,Uint8Array,crypto:webcrypto,DOMException, setTimeout:()=>0, clearTimeout(){}, window:{addEventListener(){}},document:{addEventListener(){}},navigator:{},
     S:{dir:d.dir,proj:{},items:[],view:[],busy:false,changing:false},APP_VERSION:'1.9.5',PROTECTED_PROJECT:'protected',PJ:{failed:false},cfg:{},defaults:{},$:()=>element,esc:String,applyCfgToUI(){},banner(){},hideBanner(){},saveError(){},logProblem(){},completePendingSave(){},flushDrafts(){},saveExtra(){},verCmp:(a,b)=>a.localeCompare(b,undefined,{numeric:true})};
   vm.createContext(ctx);
   vm.runInContext(source.slice(source.indexOf("const PROJ_FILE ="),source.indexOf("document.addEventListener('visibilitychange'"))+`\nfunction applyMergedToItems(){};function flushDrafts(){};function saveExtra(){};this.api={P,store,loadProject,flushProject,projSet,projToJson,projFromJson,checkExternal,${source.includes('async function photoVersions(')?'photoVersions,restorePhotoVersion,':''}};`,ctx);

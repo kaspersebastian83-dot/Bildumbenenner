@@ -30,6 +30,10 @@ jobs:
           node tests/n2-compose-compat.cjs
           mkdir -p "$RUNNER_TEMP/n2-results"
           git log -3 --format=fuller > "$RUNNER_TEMP/n2-results/composition.txt"
+      - name: Immutable old client for integrated N3 attack
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/n4-old" b616164f5ab24faa5371f4eb714276f6080a8bf3
+          echo "N3_OLD_ROOT=$RUNNER_TEMP/n4-old" >> "$GITHUB_ENV"
       - name: Install pinned Playwright
         run: |
           npm install --no-save --no-package-lock --prefix "$RUNNER_TEMP/pw" playwright@1.56.1
