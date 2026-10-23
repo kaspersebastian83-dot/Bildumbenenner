@@ -1,15 +1,15 @@
 // Real UI in both engines; synthetic shared file handles. No Windows/SMB claim.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),pw=require('playwright');
-const bridge=require('./n3-disk-bridge.cjs');
+const bridge=require('./n3-disk-bridge.cjs'),alternateHTML=require('./n3-test-html.cjs');
 const os=require('node:os');
 const root=path.resolve(__dirname,'..'),engine=process.argv[2]||'chromium',project='26.0401 Recovery Test',other='26.0402 Other Test',primary=project+'/Fotos/_Bildumbenenner.json';
 const fixture=version=>({app:'Bildumbenenner',format:version==='99.0.0'?2:1,version,projekt:{},benennung:{},reihenfolge:['a.jpg','b.jpg'],bilder:{'a.jpg':{beschreibung:'Disk A'},'b.jpg':{beschreibung:'Disk B'}},extension:{must:['remain',42]}});
 (async()=>{
- const files=new Map(),dirs=new Set(['',project,project+'/Fotos',other,other+'/Fotos']);let deny=false;
+ const files=new Map(),dirs=new Set(['',project,project+'/Fotos',other,other+'/Fotos']);let deny=false,offerUpdate=false;
  const put=(n,v)=>files.set(n,Buffer.from(Buffer.isBuffer(v)||typeof v==='string'?v:JSON.stringify(v)));
  const image=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64');
  for(const p of [project,other]){put(p+'/Fotos/_Bildumbenenner.json',fixture('99.0.0'));for(const n of ['a.jpg','b.jpg'])put(p+'/Fotos/'+n,image);}
- const server=http.createServer((req,res)=>{const f=path.resolve(root,'.'+new URL(req.url,'http://x').pathname);const file=f===root?path.join(root,'index.html'):f;if(!file.startsWith(root+path.sep)||!fs.existsSync(file)){res.writeHead(404).end();return;}res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':file.endsWith('.html')?'text/html':'application/octet-stream');res.end(fs.readFileSync(file));});await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ const server=http.createServer((req,res)=>{const f=path.resolve(root,'.'+new URL(req.url,'http://x').pathname);const file=f===root?path.join(root,'index.html'):f;if(!file.startsWith(root+path.sep)||!fs.existsSync(file)){res.writeHead(404).end();return;}res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':file.endsWith('.html')?'text/html':'application/octet-stream');res.end(offerUpdate&&new URL(req.url,'http://x').searchParams.has('fotokit-update')?alternateHTML(fs.readFileSync(file,'utf8')):fs.readFileSync(file));});await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const browser=await pw[engine].launch(),errors=[];let context=await browser.newContext({serviceWorkers:'block',viewport:{width:1400,height:1000}});
  async function prepare(context){
  await context.exposeBinding('__n3io',async(_,a)=>{
@@ -51,10 +51,11 @@ const fixture=version=>({app:'Bildumbenenner',format:version==='99.0.0'?2:1,vers
   await p.evaluate(()=>{const set=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k.startsWith('fotokit-recovery-v1:'))throw new DOMException('Synthetic quota full','QuotaExceededError');return set.call(this,k,v);};});
   await p.locator('#list .desc').first().fill('LOCAL STORAGE FAILURE');await p.locator('#recoveryStatus').filter({hasText:/NICHT lokal gesichert/}).waitFor();assert.equal(await p.evaluate(()=>{const e=new Event('beforeunload',{cancelable:true});window.dispatchEvent(e);return e.defaultPrevented;}),true);assert.equal(await p.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('fotokit-recovery-v1:')).length),count);
   console.log('PASS N3 FAILURE: local journal write failure visible, warning retained, previous copies not deleted');
-  await p.close();put(primary,fixture('1.9.5'));deny=true;p=await page();await open(p);await p.locator('#list .desc').first().fill('FAILED PROJECT WRITE');await p.locator('#bSaveRetry').waitFor();await p.evaluate(()=>document.getElementById('btnUpd').hidden=false);let nav=0;p.on('framenavigated',()=>nav++);await p.locator('#btnUpd').click();await p.locator('#banner').filter({hasText:/Update wurde deshalb abgebrochen/}).waitFor();assert.equal(nav,0);assert.equal(await p.locator('#list .desc').first().inputValue(),'FAILED PROJECT WRITE');
+  await p.close();put(primary,fixture('1.9.5'));deny=true;p=await page();await open(p);await p.locator('#list .desc').first().fill('FAILED PROJECT WRITE');await p.locator('#bSaveRetry').waitFor();offerUpdate=true;await p.locator('#btnCheckUpdate').click();await p.locator('#btnUpd').waitFor();let nav=0;p.on('framenavigated',()=>nav++);await p.locator('#btnUpd').click();await p.locator('#banner').filter({hasText:/Update wurde deshalb abgebrochen/}).waitFor();assert.equal(nav,0);assert.equal(await p.locator('#list .desc').first().inputValue(),'FAILED PROJECT WRITE');
   console.log('PASS N3 FAILURE: failed project write blocks update, actual input retained locally');
   deny=false;await p.locator('#bSaveRetry').click();await p.locator('#recoveryStatus').filter({hasText:/Projekt gespeichert/}).waitFor();assert.equal(JSON.parse(files.get(primary)).bilder['a.jpg'].beschreibung,'FAILED PROJECT WRITE');
   console.log('PASS N3 RETRY: successful project commit distinguished from local-only recovery copy');
+  offerUpdate=false;
   // Real browser-process restart with a persistent synthetic profile, same origin.
   await context.close();
   const profile=fs.mkdtempSync(path.join(os.tmpdir(),'n3-recovery-profile-'));
