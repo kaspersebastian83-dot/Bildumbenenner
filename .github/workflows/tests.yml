@@ -25,8 +25,13 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+      - run: node tools/build-identity.cjs --check
       - run: node tests/laborwerte.cjs
       - run: node tests/pdf-layout.cjs
+      - run: node tests/project-store.cjs
+      - run: node tests/unknown-fields.cjs
+      - run: node tests/n2-speichersicherheit.cjs
+      - run: node tests/n3-await-condition.cjs
 
   browser-tests:
     name: Browser tests (${{ matrix.browser }})
@@ -51,8 +56,17 @@ jobs:
           "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps ${{ matrix.browser }}
       - name: PDF design, exact image streams, logo and pagination
         run: node tests/pdf-layout-browser.cjs ${{ matrix.browser }}
+      - name: Loaded build and safe update UX
+        run: |
+          node tests/n3-updates-browser.cjs ${{ matrix.browser }}
+          node tests/n3-recovery-browser.cjs ${{ matrix.browser }}
+          node tests/n3-offline-browser.cjs ${{ matrix.browser }}
       - name: Project data (_Projekt.json) in the real browser
         run: node tests/projektdaten-browser.cjs ${{ matrix.browser }}
+      - name: Independent F3 sessions and explicit recovery (synthetic shared disk)
+        run: node tests/project-store-browser.cjs ${{ matrix.browser }}
+      - name: F6 unknown JSON fields, editing, retry, exports and future-version protection
+        run: node tests/unknown-fields-browser.cjs ${{ matrix.browser }}
       - name: Mosaik bar (project, steps, next step) in the real browser
         run: node tests/leiste-browser.cjs ${{ matrix.browser }}
       - name: Fotos folder → project, sort by section, PDF name without overwriting
@@ -69,3 +83,5 @@ jobs:
         run: node tests/bildnummerierung-browser.cjs ${{ matrix.browser }}
       - name: Active project context stays consistent across URL, FotoKit and suite navigation
         run: node tests/projektkontext-browser.cjs ${{ matrix.browser }}
+      - name: Independent sessions retain complete confirmed photo metadata and explicit recovery
+        run: node tests/n2-speichersicherheit-browser.cjs ${{ matrix.browser }}

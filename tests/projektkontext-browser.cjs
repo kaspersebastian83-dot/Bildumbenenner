@@ -1,3 +1,4 @@
+const { waitForAsync } = require('./await-condition.cjs');
 // Synthetische OPFS-Projekte; echte App, URL, Leiste und Picker-Bedienung.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -9,7 +10,12 @@ const projects = {A: '26.0901 Köln & Süd + 50% #Hof', B: '26.0902 Kontext B', 
 let browser, server;
 (async () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'));
-  server = http.createServer((req, res) => {res.writeHead(200, {'content-type': 'text/html; charset=utf-8'});res.end(html);});
+  server = http.createServer((req, res) => {
+    if(new URL(req.url,'http://x').pathname === '/project-store.js'){
+      res.writeHead(200,{'content-type':'application/javascript'});res.end(fs.readFileSync(path.join(__dirname,'..','project-store.js')));return;
+    }
+    res.writeHead(200, {'content-type': 'text/html; charset=utf-8'});res.end(html);
+  });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}/index.html`;
   browser = await playwright[name].launch();
@@ -194,7 +200,7 @@ let browser, server;
       await stillA('A vor Lesefehler');
       await page.evaluate(failure => io[failure] = false, failure);assert.deepEqual(await disk('B'), b);
       await page.locator('#list .desc').fill('A nach Lesefehler');
-      await page.waitForFunction(async () => {
+      await waitForAsync(page, async () => {
         const root = await navigator.storage.getDirectory(), a = await (await root.getDirectoryHandle('Archiv')).getDirectoryHandle('26.0901 Köln & Süd + 50% #Hof');
         const data = JSON.parse(await (await (await (await a.getDirectoryHandle('Fotos')).getFileHandle('_Bildumbenenner.json')).getFile()).text());
         return data.bilder['A_01.jpg'].beschreibung === 'A nach Lesefehler';
@@ -237,6 +243,9 @@ let browser, server;
     await page.evaluate(() => {io.failRead = true;releaseRead();});
     await page.waitForFunction(() => !document.body.inert && document.querySelector('#banner').textContent.includes('konnte nicht geöffnet'));
     await stillA('A erhaltene Eingabe');
+    await page.locator('[data-pj-recovery]').click();
+    await page.locator('[data-pj-recovery-dialog] h3').filter({hasText:projects.A}).waitFor();
+    await page.locator('[data-pj-recovery-dialog]').getByRole('button',{name:'Schließen',exact:true}).click();
     await page.evaluate(() => {io.failRead = false;io.holdJSON = false;if (window.releaseJSON) releaseJSON();});
     await page.waitForTimeout(700);
     assert.deepEqual(await disk('B'), beforeB, 'Fehlgeschlagener Wechsel darf B nicht verändern');
@@ -260,7 +269,7 @@ let browser, server;
     await page.waitForTimeout(650);
     assert.deepEqual(await disk('B'), b, 'Beim Laden noch keine Ziel-Schreibvorgänge');
     await page.evaluate(() => releaseRead());await contextIs('B');
-    await page.waitForFunction(async () => {
+    await waitForAsync(page, async () => {
       const r = await navigator.storage.getDirectory();
       const p = await (await r.getDirectoryHandle('Archiv')).getDirectoryHandle('26.0902 Kontext B');
       const h = await (await p.getDirectoryHandle('Fotos')).getFileHandle('_Bildumbenenner.json');
@@ -304,10 +313,11 @@ let browser, server;
 
   await scenario('Unbekannten Fotos-Ordner öffnen und nachträglich richtig zuordnen', async ({page, start, open, disk}) => {
     await start();const beforeU = await disk('U');await open('unknown');
-    await page.waitForFunction(() => !document.body.inert && document.getElementById('btnAssign'));
+    await page.waitForFunction(() => !document.body.inert && document.getElementById('btnAssign') && !document.querySelector('#mosaikLeiste .ml-proj b'));
     assert.equal(new URL(page.url()).searchParams.has('projekt'), false);assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).has('projekt'), false);assert.equal(new URL(page.url()).searchParams.get('ansicht'), 'liste');
     assert.equal(await page.locator('#projBadge').isVisible(), false);assert.equal(await page.locator('#mosaikLeiste .ml-proj b').count(), 0);
     assert.match(await page.locator('#folderName').textContent(), /Projekt unbekannt/);assert.equal(await page.locator('#mosaikLeiste a.ml-step').count(), 0);
+    assert.equal(await page.locator('[data-pj-recovery]').count(),0,'unassigned folder has no stale recovery action');
     await page.locator('#list .desc').fill('U nachträgliche Beschreibung');
     await page.evaluate(() => window.nextFolder = 'A');await page.locator('#btnAssign').click();
     await page.waitForFunction(() => document.getElementById('banner').textContent.includes('nicht der Projektordner'));

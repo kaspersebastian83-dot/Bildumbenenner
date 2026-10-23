@@ -43,6 +43,10 @@ jobs:
           for test in tests/laborwerte.cjs tests/pdf-layout.cjs tests/n2-speichersicherheit.cjs tests/unknown-fields.cjs tests/project-store.cjs; do
             node "$test" | tee "$RUNNER_TEMP/n2-results/$(basename "$test").log"
           done
+      - name: Immutable pre-F6 old client for N3 attack
+        run: |
+          git -C combined worktree add --detach "$RUNNER_TEMP/n4-old" b616164f5ab24faa5371f4eb714276f6080a8bf3
+          echo "N3_OLD_ROOT=$RUNNER_TEMP/n4-old" >> "$GITHUB_ENV"
       - name: All browser regressions
         working-directory: combined
         shell: bash

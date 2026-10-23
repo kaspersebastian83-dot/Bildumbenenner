@@ -1,0 +1,118 @@
+name: N3 old client attack and pinned compatibility
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: n3-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  combined:
+    name: N3 + F3/F6/N2/PDF (${{ matrix.browser }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Prepare immutable old client and pinned combination
+        run: |
+          mkdir -p "$RUNNER_TEMP/n3-results"
+          git worktree add --detach "$RUNNER_TEMP/n3-old" b616164f5ab24faa5371f4eb714276f6080a8bf3
+          node tools/n3-compose-compat.cjs "$RUNNER_TEMP/n3-combined" | tee "$RUNNER_TEMP/n3-results/composition.log"
+      - name: Install pinned browser
+        run: |
+          npm install --no-save --no-package-lock --prefix "$RUNNER_TEMP/pw" playwright@1.56.1
+          echo "NODE_PATH=$RUNNER_TEMP/pw/node_modules" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps ${{ matrix.browser }}
+      - name: All Node regressions and real old client attack
+        shell: bash
+        env:
+          PDF_COMBINED: '1'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/n3-combined"
+          node tools/build-identity.cjs --check
+          for test in tests/laborwerte.cjs tests/n3-await-condition.cjs tests/project-store.cjs tests/unknown-fields.cjs tests/n2-speichersicherheit.cjs tests/n3-writer-conflict.cjs tests/pdf-layout.cjs; do
+            node "$test" | tee "$RUNNER_TEMP/n3-results/$(basename "$test").log"
+          done
+          N3_OLD_ROOT="$RUNNER_TEMP/n3-old" N3_RESULTS="$RUNNER_TEMP/n3-results" node tests/n3-altclient-browser.cjs "${{ matrix.browser }}" | tee "$RUNNER_TEMP/n3-results/old-client.log"
+      - name: All existing and new browser regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/n3-combined"
+          for test in tests/*-browser.cjs; do
+            if [[ "$test" == tests/n3-altclient-browser.cjs ]]; then continue; fi
+            node "$test" "${{ matrix.browser }}" | tee "$RUNNER_TEMP/n3-results/$(basename "$test").log"
+          done
+      - name: Shared F3 protocol and cross-application recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --no-checkout https://github.com/kaspersebastian83-dot/Projektzentrale.git "$RUNNER_TEMP/n3-central"
+          git -C "$RUNNER_TEMP/n3-central" checkout e7b8c4e3819a4ce54fe2dc2ac91bb731e040896f
+          cd "$RUNNER_TEMP/n3-combined"
+          cmp project-store.js "$RUNNER_TEMP/n3-central/project-store.js"
+          node tests/project-store-browser.cjs "${{ matrix.browser }}" "$RUNNER_TEMP/n3-central" | tee "$RUNNER_TEMP/n3-results/f3-cross-app.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: n3-combined-${{ matrix.browser }}
+          path: ${{ runner.temp }}/n3-results/
+  suite:
+    name: N3 pinned Spektron security integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Compose N3 and unchanged suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tools/n3-compose-compat.cjs "$RUNNER_TEMP/n3-combined"
+          git clone --no-checkout https://github.com/kaspersebastian83-dot/Projektzentrale.git "$RUNNER_TEMP/n3-central"
+          git -C "$RUNNER_TEMP/n3-central" checkout e7b8c4e3819a4ce54fe2dc2ac91bb731e040896f
+          cd "$RUNNER_TEMP/n3-central"
+          node --test tests/integration/provenance.test.mjs
+          node tests/integration/prepare.mjs
+          git -C tests/.integration-work/Bildumbenenner fetch "$RUNNER_TEMP/n3-combined" HEAD
+          git -C tests/.integration-work/Bildumbenenner checkout --detach FETCH_HEAD
+          node - <<'JS'
+          const fs=require('fs'),cp=require('child_process'),p='tests/integration/stand.json',m=JSON.parse(fs.readFileSync(p));
+          m.Bildumbenenner=cp.execFileSync('git',['-C',process.env.RUNNER_TEMP+'/n3-combined','rev-parse','HEAD'],{encoding:'utf8'}).trim();
+          fs.writeFileSync(p,JSON.stringify(m,null,2)+'\n');
+          JS
+          node "$RUNNER_TEMP/n3-combined/tests/n2-adapt-suite.cjs" "$RUNNER_TEMP/n3-central"
+      - name: Install Chromium
+        run: |
+          npm install --no-save --no-package-lock --prefix "$RUNNER_TEMP/pw" playwright@1.56.1
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/pw/node_modules/playwright" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Full producer consumer and security integration
+        run: cd "$RUNNER_TEMP/n3-central" && node tests/integration/run.mjs --security
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: n3-spektron-integration
+          path: |
+            ${{ runner.temp }}/n3-central/tests/integration/results/
+            ${{ runner.temp }}/n3-central/tests/integration/stand.json
