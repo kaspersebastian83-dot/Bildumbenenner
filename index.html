@@ -331,6 +331,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
       <button id="btnOpen" class="primary">Projekt öffnen …</button>
       <button id="btnReload" disabled>Fotos neu einlesen</button>
       <button id="btnMeta" disabled>Projektdaten …</button><span id="pjRecovery"></span>
+      <button id="btnVersions" disabled>Gesicherte Fassungen …</button>
     </div>
     <span class="spacer"></span>
     <div class="toolgroup" role="group" aria-label="Bildbearbeitung und Sortierung">
@@ -496,7 +497,7 @@ const TMP_PREFIX = 'umb-tmp_';
 const PROJ_FILE = '_Bildumbenenner.json';
 const PROJ_KINDS = ['drafts', 'discard', 'rot', 'extra', 'orig', 'hash', 'order', 'meta'];
 const NAMING_KEYS = ['prefix', 'date', 'num', 'start', 'digits', 'sep', 'spaces', 'uml', 'lower', 'probe', 'discard', 'sort'];
-const P = { loading: false, session: null, onSaved: null, data: null, base: null, lastText: null, timer: null, writing: Promise.resolve(true), writes: 0, dirty: false, failed: false, readOnly: false };
+const P = { loading: false, session: null, onSaved: null, data: null, base: null, lastText: null, lastBytes: null, timer: null, writing: Promise.resolve(true), writes: 0, dirty: false, failed: false, readOnly: false };
 const PROTECTED_PROJECT = 'Dieses Projekt kann mit der aktuellen FotoKit-Version nicht sicher bearbeitet werden. Die Originalfotos sind deshalb vor Umbenennung und Verschieben geschützt. Für eine Bearbeitung ist eine kompatible FotoKit-Version beziehungsweise eine lesbare Projektdatei erforderlich. Änderungen in dieser Sitzung werden nicht im Projekt gespeichert.';
 const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
 const pickNaming = c => Object.fromEntries(NAMING_KEYS.filter(k => k in c).map(k => [k, c[k]]));
@@ -580,6 +581,93 @@ function projFromJson(o){
   return d;
 }
 
+// Full immutable UTF-8 snapshots. These are recovery records, not a cross-machine lock.
+const PHOTO_ARCHIVE = '_FotoKit_Fassungen';
+const PHOTO_VERSION = /^(ausgang|vorher|kandidat|bestaetigt)_\d{8}T\d{9}Z_[0-9a-f-]{36}\.json$/;
+const photoEncode = text => new TextEncoder().encode(text);
+const photoEqual = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+async function photoSnapshot(dir, name = PROJ_FILE){
+  let handle;
+  try{ handle = await dir.getFileHandle(name); }
+  catch(e){ if (e.name === 'NotFoundError') return { exists:false, bytes:new Uint8Array(), text:null }; throw e; }
+  const bytes = new Uint8Array(await (await handle.getFile()).arrayBuffer());
+  return { exists:true, bytes };
+}
+function photoText(snapshot){ return new TextDecoder('utf-8', { fatal:true }).decode(snapshot.bytes); }
+function photoParse(snapshot){
+  const o = JSON.parse(photoText(snapshot));
+  if (o.reihenfolge !== undefined && (!Array.isArray(o.reihenfolge) || o.reihenfolge.some(n => typeof n !== 'string'))) throw new Error('Ungültige Bildreihenfolge.');
+  projFromJson(o); // Validate the same structural rules used when opening a project.
+  const problem = projectWriteProblem(o);
+  if (problem) throw new Error(problem);
+  return o;
+}
+function photoSame(a, b){ return a.exists === b.exists && photoEqual(a.bytes, b.bytes); }
+async function photoPut(handle, bytes){
+  let writable;
+  try{
+    writable = await handle.createWritable();
+    // Text for browser filesystem bridges, bytes for explicitly preserved damaged UTF-8.
+    let value = bytes;
+    try{ const text = new TextDecoder('utf-8', { fatal:true, ignoreBOM:true }).decode(bytes); if (photoEqual(photoEncode(text), bytes)) value = text; }catch(_){}
+    await writable.write(value); await writable.close(); writable = null;
+  }finally{ if (writable) try{ await writable.abort(); }catch(_){} }
+}
+async function photoBackup(dir, kind, bytes){
+  const archive = await dir.getDirectoryHandle(PHOTO_ARCHIVE, { create:true });
+  const name = kind + '_' + new Date().toISOString().replace(/[-:.]/g, '') + '_' + crypto.randomUUID() + '.json';
+  try{ await archive.getFileHandle(name); throw new Error('Sicherungsname bereits belegt. Bitte erneut speichern.'); }
+  catch(e){ if (e.name !== 'NotFoundError') throw e; }
+  await photoPut(await archive.getFileHandle(name, { create:true }), bytes);
+  const saved = await photoSnapshot(archive, name);
+  if (!saved.exists || !photoEqual(saved.bytes, bytes)) throw new Error('Die vollständige Sicherung konnte nicht bytegenau geprüft werden. Hauptdatei nicht ersetzt.');
+  return name;
+}
+const photoConflict = () => new Error('Die Projektdatei wurde gleichzeitig geändert. Vollständige gesicherte Fassungen bleiben erhalten. Bitte „Gesicherte Fassungen“ prüfen und das Projekt neu einlesen.');
+async function photoCommit(dir, before, bytes, active = () => true){
+  if (!active()) throw new Error('Das geöffnete Projekt hat sich geändert.');
+  if (before.exists) await photoBackup(dir, 'vorher', before.bytes);
+  await photoBackup(dir, 'kandidat', bytes);
+  if (!active()) throw new Error('Das geöffnete Projekt hat sich geändert.');
+  const compared = await photoSnapshot(dir);
+  if (!photoSame(compared, before)) throw photoConflict();
+  const handle = await dir.getFileHandle(PROJ_FILE, { create:true });
+  // A first creation can expose an empty file before its stream is committed.
+  // A second missing->empty transition is accepted only for this creation window.
+  const last = await photoSnapshot(dir);
+  if (!photoSame(last, before) && !(before.exists === false && last.exists && !last.bytes.length)) throw photoConflict();
+  if (!active()) throw new Error('Das geöffnete Projekt hat sich geändert.');
+  await photoPut(handle, bytes);
+  const after = await photoSnapshot(dir);
+  if (!after.exists || !photoEqual(after.bytes, bytes)) throw photoConflict();
+  // This full confirmation snapshot also survives a subsequent independent writer.
+  await photoBackup(dir, 'bestaetigt', bytes);
+}
+async function photoVersions(dir){
+  const current = await photoSnapshot(dir), items = [], invalid = [];
+  let archive;
+  try{ archive = await dir.getDirectoryHandle(PHOTO_ARCHIVE); }
+  catch(e){ if (e.name === 'NotFoundError') return { current, items, invalid }; throw e; }
+  for await (const handle of archive.values()){
+    if (handle.kind !== 'file' || !PHOTO_VERSION.test(handle.name)) continue;
+    try{
+      const snapshot = await photoSnapshot(archive, handle.name), data = photoParse(snapshot);
+      items.push({ name:handle.name, snapshot, data, current:photoSame(current, snapshot) });
+    }catch(e){ invalid.push({ name:handle.name, problem:e.message }); }
+  }
+  items.sort((a, b) => b.name.slice(b.name.indexOf('_') + 1).localeCompare(a.name.slice(a.name.indexOf('_') + 1)));
+  return { current, items, invalid };
+}
+async function restorePhotoVersion(dir, version, expected, active = () => true){
+  if (!PHOTO_VERSION.test(version.name)) throw new Error('Ungültige Fassung.');
+  const archive = await dir.getDirectoryHandle(PHOTO_ARCHIVE), chosen = await photoSnapshot(archive, version.name);
+  photoParse(chosen);
+  if (!photoSame(chosen, version.snapshot)) throw new Error('Die ausgewählte Sicherung wurde geändert. Bitte die Fassungen erneut öffnen.');
+  if (!photoSame(await photoSnapshot(dir), expected)) throw photoConflict();
+  // Explicit restoration also preserves an unreadable/unsupported current file as raw bytes.
+  await photoCommit(dir, expected, chosen.bytes, active);
+}
+
 function scheduleProjSave(){
   if (!P.data || P.readOnly) return;
   P.dirty = true; clearTimeout(P.timer);
@@ -592,28 +680,30 @@ function flushProject(){
   const dir = S.dir, session = P.session;
   P.writes++;
   P.writing = P.writing.then(async () => {
-    let writable = null;
     try{
       if (P.session !== session) return false;
-      const fh = await dir.getFileHandle(PROJ_FILE, { create: true });
-      // someone else (a coworker, another window) saved since we loaded or last wrote → merge instead of overwriting
-      const onDisk = await (await fh.getFile()).text();
-      // Never serialize a different project after an asynchronous file read.
+      const onDisk = await photoSnapshot(dir);
       if (P.session !== session) return false;
-      if (onDisk.trim() && onDisk !== P.lastText){
-        let theirs;
-        try{ const o = JSON.parse(onDisk); theirs = projFromJson(o); requireWritableProject(o); }
-        catch(e){ if (P.readOnly) throw e; throw new Error('die Datei wird gerade von jemand anderem gespeichert oder ist beschädigt – neuer Versuch beim nächsten Speichern'); }
-        mergeExternal(theirs);
-      }
-      const saved = clone(P.data), json = projToJson(saved);
-      writable = await fh.createWritable(); await writable.write(json); await writable.close(); writable = null;
+      // Preserve the exact loaded bytes even if a different writer already replaced them.
+      if (P.lastBytes) await photoBackup(dir, 'ausgang', P.lastBytes);
+      if (onDisk.exists){
+        let object;
+        try{ object = photoParse(onDisk); }
+        catch(e){ requireWritableProject(JSON.parse(photoText(onDisk))); throw e; }
+        if (photoText(onDisk) !== P.lastText){
+          // Keep the complete local proposal before reconciling unrelated changes.
+          await photoBackup(dir, 'kandidat', photoEncode(projToJson(clone(P.data))));
+          if (P.session !== session) return false;
+          mergeExternal(projFromJson(object));
+        }
+      } else if (P.lastBytes){ throw photoConflict(); }
+      const saved = clone(P.data), json = projToJson(saved), bytes = photoEncode(json);
+      await photoCommit(dir, onDisk, bytes, () => P.session === session);
       if (P.session !== session) return false;
-      P.lastText = json; P.base = saved;
+      P.lastText = json; P.lastBytes = bytes; P.base = saved;
       if (P.failed){ P.failed = false; if (!PJ.failed) hideBanner(); }
       return true;
     }catch(e){
-      if (writable){ try{ await writable.abort(); }catch(_){} }
       if (P.session !== session) return false;
       P.dirty = true;
       if (!P.failed){ P.failed = true; saveError(`Projektdatei „${PROJ_FILE}“ konnte nicht gespeichert werden: ${esc(e.message)}.`); }
@@ -638,7 +728,6 @@ function mergeMap(b, o, t, kind, out){
     let v;
     if (same(o[k], b[k])){ v = t[k]; if (!same(t[k], o[k]) && kind !== 'hash') out.theirs.add(['meta', 'settings', 'extensions'].includes(kind) ? '' : k); }
     else if (same(t[k], b[k]) || same(t[k], o[k])) v = o[k];
-    else if (kind === 'hash') v = t[k];            // checksum cache: either one is fine
     else { v = o[k]; out.conflicts.add(['meta', 'settings', 'extensions'].includes(kind) ? 'Projektdaten' : k); }
     if (v !== undefined) r[k] = clone(v);
   }
@@ -654,9 +743,14 @@ function mergeExternal(theirs){
   m.discard = Object.keys(mergeMap(asSet(b.discard), asSet(o.discard), asSet(theirs.discard), 'discard', out));
   const orderChanged = !same(o.order, b.order) ? false : !same(theirs.order, o.order);
   m.order = same(o.order, b.order) ? (theirs.order || []) : o.order;
-  out.theirs.delete('');
+  if (!same(o.order, b.order) && !same(theirs.order, b.order) && !same(o.order, theirs.order)) out.conflicts.add('Bildreihenfolge');
+  if (out.conflicts.size){
+    banner('err', 'Widersprüchliche Änderungen wurden nicht zusammengeführt. Deine Eingaben bleiben geöffnet. Bitte „Gesicherte Fassungen“ prüfen; eine Wiederherstellung muss ausdrücklich bestätigt werden.');
+    throw new Error('Widersprüchliche Änderungen: ' + [...out.conflicts].join(', '));
+  }
   P.data = m;
   applyMergedToItems(orderChanged);
+  out.theirs.delete('');
   const known = new Set(S.items.map(it => it.name));
   const unknown = [...new Set([...Object.keys(theirs.drafts || {}), ...Object.keys(theirs.orig || {}), ...(theirs.order || [])])].filter(n => !known.has(n) && !(n in (b.drafts || {})) && !(n in (b.orig || {})) && !(b.order || []).includes(n));
   const nT = out.theirs.size, nC = out.conflicts.size;
@@ -675,16 +769,19 @@ function mergeExternal(theirs){
 /* coming back to the window: pick up what others saved meanwhile, without writing anything ourselves */
 async function checkExternal(){
   if (!S.dir || !P.data || P.readOnly || S.busy || S.changing) return;
-  const dir = S.dir;
+  const dir = S.dir, session = P.session;
   await P.writing;
-  if (S.changing || S.dir !== dir) return;
+  if (S.changing || S.dir !== dir || P.session !== session) return;
   try{
-    const onDisk = await (await (await dir.getFileHandle(PROJ_FILE)).getFile()).text();
-    if (S.dir !== dir || !onDisk.trim() || onDisk === P.lastText) return;
+    const snapshot = await photoSnapshot(dir);
+    const onDisk = snapshot.exists ? photoText(snapshot) : '';
+    if (S.dir !== dir || P.session !== session || !onDisk.trim() || onDisk === P.lastText) return;
     const o = JSON.parse(onDisk), theirs = projFromJson(o);
     requireWritableProject(o);
+    if (P.lastBytes) await photoBackup(dir, 'ausgang', P.lastBytes);
+    if (P.session !== session || S.dir !== dir || S.changing) return;
     mergeExternal(theirs);
-    P.lastText = onDisk; P.base = projFromJson(JSON.parse(onDisk));
+    P.lastText = onDisk; P.lastBytes = snapshot.bytes; P.base = projFromJson(JSON.parse(onDisk));
     if (!same(P.data, P.base)) scheduleProjSave();      // our unsaved changes still have to be written
   }catch(e){ /* not there yet / being written – the next save merges anyway */ }
 }
@@ -750,10 +847,12 @@ async function loadProject(dir){
   P.session = {}; P.onSaved = null;
   clearTimeout(P.timer); P.dirty = false; P.failed = false; P.readOnly = false;
   let d = null, note = '';
-  P.lastText = null; P.base = null;
+  P.lastText = null; P.lastBytes = null; P.base = null;
   try{
-    const txt = await (await (await dir.getFileHandle(PROJ_FILE)).getFile()).text();
-    P.lastText = txt;
+    const snapshot = await photoSnapshot(dir);
+    if (!snapshot.exists) throw new DOMException('Projektdatei fehlt', 'NotFoundError');
+    const txt = photoText(snapshot);
+    P.lastText = txt; P.lastBytes = snapshot.bytes;
     // Only a missing file is a new project. An existing empty/truncated file
     // cannot safely tell us which metadata belongs to the original photos.
     const o = JSON.parse(txt);
@@ -1235,6 +1334,7 @@ async function openDir(dir, proj = null){
       if (P.dirty) scheduleProjSave();
       $('btnReload').disabled = false;
       $('btnMeta').disabled = false;
+      $('btnVersions').disabled = false;
       $('btnLab').disabled = false; LAB.rep = null; LAB.err = '';
       if (note) banner(P.readOnly ? 'err' : 'info', note);
     }catch(e){
@@ -2915,6 +3015,61 @@ setTimeout(checkUpdate, 4000);
 setInterval(checkUpdate, 30 * 60 * 1000);
 
 /* ---------- info dialog ---------- */
+async function openPhotoVersions(){
+  if (!S.dir || S.busy || S.changing) return;
+  const dir = S.dir, session = P.session;
+  showDialog('<h3>Gesicherte FotoKit-Fassungen</h3><p>Lese gesicherte Fassungen …</p><button id="vClose">Schließen</button>');
+  $('vClose').onclick = closeDialog;
+  try{
+    const result = await photoVersions(dir);
+    if (P.session !== session || S.dir !== dir || !$('overlay').classList.contains('show') || !$('vClose')) return;
+    const labels = { ausgang:'Geladener Ausgangsstand', vorher:'Stand vor dem Schreiben', kandidat:'Gesicherter Schreibkandidat', bestaetigt:'Nach dem Schreiben bestätigt' };
+    showDialog(`<h3>Gesicherte FotoKit-Fassungen</h3>
+      <p>Jede Fassung enthält die vollständigen Bildmetadaten. „Bestätigt“ bedeutet: nach dem Schreiben erneut gelesen und geprüft. Ein Kandidat kann auch zu einem abgebrochenen Speichervorgang gehören.</p>
+      <p>Wiederherstellen ersetzt ausschließlich die FotoKit-Metadaten. Originalbilder, Dateinamen und gemeinsame Projektdaten werden nicht verändert. Nach früheren Umbenennungen können Dateinamen abweichen. Keine Fassung wird automatisch gelöscht oder zusammengeführt.</p>
+      <div class="list">${result.items.map((v, i) => `<p><b>${esc(labels[v.name.split('_')[0]])}</b>${v.current ? ' · entspricht der aktuellen Datei' : ''}<br><small>${esc(v.name)} · ${v.snapshot.bytes.length} Bytes · ${Object.keys(v.data.bilder || {}).length} Bildeinträge</small><br><button data-photo-version="${i}">Fassung ansehen …</button></p>`).join('') || '<p>Keine unterstützte Fassung gefunden.</p>'}</div>
+      ${result.invalid.length ? `<p class="warn">${result.invalid.length} beschädigte, unlesbare oder nicht unterstützte Fassungen bleiben unverändert erhalten:</p><ul>${result.invalid.map(v => `<li>${esc(v.name)}: ${esc(v.problem)}</li>`).join('')}</ul>` : ''}
+      <div class="btns"><button id="vClose">Schließen</button></div>`);
+    $('vClose').onclick = closeDialog;
+    document.querySelectorAll('[data-photo-version]').forEach(button => {
+      button.onclick = () => {
+        const version = result.items[Number(button.dataset.photoVersion)];
+        showDialog(`<h3>FotoKit-Fassung wiederherstellen?</h3><p>${esc(version.name)}</p>
+          <p>Die aktuelle Datei und noch offene FotoKit-Eingaben werden zuvor vollständig gesichert. Diese Auswahl ersetzt danach die FotoKit-Metadaten; sie kombiniert keine Fassungen. Bilder und „_Projekt.json“ bleiben unverändert.</p>
+          <pre id="vPreview" style="white-space:pre-wrap;overflow:auto;max-height:40vh"></pre>
+          <div class="btns"><button id="vBack">Zurück</button><button id="vRestore">Diese Fassung ausdrücklich wiederherstellen</button></div>`);
+        $('vPreview').textContent = photoText(version.snapshot);
+        $('vBack').onclick = openPhotoVersions;
+        $('vRestore').onclick = async () => {
+          if (P.session !== session || S.dir !== dir || S.changing || S.busy) return;
+          S.changing = true;
+          const inert = document.body.inert; document.body.inert = true;
+          try{
+            // Drain only operations already started; recovery must also work after a save conflict.
+            if (PJ.failed || Object.keys(PJ.pending).length) throw new Error('Gemeinsame Projektdaten sind noch nicht gesichert. Bitte zuerst deren Speicherung abschließen.');
+            clearTimeout(P.timer);
+            await P.writing; await PJ.writing;
+            if (P.session !== session || S.dir !== dir) throw new Error('Das Projekt hat sich geändert.');
+            flushDrafts(); saveExtra(); clearTimeout(P.timer);
+            await photoBackup(dir, 'kandidat', photoEncode(projToJson(clone(P.data))));
+            await restorePhotoVersion(dir, version, result.current, () => P.session === session && S.dir === dir);
+            await loadProject(dir);
+            P.writing = Promise.resolve(true);
+            await loadItems();
+            closeDialog();
+            banner('ok', 'Die ausdrücklich ausgewählte FotoKit-Fassung wurde bytegenau wiederhergestellt. Andere Fassungen bleiben erhalten. Originalbilder und gemeinsame Projektdaten wurden nicht verändert.');
+          }catch(e){ banner('err', 'Wiederherstellung nicht abgeschlossen: ' + esc(e.message) + ' Gesicherte Fassungen bleiben erhalten.'); }
+          finally{ S.changing = false; document.body.inert = inert; }
+        };
+      };
+    });
+  }catch(e){
+    if (P.session !== session) return;
+    showDialog('<h3>Gesicherte FotoKit-Fassungen</h3><p>' + esc(e.message) + '</p><button id="vClose">Schließen</button>');
+    $('vClose').onclick = closeDialog;
+  }
+}
+
 function openInfo(){
   showDialog(`<h3>${APP_NAME} ${APP_VERSION} <small>(früher „Bildumbenenner“)</small></h3>
     <div class="body"><table class="info">
@@ -3472,6 +3627,7 @@ $('btnInfo').textContent = 'v' + APP_VERSION;
 document.title = `${APP_NAME} ${APP_VERSION}`;
 $('btnZip').onclick = openZipDialog;
 $('btnPdf').onclick = openPdfDialog;
+$('btnVersions').onclick = openPhotoVersions;
 $('btnMeta').onclick = () => openMetaDialog(false);
 $('btnOpen2').onclick = pickFolder;
 $('btnReload').onclick = async () => {

@@ -29,6 +29,7 @@ jobs:
       - run: node tests/pdf-layout.cjs
       - run: node tests/project-store.cjs
       - run: node tests/unknown-fields.cjs
+      - run: node tests/n2-speichersicherheit.cjs
 
   browser-tests:
     name: Browser tests (${{ matrix.browser }})
@@ -75,3 +76,5 @@ jobs:
         run: node tests/bildnummerierung-browser.cjs ${{ matrix.browser }}
       - name: Active project context stays consistent across URL, FotoKit and suite navigation
         run: node tests/projektkontext-browser.cjs ${{ matrix.browser }}
+      - name: Independent sessions retain complete confirmed photo metadata and explicit recovery
+        run: node tests/n2-speichersicherheit-browser.cjs ${{ matrix.browser }}
