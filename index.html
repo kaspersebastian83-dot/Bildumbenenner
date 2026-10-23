@@ -330,7 +330,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
     <div class="toolgroup" role="group" aria-label="Projekt und Fotos">
       <button id="btnOpen" class="primary">Projekt öffnen …</button>
       <button id="btnReload" disabled>Fotos neu einlesen</button>
-      <button id="btnMeta" disabled>Projektdaten …</button>
+      <button id="btnMeta" disabled>Projektdaten …</button><span id="pjRecovery"></span>
     </div>
     <span class="spacer"></span>
     <div class="toolgroup" role="group" aria-label="Bildbearbeitung und Sortierung">
@@ -420,6 +420,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 <div id="lightbox"><img id="lbImg" alt=""></div>
 <div id="overlay"><div class="dialog" id="dialog"></div></div>
 
+<script src="project-store.js"></script>
 <script>
 (() => {
 'use strict';
@@ -934,16 +935,12 @@ async function findSubdir(dir, name){
   return null;
 }
 async function readPJ(projDir){
-  try{
-    const txt = await (await (await projDir.getFileHandle(PJ_FILE)).getFile()).text();
-    return txt.trim() ? JSON.parse(txt) : {};
-  }catch(e){ if (e.name === 'NotFoundError') return {}; throw e; }
+  return (await ProjectStore.read(projDir)).data;
 }
 /* project values fill the fields; the project file wins over this app's own copy, because it is what Projektzentrale
    and coworkers edit. Returns true if something changed. */
 /* Gemeinsame Regeln für _Projekt.json (in Projektzentrale und FotoKit identisch halten): eine Sperre je Projekt, ein Hinweistext. */
 const PJ_HINWEIS = 'Gemeinsame Projektdaten (Projektzentrale, FotoKit, PlanKit, LabelKit). Bitte nicht löschen oder umbenennen.';
-function mitPjSperre(name, fn){ return navigator.locks ? navigator.locks.request('mosaik:projekt:' + name, fn) : fn(); }
 function applyPJ(meta){
   if (!S.proj || !PJ.data) return false;
   let changed = false;
@@ -954,6 +951,16 @@ function applyPJ(meta){
     if (v && meta[k] !== v){ meta[k] = v; changed = true; }
   }
   return changed;
+}
+function mountPJRecovery(){
+  $('pjRecovery').replaceChildren();
+  PJ.recoveryRefresh=null;
+  if (!S.proj) return;
+  const proj=S.proj;
+  PJ.recoveryRefresh=ProjectStore.recoveryButton($('pjRecovery'),proj.dir,proj.name,{
+    before: async()=>{ await flushPJ(); if(S.proj!==proj || PJ.failed || Object.keys(PJ.pending).length || P.readOnly) throw Error('Bitte offene Eingaben zuerst speichern oder das Projekt bewusst neu öffnen. Geschützte Projekte bleiben unverändert.'); },
+    after: async()=>{ if(S.proj===proj){ await loadPJ(); mountPJRecovery(); banner('ok','Die ausgewählte vollständige Projektfassung wurde wiederhergestellt.'); } }
+  });
 }
 async function loadPJ(){
   PJ.data = null; PJ.sent = {}; PJ.pending = {}; PJ.failed = false;
@@ -983,24 +990,18 @@ function flushPJ(){
     // restored fields; newer edits in pending must win over those older values.
     const patch = PJ.pending;
     PJ.pending = {};
-    let writable = null;
     try{
       if (!Object.keys(patch).length) return !PJ.failed;
       /* Lesen → ändern → Schreiben unter einer Sperre je Projekt: Projektzentrale (anderer Tab) schreibt dieselbe Datei und nimmt dieselbe Sperre. */
-      const o = await mitPjSperre(proj.name, async () => {
-        const cur = await readPJ(proj.dir);
-        if (cur.format === 'mosaik-projekt' && cur.version > 1) throw new Error('die Datei stammt von einer neueren Projektzentrale');
-        const o = Object.assign({}, cur, patch, { format: 'mosaik-projekt', version: 1, hinweis: PJ_HINWEIS,
-          projektnummer: proj.nr, schadenort: proj.ort, geaendert: new Date().toISOString(), geaendertMit: APP_NAME + ' ' + APP_VERSION });
-        const fh = await proj.dir.getFileHandle(PJ_FILE, { create: true });
-        writable = await fh.createWritable(); await writable.write(JSON.stringify(o, null, 2) + '\n'); await writable.close(); writable = null;
+      const o = await ProjectStore.update(proj.dir, proj.name, cur => {
+        const o = { ...cur, ...patch, format: 'mosaik-projekt', version: 1, hinweis: PJ_HINWEIS,
+          projektnummer: proj.nr, schadenort: proj.ort, geaendert: new Date().toISOString(), geaendertMit: APP_NAME + ' ' + APP_VERSION };
         return o;
-      });
-      if (S.proj === proj) PJ.data = o;
+      }, {data:PJ.data,keys:Object.keys(patch)});
+      if (S.proj === proj){ PJ.data = o; PJ.recoveryRefresh?.(); }
       if (PJ.failed){ PJ.failed = false; if (!P.failed) hideBanner(); }
       return true;
     }catch(e){
-      if (writable){ try{ await writable.abort(); }catch(_){} }
       PJ.pending = Object.assign({}, patch, PJ.pending);
       if (!PJ.failed){ PJ.failed = true; saveError(`Gemeinsame Projektdaten („${PJ_FILE}“) konnten nicht gespeichert werden: ${esc(e.message)}.`); }
       return false;
@@ -1072,6 +1073,7 @@ function syncProjectContext(){
   PROJEKT_URL.setzen(name || null);
   activeProjectName = name;
   showProject(S.dir, S.proj);
+  mountPJRecovery();
   if (window.MosaikLeiste) MosaikLeiste.aktualisieren();
 }
 document.addEventListener('DOMContentLoaded', () => {

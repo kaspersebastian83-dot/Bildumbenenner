@@ -27,6 +27,7 @@ jobs:
           node-version: 24
       - run: node tests/laborwerte.cjs
       - run: node tests/pdf-layout.cjs
+      - run: node tests/project-store.cjs
 
   browser-tests:
     name: Browser tests (${{ matrix.browser }})
@@ -53,6 +54,8 @@ jobs:
         run: node tests/pdf-layout-browser.cjs ${{ matrix.browser }}
       - name: Project data (_Projekt.json) in the real browser
         run: node tests/projektdaten-browser.cjs ${{ matrix.browser }}
+      - name: Independent F3 sessions and explicit recovery (synthetic shared disk)
+        run: node tests/project-store-browser.cjs ${{ matrix.browser }}
       - name: Mosaik bar (project, steps, next step) in the real browser
         run: node tests/leiste-browser.cjs ${{ matrix.browser }}
       - name: Fotos folder → project, sort by section, PDF name without overwriting

@@ -8,9 +8,9 @@
    This worker therefore only ever touches caches with its own prefix and only answers requests inside its own scope. */
 const SCOPE = self.registration.scope;
 const PREFIX = 'bildumbenenner:' + SCOPE + ':';
-const CACHE = PREFIX + 'v2';
+const CACHE = PREFIX + 'v3';
 const LEGACY = ['bildumbenenner'];                       // cache name used by 1.1.0 – removed on update
-const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png']
+const ASSETS = ['./', './index.html', './project-store.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png']
   .map(f => new URL(f, SCOPE).href);
 const INDEX = new URL('index.html', SCOPE).href;
 
