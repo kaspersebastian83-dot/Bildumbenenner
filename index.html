@@ -319,12 +319,16 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 <header>
   <div class="appbar">
     <div class="brand"><span class="hex">⬡</span> FotoKit <small>Bilddokumentation</small></div>
-    <button id="btnInfo" class="hbadge" title="Version, Speicherorte, Änderungen, Problem melden">v1.9.4</button>
+    <button id="btnInfo" class="hbadge" title="Geladene Version und Build, Speicherorte, Änderungen, Problem melden">Version und Build</button>
     <button id="btnHelp" class="hbadge help" title="Kurzanleitung (F1)"><b>?</b> Kurzanleitung</button>
     <button id="btnUpd" class="upd" hidden title="Neu laden lädt die neue Version – ungespeicherte Änderungen werden vorher gesichert">Update verfügbar – neu laden</button>
     <span class="spacer"></span>
     <span class="projbadge" id="projBadge" hidden></span>
     <span class="folder" id="folderName"></span>
+  </div>
+  <div class="bar" style="font-size:12px;flex-wrap:wrap" aria-label="Programmstand">
+    <span id="buildStatus" role="status">Programmstand wird geprüft …</span>
+    <button id="btnCheckUpdate">Programmstand prüfen</button>
   </div>
   <div class="bar">
     <div class="toolgroup" role="group" aria-label="Projekt und Fotos">
@@ -450,6 +454,8 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.9.5';
+// Generated from this HTML's bytes with the build value normalized; no project format change.
+const APP_BUILD = 'sha256:cb3aff031527d5ca6d626f29e3e4e52d7f01fbaff5fd7c19097febf06b5443b6';
 const APP_DATE = '2026-10-21';
 const CHANGELOG = [
   ['1.9.5', '21.10.2026', 'Einheitliche Bildnummern: Alle aktiven Bilder zählen in Listenreihenfolge ab 1, auch ohne Beschreibung. Vorschau, PDF, ZIP, CSV und Labor-Fotoreferenzen verwenden dieselben Nummern; eine Exportauswahl behält diese bei. Die Dateinummer folgt mit der eingestellten Startnummer derselben Position. Originalname und geplanter Dateiname sind sichtbar. Sortieren ändert keine Dateien; geplante Änderungen müssen ausdrücklich ausgeführt werden. Umbenennen erhält die Dokumentationsreihenfolge als manuelle Sortierung.'],
@@ -2996,23 +3002,55 @@ async function doPdf(meta){
 /* ---------- online version: offline cache + update notice ----------
    Only when served over https (GitHub Pages). Opened as a local file, the app behaves exactly as before. */
 const IS_WEB = location.protocol === 'https:' || location.hostname === 'localhost';
-if (IS_WEB && 'serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+let updateRegistration = null, updateChecking = false;
+function updateStatus(text){ $('buildStatus').textContent = text; }
+if (IS_WEB && 'serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(reg => {
+    updateRegistration = reg;
+    reg.addEventListener('updatefound', () => {
+      updateStatus('Programmaktualisierung wird geladen. Offene Fenster behalten ihren bisherigen Code.');
+    });
+  }).catch(() => updateStatus('Offline-Bereitschaft nicht bestätigt. Programmstand bitte online prüfen.'));
+  // Claiming a page changes its network controller, never its running application.
+  navigator.serviceWorker.addEventListener('controllerchange', () => { checkUpdate(); });
+}
 async function checkUpdate(){
-  if (!IS_WEB || !navigator.onLine) return;
+  if (!IS_WEB){ updateStatus('Lokale Datei: kein Online-Versionsnachweis. Build im Infofenster prüfen.'); return; }
+  if (updateChecking) return;
+  updateChecking = true;
+  const abort = new AbortController(), timer = setTimeout(() => abort.abort(), 6000);
+  updateStatus('Online-Programmstand wird geprüft …');
   try{
-    const txt = await (await fetch('./index.html', { cache: 'no-store' })).text();
-    const m = txt.match(/const APP_VERSION = '(\d+\.\d+\.\d+)'/);
-    if (m && verCmp(m[1], APP_VERSION) > 0){
-      const b = $('btnUpd');
-      b.textContent = `Version ${m[1]} verfügbar – neu laden`; b.hidden = false;
-    }
-  }catch(e){}
+    const res = await fetch('./index.html?fotokit-update=1', { cache: 'no-store', signal: abort.signal });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const txt = await res.text();
+    const v = txt.match(/const APP_VERSION = '(\d+\.\d+\.\d+)'/);
+    const build = txt.match(/const APP_BUILD = '(sha256:[a-f0-9]{64})'/);
+    if (!v || !build) throw new Error('Kein prüfbarer Build');
+    const different = build[1] !== APP_BUILD || v[1] !== APP_VERSION;
+    const b = $('btnUpd');
+    b.hidden = !different;
+    b.textContent = `Anderer Programmstand ${v[1]} · ${build[1].slice(7, 19)} – sicher neu laden`;
+    updateStatus(different
+      ? 'Anderer Online-Programmstand verfügbar. Sicher neu laden; weitere offene Fenster separat prüfen.'
+      : 'Geladener Build stimmt mit der Online-Antwort überein. Keine Bürofreigabe oder Prüfung anderer Sitzungen.');
+    // Advisory only: an old client can ignore every check in this file.
+    if (updateRegistration) updateRegistration.update().catch(() => {});
+  }catch(e){
+    updateStatus('Online-Programmstand nicht bestätigt (offline, Zeitüberschreitung oder ungültige Antwort). Geladener Build bleibt aktiv.');
+  }finally{ clearTimeout(timer); updateChecking = false; }
 }
 async function applyUpdate(){
+  if (S.dir && P.readOnly){
+    banner('err', 'Neuladen abgebrochen: Im geschützten Projektmodus können Sitzungseingaben nicht dauerhaft gesichert werden. Bitte Angaben zuerst separat sichern und das Fenster anschließend bewusst schließen.');
+    return false;
+  }
   return withSavedProject('Das Update', async () => { location.reload(); });
 }
 setTimeout(checkUpdate, 4000);
 setInterval(checkUpdate, 30 * 60 * 1000);
+window.addEventListener('online', checkUpdate);
+window.addEventListener('offline', () => updateStatus('Offline: Online-Programmstand nicht bestätigt. Geladener Build bleibt aktiv.'));
 
 /* ---------- info dialog ---------- */
 async function openPhotoVersions(){
@@ -3074,6 +3112,8 @@ function openInfo(){
   showDialog(`<h3>${APP_NAME} ${APP_VERSION} <small>(früher „Bildumbenenner“)</small></h3>
     <div class="body"><table class="info">
       <tr><td>Version</td><td>${APP_VERSION} vom ${deDate(APP_DATE)}</td></tr>
+      <tr><td>Geladener Build</td><td style="overflow-wrap:anywhere">${APP_BUILD}</td></tr>
+      <tr><td>Updateprüfung</td><td>${esc($('buildStatus').textContent)} Ein Update beendet keine alten Tabs oder RDP-Sitzungen.</td></tr>
       <tr><td>Ausführung</td><td>${IS_WEB ? `Online-Version (${esc(location.host + location.pathname)}) – nach dem ersten Aufruf auch offline nutzbar${navigator.serviceWorker && navigator.serviceWorker.controller ? ' ✓' : ''}. Installieren: im Browser-Menü „App installieren“.` : 'Lokale Datei'}</td></tr>
       <tr><td>Browser</td><td>${esc(browserVer)}${'showDirectoryPicker' in window ? '' : ' – <span class="warn">ohne Ordnerzugriff, bitte Chrome oder Edge verwenden</span>'}</td></tr>
       <tr><td>Projektdaten</td><td>„${PROJ_FILE}“ im jeweiligen Projektordner (Beschreibungen, Abschnitte, Proben, Drehungen, Originalnamen, Prüfsummen, Projektdaten). Nicht löschen oder umbenennen.</td></tr>
@@ -3102,6 +3142,7 @@ window.addEventListener('unhandledrejection', e => logProblem('Unbehandelt: ' + 
 function problemReport(){
   const it = S.items || [], L = [];
   L.push(`PROBLEMBERICHT ${APP_NAME.toUpperCase()}`);
+  L.push(`Build:       ${APP_BUILD}`);
   L.push(`Zeitpunkt:   ${new Date().toLocaleString('de-DE')}`);
   L.push(`Version:     ${APP_VERSION} (${IS_WEB ? 'online ' + location.host + location.pathname : 'lokale Datei'})${navigator.serviceWorker && navigator.serviceWorker.controller ? ', offline bereit' : ''}`);
   L.push(`Browser:     ${browserVer} · ${navigator.platform || ''} · online: ${navigator.onLine ? 'ja' : 'nein'}`);
@@ -3623,7 +3664,10 @@ $('btnNaming').onclick = () => {
   $('btnNaming').setAttribute('aria-expanded', String(!expanded));
 };
 $('btnUpd').onclick = applyUpdate;
-$('btnInfo').textContent = 'v' + APP_VERSION;
+$('btnCheckUpdate').onclick = checkUpdate;
+$('btnInfo').textContent = 'v' + APP_VERSION + ' · ' + APP_BUILD.slice(7, 19);
+$('btnInfo').title = 'Geladen: ' + APP_VERSION + ' / ' + APP_BUILD;
+updateStatus('Online-Programmstand noch nicht bestätigt. Andere Sitzungen werden nicht geprüft.');
 document.title = `${APP_NAME} ${APP_VERSION}`;
 $('btnZip').onclick = openZipDialog;
 $('btnPdf').onclick = openPdfDialog;

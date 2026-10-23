@@ -25,6 +25,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+      - run: node tools/build-identity.cjs --check
       - run: node tests/laborwerte.cjs
       - run: node tests/pdf-layout.cjs
       - run: node tests/project-store.cjs
@@ -54,6 +55,8 @@ jobs:
           "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps ${{ matrix.browser }}
       - name: PDF design, exact image streams, logo and pagination
         run: node tests/pdf-layout-browser.cjs ${{ matrix.browser }}
+      - name: Loaded build and safe update UX
+        run: node tests/n3-updates-browser.cjs ${{ matrix.browser }}
       - name: Project data (_Projekt.json) in the real browser
         run: node tests/projektdaten-browser.cjs ${{ matrix.browser }}
       - name: Independent F3 sessions and explicit recovery (synthetic shared disk)
