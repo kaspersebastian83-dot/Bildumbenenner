@@ -1,3 +1,4 @@
+const { waitForAsync } = require('./await-condition.cjs');
 // Synthetische OPFS-Projekte; echte App, URL, Leiste und Picker-Bedienung.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -199,7 +200,7 @@ let browser, server;
       await stillA('A vor Lesefehler');
       await page.evaluate(failure => io[failure] = false, failure);assert.deepEqual(await disk('B'), b);
       await page.locator('#list .desc').fill('A nach Lesefehler');
-      await page.waitForFunction(async () => {
+      await waitForAsync(page, async () => {
         const root = await navigator.storage.getDirectory(), a = await (await root.getDirectoryHandle('Archiv')).getDirectoryHandle('26.0901 Köln & Süd + 50% #Hof');
         const data = JSON.parse(await (await (await (await a.getDirectoryHandle('Fotos')).getFileHandle('_Bildumbenenner.json')).getFile()).text());
         return data.bilder['A_01.jpg'].beschreibung === 'A nach Lesefehler';
@@ -268,7 +269,7 @@ let browser, server;
     await page.waitForTimeout(650);
     assert.deepEqual(await disk('B'), b, 'Beim Laden noch keine Ziel-Schreibvorgänge');
     await page.evaluate(() => releaseRead());await contextIs('B');
-    await page.waitForFunction(async () => {
+    await waitForAsync(page, async () => {
       const r = await navigator.storage.getDirectory();
       const p = await (await r.getDirectoryHandle('Archiv')).getDirectoryHandle('26.0902 Kontext B');
       const h = await (await p.getDirectoryHandle('Fotos')).getFileHandle('_Bildumbenenner.json');

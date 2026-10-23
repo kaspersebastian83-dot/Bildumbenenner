@@ -1,3 +1,4 @@
+const { waitForAsync } = require('./await-condition.cjs');
 // Real keyboard/clicks on synthetic OPFS projects. Only pickers and filesystem
 // latency/failures are controlled; no production test API or synthetic key events.
 const assert = require('node:assert/strict');
@@ -60,7 +61,7 @@ let browser, server;
         await page.waitForFunction(([n, key]) => !document.body.inert && document.querySelectorAll('#list .row').length === n && document.querySelector('#projBadge').textContent.includes(key === 'A' ? '26.0801' : '26.0802'), [key === 'A' ? count : 5, key]);
       };
       const json = async () => {
-        const h = await page.waitForFunction(async () => {
+        const h = await waitForAsync(page, async () => {
           try { const p = await (await navigator.storage.getDirectory()).getDirectoryHandle('26.0801 Serie A'), d = await p.getDirectoryHandle('Fotos');
             return JSON.parse(await (await (await d.getFileHandle('_Bildumbenenner.json')).getFile()).text());
           } catch (e) { if (e.name === 'NotReadableError') return false; throw e; }

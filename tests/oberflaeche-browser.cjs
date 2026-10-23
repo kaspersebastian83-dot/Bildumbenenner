@@ -1,3 +1,4 @@
+const { waitForAsync } = require('./await-condition.cjs');
 // Actual clicks/keyboard/form interaction on the unchanged production app.
 // Only folder/save pickers use synthetic OPFS handles. No internal test API.
 const assert = require('node:assert/strict');

@@ -26,10 +26,26 @@ try{run(dest,'git',['apply','--3way','-'],{input:n3Patch});}catch(e){
  });assert.equal(count,1);fs.writeFileSync(file,resolved);git('add','sw.js');
 }
 const after=fs.readFileSync(path.join(dest,'index.html'),'utf8');
-const block=(s,a,b)=>s.slice(s.indexOf(a),s.indexOf(b,s.indexOf(a)));
-assert.equal(block(before,'const PROJ_FILE =','/* ---------- online version:'),block(after,'const PROJ_FILE =','/* ---------- online version:'),'all project, recovery, original file and PDF code unchanged by N3');
-for(const file of ['tools/build-identity.cjs','tests/n3-altclient-browser.cjs','tests/n3-disk-bridge.cjs','tests/n3-updates-browser.cjs']){
+const block=(s,a,b)=>{const start=s.indexOf(a),end=s.indexOf(b,start);assert.ok(start>=0&&end>start,'required source block markers');return s.slice(start,end);};
+// Only these reviewed recovery hooks may differ in the existing storage block.
+const withoutRecovery = s => s.replace(/\/\* N3 session recovery begin \*\/[\s\S]*?\/\* N3 session recovery end \*\/\n\n/, '')
+ .replace(/^  recoveryChanged\(\); \/\/ N3 recovery hook\n/gm, '')
+ .replace(/^\s*await recoveryOpened\(\); \/\/ N3 recovery hook\n/gm, '')
+ .replace('if (P.session === session){ P.writes--; completePendingSave(); recoverySaved(); } // N3 recovery hook','if (P.session === session){ P.writes--; completePendingSave(); }');
+assert.equal(block(before,'const PROJ_FILE =','/* ---------- online version:'),block(withoutRecovery(after),'const PROJ_FILE =','/* ---------- online version:'),'storage/original/PDF logic unchanged apart from explicit recovery hooks');
+assert.equal(block(before,'async function openPhotoVersions(){','function openInfo(){'),block(after,'async function openPhotoVersions(){','function openInfo(){'),'N2 recovery UI unchanged');
+// Keep N2's stricter inventory checks; replace only unsafe async wait constructs.
+for(const file of fs.readdirSync(path.join(dest,'tests')).filter(n=>n.endsWith('-browser.cjs'))){
+ const p=path.join(dest,'tests',file),text=fs.readFileSync(p,'utf8');
+ if(text.includes('page.waitForFunction(async'))fs.writeFileSync(p,"const { waitForAsync } = require('./await-condition.cjs');\n"+text.replaceAll('page.waitForFunction(async','waitForAsync(page, async'));
+}
+
+for(const file of ['tools/build-identity.cjs','tests/await-condition.cjs',...fs.readdirSync(path.join(root,'tests')).filter(n=>n.startsWith('n3-')&&n.endsWith('.cjs')).map(n=>'tests/'+n)]){
  fs.mkdirSync(path.dirname(path.join(dest,file)),{recursive:true});fs.copyFileSync(path.join(root,file),path.join(dest,file));
 }
+// Node storage units deliberately do not instantiate the browser-only journal UI.
+const unitFile=path.join(dest,'tests/n2-speichersicherheit.cjs');
+const units=fs.readFileSync(unitFile,'utf8');assert.equal(units.split('const ctx={console,').length,2);
+fs.writeFileSync(unitFile,units.replace('const ctx={console,','const ctx={recoveryChanged(){},recoverySaved(){},console,'));
 run(dest,process.execPath,['tools/build-identity.cjs']);commit('TEMP N3 with pinned F3 F6 N2 PDF; unchanged security and PDF code');
 console.log(JSON.stringify({main:MAIN,n3:run(root,'git',['rev-parse','HEAD']).trim(),f3:F3,f6:F6,n2:N2,pdf:PDF,combined:git('rev-parse','HEAD').trim()},null,2));

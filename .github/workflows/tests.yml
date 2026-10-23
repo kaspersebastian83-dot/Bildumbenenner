@@ -31,6 +31,7 @@ jobs:
       - run: node tests/project-store.cjs
       - run: node tests/unknown-fields.cjs
       - run: node tests/n2-speichersicherheit.cjs
+      - run: node tests/n3-await-condition.cjs
 
   browser-tests:
     name: Browser tests (${{ matrix.browser }})
@@ -56,7 +57,10 @@ jobs:
       - name: PDF design, exact image streams, logo and pagination
         run: node tests/pdf-layout-browser.cjs ${{ matrix.browser }}
       - name: Loaded build and safe update UX
-        run: node tests/n3-updates-browser.cjs ${{ matrix.browser }}
+        run: |
+          node tests/n3-updates-browser.cjs ${{ matrix.browser }}
+          node tests/n3-recovery-browser.cjs ${{ matrix.browser }}
+          node tests/n3-offline-browser.cjs ${{ matrix.browser }}
       - name: Project data (_Projekt.json) in the real browser
         run: node tests/projektdaten-browser.cjs ${{ matrix.browser }}
       - name: Independent F3 sessions and explicit recovery (synthetic shared disk)
