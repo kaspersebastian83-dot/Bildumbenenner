@@ -1,6 +1,7 @@
 // Real UI in both engines; synthetic shared file handles. No Windows/SMB claim.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),pw=require('playwright');
 const bridge=require('./n3-disk-bridge.cjs');
+const os=require('node:os');
 const root=path.resolve(__dirname,'..'),engine=process.argv[2]||'chromium',project='26.0401 Recovery Test',other='26.0402 Other Test',primary=project+'/Fotos/_Bildumbenenner.json';
 const fixture=version=>({app:'Bildumbenenner',format:version==='99.0.0'?2:1,version,projekt:{},benennung:{},reihenfolge:['a.jpg','b.jpg'],bilder:{'a.jpg':{beschreibung:'Disk A'},'b.jpg':{beschreibung:'Disk B'}},extension:{must:['remain',42]}});
 (async()=>{
@@ -9,7 +10,8 @@ const fixture=version=>({app:'Bildumbenenner',format:version==='99.0.0'?2:1,vers
  const image=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64');
  for(const p of [project,other]){put(p+'/Fotos/_Bildumbenenner.json',fixture('99.0.0'));for(const n of ['a.jpg','b.jpg'])put(p+'/Fotos/'+n,image);}
  const server=http.createServer((req,res)=>{const f=path.resolve(root,'.'+new URL(req.url,'http://x').pathname);const file=f===root?path.join(root,'index.html'):f;if(!file.startsWith(root+path.sep)||!fs.existsSync(file)){res.writeHead(404).end();return;}res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':file.endsWith('.html')?'text/html':'application/octet-stream');res.end(fs.readFileSync(file));});await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const browser=await pw[engine].launch(),context=await browser.newContext({serviceWorkers:'block',viewport:{width:1400,height:1000}}),errors=[];
+ const browser=await pw[engine].launch(),errors=[];let context=await browser.newContext({serviceWorkers:'block',viewport:{width:1400,height:1000}});
+ async function prepare(context){
  await context.exposeBinding('__n3io',async(_,a)=>{
   const rel=a.rel||'';
   if(deny&&a.op==='write')throw Error('Synthetic commit failure');
@@ -23,6 +25,8 @@ const fixture=version=>({app:'Bildumbenenner',format:version==='99.0.0'?2:1,vers
  });
  await bridge(context,project);
  await context.addInitScript(({other})=>{const original=window.showDirectoryPicker;window.showDirectoryPicker=async()=>{const d=await original();return window.pickOther?new d.constructor(other,'directory'):d;};},{other});
+ }
+ await prepare(context);
  const url='http://localhost:'+server.address().port+'/index.html';
  async function page(){const p=await context.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(url);return p;}
  async function open(p){await p.locator('#btnOpen').click();await p.locator('#list .desc').nth(1).waitFor();await p.waitForFunction(()=>!document.body.inert);await p.locator('#recoveryStatus').filter({hasText:/bereit|Zuordnung/}).waitFor();}
@@ -51,6 +55,15 @@ const fixture=version=>({app:'Bildumbenenner',format:version==='99.0.0'?2:1,vers
   console.log('PASS N3 FAILURE: failed project write blocks update, actual input retained locally');
   deny=false;await p.locator('#bSaveRetry').click();await p.locator('#recoveryStatus').filter({hasText:/Projekt gespeichert/}).waitFor();assert.equal(JSON.parse(files.get(primary)).bilder['a.jpg'].beschreibung,'FAILED PROJECT WRITE');
   console.log('PASS N3 RETRY: successful project commit distinguished from local-only recovery copy');
+  // Real browser-process restart with a persistent synthetic profile, same origin.
+  await context.close();
+  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'n3-recovery-profile-'));
+  const options={serviceWorkers:'block',viewport:{width:1400,height:1000},...(process.env.N3_BROWSER_EXECUTABLE?{executablePath:process.env.N3_BROWSER_EXECUTABLE}:{})};
+  context=await pw[engine].launchPersistentContext(profile,options);await prepare(context);
+  put(primary,fixture('99.0.0'));p=await page();await open(p);await p.locator('#list .desc').first().fill('BROWSER PROCESS RESTART');await context.close();
+  context=await pw[engine].launchPersistentContext(profile,options);await prepare(context);p=await page();await open(p);
+  await choose(p,'BROWSER PROCESS RESTART');await p.locator('#rApply').click();await p.locator('#overlay').waitFor({state:'hidden'});assert.equal(await p.locator('#list .desc').first().inputValue(),'BROWSER PROCESS RESTART');
+  console.log('PASS N3 PERSISTENCE: actual browser process restarted, journal and folder identity retained, explicit resume');
   for(const q of [project,other])for(const n of ['a.jpg','b.jpg'])assert.deepEqual(files.get(q+'/Fotos/'+n),image);
   assert.deepEqual(errors,[]);
  }finally{await context.close();await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

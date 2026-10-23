@@ -19,6 +19,7 @@ server=http.createServer((req,res)=>{
  if(mode==='truncated')return res.end(html.slice(0,-80));
  if(mode==='tampered')return res.end(html.replace('<title>','<title>tampered '));
  if(mode==='duplicate')return res.end(stamped(html.replace('</body>',"<script>const APP_VERSION = '1.9.5';</script></body>")));
+ if(mode==='ambiguous')return res.end(stamped(html.replace('</body>',"<script>const APP_BUILD  = 'ambiguous';</script></body>")));
  if(mode==='wrong-type'){res.setHeader('Content-Type','text/plain');return res.end(html);}
  if(mode==='rollback')return res.end(stamped(html.replace("const APP_VERSION = '1.9.5'","const APP_VERSION = '1.0.0'")));
  if(mode==='newer')return res.end(stamped(html.replace("const APP_VERSION = '1.9.5'","const APP_VERSION = '99.0.0'")));
@@ -35,7 +36,7 @@ try{
   await check(/Anderer Online-Programmstand verfügbar/);assert.equal(await p.locator('#btnUpd').isVisible(),true);assert.ok((await p.locator('#btnInfo').textContent()).includes(build.slice(7,19)));
   console.log('PASS N3 UPDATE: verified complete differing build '+mode);
  }
- for(mode of ['error','invalid','declarations','truncated','tampered','duplicate','wrong-type','network','timeout']){
+ for(mode of ['error','invalid','declarations','truncated','tampered','duplicate','ambiguous','wrong-type','network','timeout']){
   const start=Date.now();await check(/nicht bestätigt/);assert.equal(await p.locator('#btnUpd').isVisible(),true,'uncertainty retains known update');
   if(mode==='timeout')assert.ok(Date.now()-start>=5500,'actual abort deadline exercised');
   console.log('PASS N3 UPDATE: invalid or unreachable response unverified: '+mode);

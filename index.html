@@ -454,7 +454,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.9.5';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:a066ec9453cea7cbf835e18de4ddd9c7b75b074eb45cc2301f9e002d833d370f';
+const APP_BUILD = 'sha256:0351ea34dd8c4676b153d76d70c20bb55b609273462f169df66b22decf8c8e78';
 const APP_DATE = '2026-10-21';
 const CHANGELOG = [
   ['1.9.5', '21.10.2026', 'Einheitliche Bildnummern: Alle aktiven Bilder zählen in Listenreihenfolge ab 1, auch ohne Beschreibung. Vorschau, PDF, ZIP, CSV und Labor-Fotoreferenzen verwenden dieselben Nummern; eine Exportauswahl behält diese bei. Die Dateinummer folgt mit der eingestellten Startnummer derselben Position. Originalname und geplanter Dateiname sind sichtbar. Sortieren ändert keine Dateien; geplante Änderungen müssen ausdrücklich ausgeführt werden. Umbenennen erhält die Dokumentationsreihenfolge als manuelle Sortierung.'],
@@ -2847,6 +2847,7 @@ function recoveryState(){
     extra:Object.fromEntries(S.items.filter(it => it.sec.trim() || it.probe.trim()).map(it => [it.name, {sec:it.sec.trim(), probe:it.probe.trim()}])),
     discard:S.items.filter(it => it.discard).map(it => it.name), rot:clone(ROT),
     order:S.items.map(it => it.name), settings:pickNaming(cfg), meta:clone(P.data?.meta || {}),
+    identities:clone({orig:P.data?.orig || {},hash:P.data?.hash || {},imageExtensions:P.data?.imageExtensions || {}}),
     dialog:Object.fromEntries([...document.querySelectorAll('#dialog input[id^="m_"], #dialog textarea[id^="m_"]')].filter(el => !el.readOnly).map(el => [el.id, el.value]))
   };
 }
@@ -2862,6 +2863,7 @@ async function recoveryOpened(){
 }
 function recoveryChanged(){
   if (!R.ready || R.session !== P.session || P.loading || !S.dir) return;
+  if (!R.unsaved){ R.baseline=P.lastText; R.shared=JSON.stringify(PJ.data); }
   R.unsaved = true;
   const record = {format:1, id:R.id, project:S.proj?.name || S.dir.name, folder:S.dir.name,
     time:new Date().toISOString(), build:APP_BUILD, baseline:R.baseline, shared:R.shared, pending:true, state:recoveryState()};
@@ -2927,6 +2929,7 @@ function openRecovery(){
         const state = record.state, object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
         if (!object(state.drafts) || Object.values(state.drafts).some(v => typeof v !== 'string') || !object(state.extra) || Object.values(state.extra).some(v => !object(v) || typeof v.sec !== 'string' || typeof v.probe !== 'string') || !object(state.rot) || Object.values(state.rot).some(v => ![0,90,180,270].includes(v)) || !object(state.settings) || !object(state.meta) || !object(state.dialog) || Object.values(state.dialog).some(v => typeof v !== 'string') || !Array.isArray(state.discard) || state.discard.some(v => typeof v !== 'string')) throw Error('Beschädigte Sitzungseingaben. Keine Übernahme.');
         if (!Array.isArray(state.order) || state.order.length !== S.items.length || new Set(state.order).size !== S.items.length || S.items.some(it => !state.order.includes(it.name))) throw Error('Bildbestand stimmt nicht überein.');
+        if (!same(state.identities, {orig:P.data.orig || {},hash:P.data.hash || {},imageExtensions:P.data.imageExtensions || {}})) throw Error('Bildzuordnungen wurden geändert. Vollständige N2-Fassungen prüfen; keine Übernahme.');
         // Only editable fields are replayed; raw project JSON and original images are never replaced.
         for (const it of S.items){ it.el=null; it.desc=state.drafts[it.name] || ''; it.sec=state.extra[it.name]?.sec || ''; it.probe=state.extra[it.name]?.probe || ''; it.discard=state.discard.includes(it.name); }
         ROT=clone(state.rot); cfg={...cfg,...state.settings}; applyCfgToUI();
