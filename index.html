@@ -454,7 +454,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.9.5';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:b4ffe7825eec0d6b2c5ebd3e1491e53c0849f5e084675668d2285ea4e79e444e';
+const APP_BUILD = 'sha256:a066ec9453cea7cbf835e18de4ddd9c7b75b074eb45cc2301f9e002d833d370f';
 const APP_DATE = '2026-10-21';
 const CHANGELOG = [
   ['1.9.5', '21.10.2026', 'Einheitliche Bildnummern: Alle aktiven Bilder zählen in Listenreihenfolge ab 1, auch ohne Beschreibung. Vorschau, PDF, ZIP, CSV und Labor-Fotoreferenzen verwenden dieselben Nummern; eine Exportauswahl behält diese bei. Die Dateinummer folgt mit der eingestellten Startnummer derselben Position. Originalname und geplanter Dateiname sind sichtbar. Sortieren ändert keine Dateien; geplante Änderungen müssen ausdrücklich ausgeführt werden. Umbenennen erhält die Dokumentationsreihenfolge als manuelle Sortierung.'],
@@ -2924,7 +2924,8 @@ function openRecovery(){
         if (await recoveryCurrentText(dir) !== record.baseline) throw Error('Konflikt: Projektdatei wurde seit diesen Eingaben geändert. Keine Übernahme; Kopie herunterladen und bewusst vergleichen.');
         if (JSON.stringify(S.proj ? await readPJ(S.proj.dir) : null) !== record.shared) throw Error('Konflikt: Gemeinsame Projektdaten wurden geändert. Keine Übernahme.');
         if (session !== P.session || dir !== S.dir) throw Error('Projekt wurde gewechselt.');
-        const state = record.state;
+        const state = record.state, object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+        if (!object(state.drafts) || Object.values(state.drafts).some(v => typeof v !== 'string') || !object(state.extra) || Object.values(state.extra).some(v => !object(v) || typeof v.sec !== 'string' || typeof v.probe !== 'string') || !object(state.rot) || Object.values(state.rot).some(v => ![0,90,180,270].includes(v)) || !object(state.settings) || !object(state.meta) || !object(state.dialog) || Object.values(state.dialog).some(v => typeof v !== 'string') || !Array.isArray(state.discard) || state.discard.some(v => typeof v !== 'string')) throw Error('Beschädigte Sitzungseingaben. Keine Übernahme.');
         if (!Array.isArray(state.order) || state.order.length !== S.items.length || new Set(state.order).size !== S.items.length || S.items.some(it => !state.order.includes(it.name))) throw Error('Bildbestand stimmt nicht überein.');
         // Only editable fields are replayed; raw project JSON and original images are never replaced.
         for (const it of S.items){ it.el=null; it.desc=state.drafts[it.name] || ''; it.sec=state.extra[it.name]?.sec || ''; it.probe=state.extra[it.name]?.probe || ''; it.discard=state.discard.includes(it.name); }
@@ -2960,10 +2961,11 @@ if (IS_WEB && 'serviceWorker' in navigator){
 }
 async function validateUpdateHTML(txt){
   if (!/^<!doctype html>/i.test(txt.trimStart()) || !/<html[ >]/i.test(txt) || !/<head[ >]/i.test(txt) || !/<body[ >]/i.test(txt) || !/<\/body>\s*<\/html>\s*$/i.test(txt)) throw Error('Unvollständiges HTML');
-  const versions = [...txt.matchAll(/const APP_VERSION = '(\d+\.\d+\.\d+)'/g)];
-  const pattern = /const APP_BUILD = '(sha256:[a-f0-9]{64})'/g;
+  const versionPattern = new RegExp("const APP_"+"VERSION = '(\\d+\\.\\d+\\.\\d+)'", 'g');
+  const versions = [...txt.matchAll(versionPattern)];
+  const pattern = new RegExp("const APP_"+"BUILD = '(sha256:[a-f0-9]{64})'", 'g');
   const builds = [...txt.matchAll(pattern)];
-  if (versions.length !== 1 || builds.length !== 1 || [...txt.matchAll(/^[ \t]*const APP_VERSION\s*=/gm)].length !== 1 || [...txt.matchAll(/^[ \t]*const APP_BUILD\s*=/gm)].length !== 1) throw Error('Mehrdeutige Buildangaben');
+  if (versions.length !== 1 || builds.length !== 1 || [...txt.matchAll(new RegExp('\\bconst\\s+APP_'+'VERSION\\s*=', 'g'))].length !== 1 || [...txt.matchAll(new RegExp('\\bconst\\s+APP_'+'BUILD\\s*=', 'g'))].length !== 1) throw Error('Mehrdeutige Buildangaben');
   const doc = new DOMParser().parseFromString(txt, 'text/html');
   if (!doc.querySelector('#btnInfo') || !doc.querySelector('#btnOpen') || ![...doc.scripts].some(script => script.textContent.includes(builds[0][0]) && script.textContent.includes(versions[0][0]))) throw Error('Keine vollständige FotoKit-Anwendung');
   const normalized = txt.replace(pattern, "const APP_"+"BUILD = 'sha256:BUILD'");
