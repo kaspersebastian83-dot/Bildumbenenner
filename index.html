@@ -454,7 +454,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.9.5';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:0351ea34dd8c4676b153d76d70c20bb55b609273462f169df66b22decf8c8e78';
+const APP_BUILD = 'sha256:b5b8c57691a6c83389feaede8e1a3a6f6debf6c62527398a546921ff94efd42d';
 const APP_DATE = '2026-10-21';
 const CHANGELOG = [
   ['1.9.5', '21.10.2026', 'Einheitliche Bildnummern: Alle aktiven Bilder zählen in Listenreihenfolge ab 1, auch ohne Beschreibung. Vorschau, PDF, ZIP, CSV und Labor-Fotoreferenzen verwenden dieselben Nummern; eine Exportauswahl behält diese bei. Die Dateinummer folgt mit der eingestellten Startnummer derselben Position. Originalname und geplanter Dateiname sind sichtbar. Sortieren ändert keine Dateien; geplante Änderungen müssen ausdrücklich ausgeführt werden. Umbenennen erhält die Dokumentationsreihenfolge als manuelle Sortierung.'],
@@ -2898,7 +2898,7 @@ function openRecovery(){
   const records = [], invalid = [];
   try { for (let i=0; i<localStorage.length; i++){
     const key = localStorage.key(i); if (!key.startsWith(RECOVERY_PREFIX)) continue;
-    try { const v = JSON.parse(localStorage.getItem(key)); if (v.format !== 1 || !v.id || !v.state || typeof v.pending !== 'boolean') throw Error('Unbekanntes Sicherungsformat'); records.push(v); }
+    try { const v = JSON.parse(localStorage.getItem(key)); if (v.format !== 1 || typeof v.id !== 'string' || key !== RECOVERY_PREFIX+v.id || typeof v.project !== 'string' || typeof v.folder !== 'string' || typeof v.time !== 'string' || !Number.isFinite(Date.parse(v.time)) || (v.baseline !== null && typeof v.baseline !== 'string') || typeof v.shared !== 'string' || !v.state || typeof v.pending !== 'boolean') throw Error('Unbekanntes oder beschädigtes Sicherungsformat'); records.push(v); }
     catch(e){ invalid.push(key+': '+e.message); }
   }}catch(e){ recoveryStatus('Sitzungssicherungen nicht lesbar: '+e.message, true); return; }
   records.sort((a,b) => b.time.localeCompare(a.time));

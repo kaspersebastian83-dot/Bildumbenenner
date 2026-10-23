@@ -26,13 +26,14 @@ try{run(dest,'git',['apply','--3way','-'],{input:n3Patch});}catch(e){
  });assert.equal(count,1);fs.writeFileSync(file,resolved);git('add','sw.js');
 }
 const after=fs.readFileSync(path.join(dest,'index.html'),'utf8');
-const block=(s,a,b)=>s.slice(s.indexOf(a),s.indexOf(b,s.indexOf(a)));
+const block=(s,a,b)=>{const start=s.indexOf(a),end=s.indexOf(b,start);assert.ok(start>=0&&end>start,'required source block markers');return s.slice(start,end);};
 // Only these reviewed recovery hooks may differ in the existing storage block.
 const withoutRecovery = s => s.replace(/\/\* N3 session recovery begin \*\/[\s\S]*?\/\* N3 session recovery end \*\/\n\n/, '')
  .replace(/^  recoveryChanged\(\); \/\/ N3 recovery hook\n/gm, '')
  .replace(/^\s*await recoveryOpened\(\); \/\/ N3 recovery hook\n/gm, '')
  .replace('if (P.session === session){ P.writes--; completePendingSave(); recoverySaved(); } // N3 recovery hook','if (P.session === session){ P.writes--; completePendingSave(); }');
 assert.equal(block(before,'const PROJ_FILE =','/* ---------- online version:'),block(withoutRecovery(after),'const PROJ_FILE =','/* ---------- online version:'),'storage/original/PDF logic unchanged apart from explicit recovery hooks');
+assert.equal(block(before,'async function openPhotoVersions(){','function openInfo(){'),block(after,'async function openPhotoVersions(){','function openInfo(){'),'N2 recovery UI unchanged');
 // Keep N2's stricter inventory checks; replace only unsafe async wait constructs.
 for(const file of fs.readdirSync(path.join(dest,'tests')).filter(n=>n.endsWith('-browser.cjs'))){
  const p=path.join(dest,'tests',file),text=fs.readFileSync(p,'utf8');

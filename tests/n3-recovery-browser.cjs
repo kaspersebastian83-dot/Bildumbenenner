@@ -35,7 +35,7 @@ const fixture=version=>({app:'Bildumbenenner',format:version==='99.0.0'?2:1,vers
  try{
   let p=await page();await open(p);await p.locator('#list .desc').first().fill('Protected input survives RELOAD');await p.locator('#recoveryStatus').filter({hasText:/lokal gesichert/}).waitFor();
   let warnings=0;const dismiss=async d=>{warnings++;await d.dismiss();};p.on('dialog',dismiss);await p.reload({timeout:2000}).catch(e=>assert.match(e.message,/ERR_ABORTED|navigation|Timeout|beforeunload/i));assert.ok(warnings>0,'manual reload warns');assert.equal(await p.locator('#list .desc').first().inputValue(),'Protected input survives RELOAD');p.off('dialog',dismiss);
-  p.on('dialog',d=>d.accept());await p.reload();await open(p);assert.equal(await p.locator('#list .desc').first().inputValue(),'Disk A');await choose(p,'Protected input survives RELOAD');await p.locator('#rApply').click();await p.locator('#overlay').waitFor({state:'hidden'});assert.equal(await p.locator('#list .desc').first().inputValue(),'Protected input survives RELOAD');assert.deepEqual(files.get(primary),original);
+  p.on('dialog',d=>d.accept());await p.reload();await open(p);assert.equal(await p.locator('#list .desc').first().inputValue(),'Disk A');await p.evaluate(()=>localStorage.setItem('fotokit-recovery-v1:bad-header',JSON.stringify({format:1,id:'bad-header',project:'synthetic',folder:'Fotos',time:{invalid:true},pending:true,state:{}})));await p.locator('#btnSessionRecovery').click();await p.locator('#dialog').filter({hasText:/Nicht lesbare Kopien bleiben erhalten/}).waitFor();await p.locator('#rClose').click();await choose(p,'Protected input survives RELOAD');await p.locator('#rApply').click();await p.locator('#overlay').waitFor({state:'hidden'});assert.equal(await p.locator('#list .desc').first().inputValue(),'Protected input survives RELOAD');assert.deepEqual(files.get(primary),original);
   console.log('PASS N3 RECOVERY: reload warns; accepted reload keeps local draft; explicit recovery leaves protected bytes unchanged');
   await p.locator('#list .desc').first().fill('Protected input survives TAB CLOSE');await p.close({runBeforeUnload:true});
   p=await page();await open(p);await choose(p,'Protected input survives TAB CLOSE');await p.locator('#rApply').click();await p.locator('#overlay').waitFor({state:'hidden'});assert.equal(await p.locator('#list .desc').first().inputValue(),'Protected input survives TAB CLOSE');
@@ -64,6 +64,15 @@ const fixture=version=>({app:'Bildumbenenner',format:version==='99.0.0'?2:1,vers
   context=await pw[engine].launchPersistentContext(profile,options);await prepare(context);p=await page();await open(p);
   await choose(p,'BROWSER PROCESS RESTART');await p.locator('#rApply').click();await p.locator('#overlay').waitFor({state:'hidden'});assert.equal(await p.locator('#list .desc').first().inputValue(),'BROWSER PROCESS RESTART');
   console.log('PASS N3 PERSISTENCE: actual browser process restarted, journal and folder identity retained, explicit resume');
+  await p.evaluate(()=>{for(const k of Object.keys(localStorage).filter(k=>k.startsWith('fotokit-recovery-v1:'))){const v=JSON.parse(localStorage.getItem(k));if(v.state.drafts['a.jpg']==='BROWSER PROCESS RESTART'){v.state.drafts=[];v.state.meta.notes='MALFORMED RECOVERY CASE';localStorage.setItem(k,JSON.stringify(v));break;}}});
+  await context.close();context=await pw[engine].launchPersistentContext(profile,options);await prepare(context);p=await page();await open(p);
+  const beforeMalformed=Buffer.from(files.get(primary));await choose(p,'MALFORMED RECOVERY CASE');await p.locator('#rApply').click();await p.locator('#rProblem').filter({hasText:/Beschädigte Sitzungseingaben/}).waitFor();assert.deepEqual(files.get(primary),beforeMalformed);assert.equal(await p.locator('#list .desc').first().inputValue(),'Disk A');
+  console.log('PASS N3 CORRUPTION: malformed persisted draft rejected before changing session or project data');
+  await context.close();put(project+'/_Projekt.json',{format:'mosaik-projekt',version:1,objekt:'NEW SHARED DATA'});
+  context=await pw[engine].launchPersistentContext(profile,options);await prepare(context);p=await page();await open(p);
+  // The unmodified second copy from explicit resume still contains this input.
+  await choose(p,'BROWSER PROCESS RESTART');await p.locator('#rApply').click();await p.locator('#rProblem').filter({hasText:/Gemeinsame Projektdaten wurden geändert/}).waitFor();assert.deepEqual(files.get(primary),beforeMalformed);assert.equal(JSON.parse(files.get(project+'/_Projekt.json')).objekt,'NEW SHARED DATA');
+  console.log('PASS N3 SHARED CONFLICT: newer shared project data blocks recovery and both project files remain unchanged');
   for(const q of [project,other])for(const n of ['a.jpg','b.jpg'])assert.deepEqual(files.get(q+'/Fotos/'+n),image);
   assert.deepEqual(errors,[]);
  }finally{await context.close();await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}
