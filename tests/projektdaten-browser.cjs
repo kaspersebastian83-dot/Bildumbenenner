@@ -1,3 +1,4 @@
+const { waitForAsync } = require('./await-condition.cjs');
 // FotoKit ↔ Projektzentrale: gemeinsame Projektdaten (_Projekt.json) im echten Browser. node tests/projektdaten-browser.cjs [chromium|webkit]
 //  • Ändert sich _Projekt.json außerhalb (Projektzentrale, Kollege), liest FotoKit sie beim Zurückkehren ins Fenster neu
 //  • Speichern der Projektdaten läuft unter der Sperre „mosaik:projekt:<Ordner>“ (dieselbe nimmt Projektzentrale) und schreibt den einheitlichen Hinweistext
@@ -121,7 +122,7 @@ const PROJ = '26.0142 Teststadt';
     return JSON.parse(await (await (await p.getFileHandle('_Projekt.json')).getFile()).text());
   }), PROJ);
   // Confirm that the reader is queued, rather than relying on a fixed delay.
-  await page.waitForFunction(async () => (await navigator.locks.query()).pending.some(l => l.name.startsWith('mosaik:projekt:')));
+  await waitForAsync(page, async () => (await navigator.locks.query()).pending.some(l => l.name.startsWith('mosaik:projekt:')));
   assert.equal(await page.evaluate(() => window.__pjReadStarted), false, 'Dateiprüfung wartet auf den Abschluss des Schreibvorgangs');
   await page.evaluate(() => window.__releasePJClose());
   const d = await committed;

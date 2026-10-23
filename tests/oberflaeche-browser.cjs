@@ -1,3 +1,4 @@
+const { waitForAsync } = require('./await-condition.cjs');
 // Actual clicks/keyboard/form interaction on the unchanged production app.
 // Only folder/save pickers use synthetic OPFS handles. No internal test API.
 const assert = require('node:assert/strict');
@@ -75,7 +76,7 @@ let browser, server;
         window.showSaveFilePicker = async opts => (await (await r.getDirectoryHandle(projects[window.testNext])).getDirectoryHandle('Fotos')).getFileHandle(opts.suggestedName, { create: true });
       }, { projects, protectedProject });
       const snapshot = async key => {
-        const h = await page.waitForFunction(async ([key, projects]) => {
+        const h = await waitForAsync(page, async ([key, projects]) => {
           try { const p = await (await navigator.storage.getDirectory()).getDirectoryHandle(projects[key]), files = {};
             const walk = async (d, prefix) => { for await (const [n, entry] of d.entries()) {
               if (entry.kind === 'directory') { files[prefix + n + '/'] = 'directory'; await walk(entry, prefix + n + '/'); }

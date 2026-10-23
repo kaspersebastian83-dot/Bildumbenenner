@@ -1,3 +1,4 @@
+const { waitForAsync } = require('./await-condition.cjs');
 // Only synthetic OPFS files. The served test copy exposes references to the real
 // functions inside the IIFE to test direct calls; production has no test API.
 const assert = require('node:assert/strict');
@@ -94,7 +95,7 @@ let browser, server;
         };
       }, { archiveName, projects, mode });
       const snapshot = async () => {
-        const h = await page.waitForFunction(async ({ archiveName }) => {
+        const h = await waitForAsync(page, async ({ archiveName }) => {
           try {
             const a = await (await navigator.storage.getDirectory()).getDirectoryHandle(archiveName), files = {};
             const walk = async (d, prefix) => {
@@ -260,7 +261,7 @@ let browser, server;
     await page.evaluate(() => window.failMetadataSave = false);
     await open('B');
     await page.locator('#list .desc').first().fill('B nach Projektwechsel');
-    await page.waitForFunction(async () => {
+    await waitForAsync(page, async () => {
       const r = await navigator.storage.getDirectory(), a = await r.getDirectoryHandle('Schutzmodus-Testarchiv');
       const h = await (await (await a.getDirectoryHandle('26.0802 Test B')).getDirectoryHandle('Fotos')).getFileHandle('_Bildumbenenner.json');
       return JSON.parse(await (await h.getFile()).text()).bilder['IMG_0001.jpg'].beschreibung === 'B nach Projektwechsel';

@@ -1,3 +1,4 @@
+const { waitForAsync } = require('./await-condition.cjs');
 // Synthetische Projekte im OPFS; echte UI und echte Dateiinhalte, keine App-Interna.
 // node tests/sicherer-projektwechsel-browser.cjs [chromium|webkit]
 const assert = require('node:assert/strict');
@@ -76,7 +77,7 @@ let browser, server;
       const read = async key => {
         // A native File snapshot can become unreadable if an autosave commits
         // between getFile() and text(). Retry that transient filesystem race.
-        const snapshot = await page.waitForFunction(async ([key, projects]) => {
+        const snapshot = await waitForAsync(page, async ([key, projects]) => {
           try {
             const r = await navigator.storage.getDirectory(), p = await r.getDirectoryHandle(projects[key]), f = await p.getDirectoryHandle('Fotos');
             const text = await (await (await f.getFileHandle('_Bildumbenenner.json')).getFile()).text();

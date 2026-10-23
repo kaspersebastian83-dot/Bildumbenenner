@@ -329,6 +329,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
   <div class="bar" style="font-size:12px;flex-wrap:wrap" aria-label="Programmstand">
     <span id="buildStatus" role="status">Programmstand wird geprüft …</span>
     <button id="btnCheckUpdate">Programmstand prüfen</button>
+    <button id="btnSessionRecovery">Sitzungssicherungen …</button><span id="recoveryStatus" role="status">Lokale Eingabekopien bleiben in diesem Browserprofil.</span>
   </div>
   <div class="bar">
     <div class="toolgroup" role="group" aria-label="Projekt und Fotos">
@@ -453,7 +454,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.9.5';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:cb3aff031527d5ca6d626f29e3e4e52d7f01fbaff5fd7c19097febf06b5443b6';
+const APP_BUILD = 'sha256:b4ffe7825eec0d6b2c5ebd3e1491e53c0849f5e084675668d2285ea4e79e444e';
 const APP_DATE = '2026-10-21';
 const CHANGELOG = [
   ['1.9.5', '21.10.2026', 'Einheitliche Bildnummern: Alle aktiven Bilder zählen in Listenreihenfolge ab 1, auch ohne Beschreibung. Vorschau, PDF, ZIP, CSV und Labor-Fotoreferenzen verwenden dieselben Nummern; eine Exportauswahl behält diese bei. Die Dateinummer folgt mit der eingestellten Startnummer derselben Position. Originalname und geplanter Dateiname sind sichtbar. Sortieren ändert keine Dateien; geplante Änderungen müssen ausdrücklich ausgeführt werden. Umbenennen erhält die Dokumentationsreihenfolge als manuelle Sortierung.'],
@@ -554,6 +555,7 @@ function projFromJson(o){
 }
 
 function scheduleProjSave(){
+  recoveryChanged(); // N3 recovery hook
   if (!P.data || P.readOnly) return;
   P.dirty = true; clearTimeout(P.timer);
   if (!P.loading) P.timer = setTimeout(flushProject, 400);
@@ -593,7 +595,7 @@ function flushProject(){
       logProblem('Speichern ' + PROJ_FILE + ': ' + e.message);
       return false;
     }finally{
-      if (P.session === session){ P.writes--; completePendingSave(); }
+      if (P.session === session){ P.writes--; completePendingSave(); recoverySaved(); } // N3 recovery hook
     }
   });
   return P.writing;
@@ -1203,6 +1205,7 @@ async function openDir(dir, proj = null){
       syncProjectContext();
       P.loading = false;
       if (P.dirty) scheduleProjSave();
+      await recoveryOpened(); // N3 recovery hook
       $('btnReload').disabled = false;
       $('btnMeta').disabled = false;
       $('btnLab').disabled = false; LAB.rep = null; LAB.err = '';
@@ -2813,6 +2816,133 @@ async function doPdf(meta){
   }
 }
 
+/* N3 session recovery begin */
+// Local, per-session journal. Never a project backup, lock, or permission fence.
+const RECOVERY_PREFIX = 'fotokit-recovery-v1:';
+const R = { session:null, id:null, ready:false, unsaved:false, error:false, baseline:null, shared:null };
+function recoveryStatus(text, error = false){
+  $('recoveryStatus').textContent = text;
+  $('recoveryStatus').setAttribute('role', error ? 'alert' : 'status');
+}
+function recoveryDB(){
+  return new Promise((resolve, reject) => {
+    const q = indexedDB.open('fotokit-recovery', 1);
+    q.onupgradeneeded = () => q.result.createObjectStore('folders');
+    q.onerror = () => reject(q.error);
+    q.onblocked = () => reject(new Error('Sicherungsspeicher ist blockiert'));
+    q.onsuccess = () => resolve(q.result);
+  });
+}
+async function recoveryFolder(id, handle){
+  const db = await recoveryDB();
+  try { return await new Promise((resolve, reject) => {
+    const tx = db.transaction('folders', handle ? 'readwrite' : 'readonly'), store = tx.objectStore('folders');
+    const q = handle ? store.put(handle, id) : store.get(id);
+    tx.oncomplete = () => resolve(q.result); tx.onabort = tx.onerror = () => reject(tx.error || q.error);
+  }); } finally { db.close(); }
+}
+function recoveryState(){
+  return {
+    drafts:Object.fromEntries(S.items.filter(it => it.desc.trim()).map(it => [it.name, it.desc])),
+    extra:Object.fromEntries(S.items.filter(it => it.sec.trim() || it.probe.trim()).map(it => [it.name, {sec:it.sec.trim(), probe:it.probe.trim()}])),
+    discard:S.items.filter(it => it.discard).map(it => it.name), rot:clone(ROT),
+    order:S.items.map(it => it.name), settings:pickNaming(cfg), meta:clone(P.data?.meta || {}),
+    dialog:Object.fromEntries([...document.querySelectorAll('#dialog input[id^="m_"], #dialog textarea[id^="m_"]')].filter(el => !el.readOnly).map(el => [el.id, el.value]))
+  };
+}
+async function recoveryOpened(){
+  const session = P.session, dir = S.dir;
+  R.ready = false; R.unsaved = false; R.error = false; R.session = session;
+  R.id = crypto.randomUUID(); R.baseline = P.lastText; R.shared = JSON.stringify(PJ.data);
+  try { await recoveryFolder(R.id, dir); }
+  catch(e){ if (P.session === session) recoveryStatus('Ordnerzuordnung nicht gesichert: '+e.message+'. Lokale Kopien können nur heruntergeladen werden.', true); }
+  if (P.session !== session || S.dir !== dir) return;
+  R.ready = true;
+  if ($('recoveryStatus').getAttribute('role') !== 'alert') recoveryStatus('Lokale Sitzungssicherung bereit. Vorhandene Kopien bleiben erhalten.');
+}
+function recoveryChanged(){
+  if (!R.ready || R.session !== P.session || P.loading || !S.dir) return;
+  R.unsaved = true;
+  const record = {format:1, id:R.id, project:S.proj?.name || S.dir.name, folder:S.dir.name,
+    time:new Date().toISOString(), build:APP_BUILD, baseline:R.baseline, shared:R.shared, pending:true, state:recoveryState()};
+  try {
+    const text = JSON.stringify(record), key = RECOVERY_PREFIX+R.id;
+    localStorage.setItem(key, text);
+    if (localStorage.getItem(key) !== text) throw new Error('Rücklesen stimmt nicht überein');
+    R.error = false;
+    recoveryStatus(P.readOnly ? 'Ungespeicherte Sitzungseingaben lokal gesichert; Projektdatei bleibt geschützt.' : 'Lokale Eingabekopie gesichert; Projektspeicherung noch nicht bestätigt.');
+  }catch(e){ R.error = true; recoveryStatus('Sitzungseingaben NICHT lokal gesichert: '+e.message+'. Fenster geöffnet lassen und Eingaben separat sichern.', true); }
+}
+function recoverySaved(){
+  if (!R.ready || R.session !== P.session || !R.unsaved || R.error || P.readOnly || P.dirty || P.writes || P.failed || PJ.writes || PJ.failed || Object.keys(PJ.pending).length) return;
+  try {
+    const key = RECOVERY_PREFIX+R.id, record = JSON.parse(localStorage.getItem(key));
+    if (!record) return;
+    const state = recoveryState();
+    for (const k of ['drafts','extra','discard','rot','order','meta']) if (!same(state[k], P.data[k] || (['discard','order'].includes(k) ? [] : {}))) return;
+    if (!same(state.settings, pickNaming(P.data.settings || {})) || !same(record.state, state)) return;
+    record.pending = false;
+    localStorage.setItem(key, JSON.stringify(record));
+    if (JSON.parse(localStorage.getItem(key)).pending !== false) throw new Error('Speicherbestätigung nicht rücklesbar');
+    R.unsaved = false; R.baseline = P.lastText; R.shared = JSON.stringify(PJ.data);
+    recoveryStatus('Projekt gespeichert; lokale Eingabekopie zusätzlich erhalten.');
+  }catch(e){ R.error = true; recoveryStatus('Lokale Speicherbestätigung fehlgeschlagen: '+e.message+'. Eingabekopie prüfen.', true); }
+}
+async function recoveryCurrentText(dir){
+  try { return await (await (await dir.getFileHandle(PROJ_FILE)).getFile()).text(); }
+  catch(e){ if (e.name === 'NotFoundError') return null; throw e; }
+}
+function openRecovery(){
+  const records = [], invalid = [];
+  try { for (let i=0; i<localStorage.length; i++){
+    const key = localStorage.key(i); if (!key.startsWith(RECOVERY_PREFIX)) continue;
+    try { const v = JSON.parse(localStorage.getItem(key)); if (v.format !== 1 || !v.id || !v.state || typeof v.pending !== 'boolean') throw Error('Unbekanntes Sicherungsformat'); records.push(v); }
+    catch(e){ invalid.push(key+': '+e.message); }
+  }}catch(e){ recoveryStatus('Sitzungssicherungen nicht lesbar: '+e.message, true); return; }
+  records.sort((a,b) => b.time.localeCompare(a.time));
+  showDialog('<h3>Lokale Sitzungssicherungen</h3><p>Nur dieses Browserprofil und diese Adresse. Keine Projektsicherung und keine Altclientsperre. Es wird nichts automatisch übernommen oder gelöscht.</p>'+
+    (invalid.length ? '<p role="alert">Nicht lesbare Kopien bleiben erhalten: '+esc(invalid.join('; '))+'</p>' : '')+
+    records.map((v,i) => '<p><button data-session-recovery="'+i+'">'+esc(v.project)+' · '+esc(v.time)+' · '+(v.pending ? 'Projektspeicherung unbestätigt' : 'Projekt gespeichert')+'</button></p>').join('')+
+    (!records.length ? '<p>Keine lokalen Eingabekopien vorhanden.</p>' : '')+'<button id="rClose">Schließen</button>');
+  $('rClose').onclick = closeDialog;
+  document.querySelectorAll('[data-session-recovery]').forEach(button => button.onclick = () => {
+    const record = records[+button.dataset.sessionRecovery];
+    showDialog('<h3>Sitzungseingaben prüfen</h3><p>Übernehmen ist nur im selben Ordner bei unverändertem Ausgangsstand möglich. Änderungen bleiben im Schutzmodus ausschließlich in der Sitzung.</p><pre id="rPreview" style="white-space:pre-wrap"></pre><p id="rProblem" role="alert"></p><button id="rDownload">Kopie herunterladen</button><button id="rApply">Ausdrücklich in Sitzung übernehmen</button><button id="rBack">Zurück</button>');
+    $('rPreview').textContent = JSON.stringify(record, null, 2);
+    $('rBack').onclick = openRecovery;
+    $('rDownload').onclick = () => { const url = URL.createObjectURL(new Blob([JSON.stringify(record,null,2)],{type:'application/json'})), a = document.createElement('a'); a.href=url; a.download='FotoKit-Sitzung-'+record.id+'.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url),1000); };
+    $('rApply').onclick = async () => {
+      if (S.changing || S.busy) return;
+      const dir = S.dir, session = P.session, inert = document.body.inert;
+      S.changing = true; document.body.inert = true;
+      try {
+        if (!dir) throw Error('Bitte zuerst den zugehörigen Projektordner öffnen.');
+        if (R.unsaved) throw Error('Aktuelle Sitzung enthält ungesicherte Eingaben. Diese zuerst separat sichern und das Projekt erneut öffnen.');
+        if (P.writes || PJ.writes || P.dirty || Object.keys(PJ.pending).length || P.failed || PJ.failed) throw Error('Aktuelle Speicherungen zuerst abschließen.');
+        const folder = await recoveryFolder(record.id);
+        if (!folder || !await dir.isSameEntry(folder)) throw Error('Anderer oder nicht eindeutig zugeordneter Ordner. Nur Download möglich.');
+        if (await recoveryCurrentText(dir) !== record.baseline) throw Error('Konflikt: Projektdatei wurde seit diesen Eingaben geändert. Keine Übernahme; Kopie herunterladen und bewusst vergleichen.');
+        if (JSON.stringify(S.proj ? await readPJ(S.proj.dir) : null) !== record.shared) throw Error('Konflikt: Gemeinsame Projektdaten wurden geändert. Keine Übernahme.');
+        if (session !== P.session || dir !== S.dir) throw Error('Projekt wurde gewechselt.');
+        const state = record.state;
+        if (!Array.isArray(state.order) || state.order.length !== S.items.length || new Set(state.order).size !== S.items.length || S.items.some(it => !state.order.includes(it.name))) throw Error('Bildbestand stimmt nicht überein.');
+        // Only editable fields are replayed; raw project JSON and original images are never replaced.
+        for (const it of S.items){ it.el=null; it.desc=state.drafts[it.name] || ''; it.sec=state.extra[it.name]?.sec || ''; it.probe=state.extra[it.name]?.probe || ''; it.discard=state.discard.includes(it.name); }
+        ROT=clone(state.rot); cfg={...cfg,...state.settings}; applyCfgToUI();
+        P.data.meta=clone(state.meta); P.data.order=clone(state.order);
+        S.items.sort((a,b) => state.order.indexOf(a.name)-state.order.indexOf(b.name));
+        buildRows(); recompute(); flushDrafts(); saveExtra(); saveRot(); saveDiscards(); scheduleProjSave();
+        closeDialog();
+        if (Object.keys(state.dialog || {}).length){ openMetaDialog(false); for (const [id,value] of Object.entries(state.dialog)){ const el=$(id); if(el && !el.readOnly){ el.value=value; el.dispatchEvent(new Event('input',{bubbles:true})); } } }
+        recoveryChanged();
+        recoveryStatus('Sitzungseingaben ausdrücklich übernommen. Projektstatus separat prüfen.');
+      }catch(e){ if ($('rProblem')) $('rProblem').textContent='Wiederaufnahme abgebrochen: '+e.message; recoveryStatus('Wiederaufnahme abgebrochen: '+e.message,true); }
+      finally { document.body.inert=inert; S.changing=false; }
+    };
+  });
+}
+/* N3 session recovery end */
+
 /* ---------- online version: offline cache + update notice ----------
    Only when served over https (GitHub Pages). Opened as a local file, the app behaves exactly as before. */
 const IS_WEB = location.protocol === 'https:' || location.hostname === 'localhost';
@@ -2828,6 +2958,20 @@ if (IS_WEB && 'serviceWorker' in navigator){
   // Claiming a page changes its network controller, never its running application.
   navigator.serviceWorker.addEventListener('controllerchange', () => { checkUpdate(); });
 }
+async function validateUpdateHTML(txt){
+  if (!/^<!doctype html>/i.test(txt.trimStart()) || !/<html[ >]/i.test(txt) || !/<head[ >]/i.test(txt) || !/<body[ >]/i.test(txt) || !/<\/body>\s*<\/html>\s*$/i.test(txt)) throw Error('Unvollständiges HTML');
+  const versions = [...txt.matchAll(/const APP_VERSION = '(\d+\.\d+\.\d+)'/g)];
+  const pattern = /const APP_BUILD = '(sha256:[a-f0-9]{64})'/g;
+  const builds = [...txt.matchAll(pattern)];
+  if (versions.length !== 1 || builds.length !== 1 || [...txt.matchAll(/^[ \t]*const APP_VERSION\s*=/gm)].length !== 1 || [...txt.matchAll(/^[ \t]*const APP_BUILD\s*=/gm)].length !== 1) throw Error('Mehrdeutige Buildangaben');
+  const doc = new DOMParser().parseFromString(txt, 'text/html');
+  if (!doc.querySelector('#btnInfo') || !doc.querySelector('#btnOpen') || ![...doc.scripts].some(script => script.textContent.includes(builds[0][0]) && script.textContent.includes(versions[0][0]))) throw Error('Keine vollständige FotoKit-Anwendung');
+  const normalized = txt.replace(pattern, "const APP_"+"BUILD = 'sha256:BUILD'");
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalized));
+  const actual = 'sha256:'+Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2,'0')).join('');
+  if (actual !== builds[0][1]) throw Error('HTML-Inhalt stimmt nicht mit Buildkennung überein');
+  return {version:versions[0][1], build:actual};
+}
 async function checkUpdate(){
   if (!IS_WEB){ updateStatus('Lokale Datei: kein Online-Versionsnachweis. Build im Infofenster prüfen.'); return; }
   if (updateChecking) return;
@@ -2837,11 +2981,10 @@ async function checkUpdate(){
   try{
     const res = await fetch('./index.html?fotokit-update=1', { cache: 'no-store', signal: abort.signal });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    const txt = await res.text();
-    const v = txt.match(/const APP_VERSION = '(\d+\.\d+\.\d+)'/);
-    const build = txt.match(/const APP_BUILD = '(sha256:[a-f0-9]{64})'/);
-    if (!v || !build) throw new Error('Kein prüfbarer Build');
-    const different = build[1] !== APP_BUILD || v[1] !== APP_VERSION;
+    if (!/^text\/html(?:;|$)/i.test(res.headers.get('Content-Type') || '')) throw Error('Keine HTML-Antwort');
+    const remote = await validateUpdateHTML(await res.text());
+    const v = [null,remote.version], build = [null,remote.build];
+    const different = remote.build !== APP_BUILD || remote.version !== APP_VERSION;
     const b = $('btnUpd');
     b.hidden = !different;
     b.textContent = `Anderer Programmstand ${v[1]} · ${build[1].slice(7, 19)} – sicher neu laden`;
@@ -3424,6 +3567,9 @@ $('btnNaming').onclick = () => {
 };
 $('btnUpd').onclick = applyUpdate;
 $('btnCheckUpdate').onclick = checkUpdate;
+$('btnSessionRecovery').onclick = openRecovery;
+document.addEventListener('input', () => recoveryChanged());
+document.addEventListener('change', () => recoveryChanged());
 $('btnInfo').textContent = 'v' + APP_VERSION + ' · ' + APP_BUILD.slice(7, 19);
 $('btnInfo').title = 'Geladen: ' + APP_VERSION + ' / ' + APP_BUILD;
 updateStatus('Online-Programmstand noch nicht bestätigt. Andere Sitzungen werden nicht geprüft.');
@@ -3438,6 +3584,7 @@ $('btnReload').onclick = async () => {
     const note = await loadProject(S.dir);      // picks up changes a coworker saved meanwhile
     await loadPJ();
     await loadItems();
+    await recoveryOpened(); // N3 recovery hook
     if (note) banner(P.readOnly ? 'err' : 'info', note);
   });
 };
@@ -3475,9 +3622,10 @@ document.addEventListener('drop', async e => {
 
 window.addEventListener('beforeunload', e => {
   if (S.dir && !S.changing){ flushDrafts(); saveExtra(); }
+  if (R.unsaved) recoveryChanged();
   // A browser reload/close cannot await promises. Warn also while a write is in
   // flight: dirty/pending have already been removed from the queue at that point.
-  if (S.busy || P.dirty || P.writes || PJ.writes || PJ.failed || Object.keys(PJ.pending).length){
+  if (R.unsaved || R.error || S.busy || P.dirty || P.writes || PJ.writes || PJ.failed || Object.keys(PJ.pending).length){
     flushProject(); flushPJ(); e.preventDefault(); e.returnValue = '';
   }
 });

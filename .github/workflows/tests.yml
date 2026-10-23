@@ -25,6 +25,7 @@ jobs:
           node-version: 24
       - run: node tools/build-identity.cjs --check
       - run: node tests/laborwerte.cjs
+      - run: node tests/n3-await-condition.cjs
 
   browser-tests:
     name: Browser tests (${{ matrix.browser }})
@@ -46,7 +47,10 @@ jobs:
           echo "NODE_PATH=$RUNNER_TEMP/pw/node_modules" >> "$GITHUB_ENV"
           "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps ${{ matrix.browser }}
       - name: Loaded build and safe update UX
-        run: node tests/n3-updates-browser.cjs ${{ matrix.browser }}
+        run: |
+          node tests/n3-updates-browser.cjs ${{ matrix.browser }}
+          node tests/n3-recovery-browser.cjs ${{ matrix.browser }}
+          node tests/n3-offline-browser.cjs ${{ matrix.browser }}
       - name: Project data (_Projekt.json) in the real browser
         run: node tests/projektdaten-browser.cjs ${{ matrix.browser }}
       - name: Mosaik bar (project, steps, next step) in the real browser
