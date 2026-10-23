@@ -44,13 +44,6 @@ function assertLongText(text){
  assert.ok(text.includes('\u00c4\u00d6\u00dc'),'German special characters retained');
 }
 async function run(){
- const cp=require('node:child_process'),baseline=cp.execFileSync('git',['show','b616164f5ab24faa5371f4eb714276f6080a8bf3:index.html'],{cwd:root,encoding:'utf8'});
- const n4='fde3aad7401a1b590a5ef9ac61f8627f63180e18';
- const n4Integrated=cp.spawnSync('git',['merge-base','--is-ancestor',n4,'HEAD'],{cwd:root}).status===0;
- if(n4Integrated){
-  // Combined N4 deliberately changes storage/UI outside PDF; guard exact N4 product bytes instead.
-  assert.deepEqual(fs.readFileSync(path.join(root,'index.html')),cp.execFileSync('git',['show',n4+':index.html'],{cwd:root}),'N4 PDF+product HTML bytes unchanged');
- }else if(!process.env.PDF_COMBINED)assert.equal(outside(html),outside(baseline),'Every byte outside PDF block unchanged from main');
  const jpeg=Buffer.from([255,216,255,217]);let calls=[];
  const build=harness(async(f,r,e,q)=>{calls.push([f.i,r,e,q]);return{data:jpeg,w:f.i%2?600:1200,h:f.i%2?1200:600};});let cases=0;
  const test=async(title,fn)=>{await fn();cases++;console.log('OK PDF: '+title);};

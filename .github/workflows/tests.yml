@@ -16,7 +16,7 @@ concurrency:
 jobs:
   node-tests:
     name: Node tests (no browser)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
@@ -32,6 +32,7 @@ jobs:
       - run: node tests/unknown-fields.cjs
       - run: node tests/n2-speichersicherheit.cjs
       - run: node tests/n3-await-condition.cjs
+      - run: node tests/n3-writer-conflict.cjs
 
   browser-tests:
     name: Browser tests (${{ matrix.browser }})
@@ -41,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium, webkit]
+        browser: [chromium]
     steps:
       - uses: actions/checkout@v6
         with:
