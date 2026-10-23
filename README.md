@@ -116,4 +116,4 @@ node tests/oberflaeche-browser.cjs [chromium|webkit]   # Einstellungsbereich, Ta
 node tests/serienbeschriftung-browser.cjs [chromium|webkit]   # 5/50/150 Bilder: Tastatur, Fokus, Vorschau, Vererbung und Autosave
 ```
 
-GitHub führt alle Tests bei jedem Pull Request aus (`.github/workflows/tests.yml`, Chromium und WebKit; ab 1.7.1).
+GitHub führt alle Tests bei jedem Pull Request aus (`.github/workflows/tests.yml`, Chromium; die WebKit-Aufrufe sind lokal optional). Es gibt nur diesen einen Test-Workflow; zusätzliche Kompatibilitäts- und Integrations-Workflows wurden am 23.10.2026 entfernt.
