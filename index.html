@@ -454,11 +454,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.9.5';
+const APP_VERSION = '1.10.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:d9c431db8c8b5e26793722e18f7517c99fa25660f7788ef13dba896e0a4449ce';
-const APP_DATE = '2026-10-21';
+const APP_BUILD = 'sha256:88b3c8e9dbb2605b88e75d569e2bd999cfac24a83ac8a01d18e3c4ae655e571b';
+const APP_DATE = '2026-10-23';
 const CHANGELOG = [
+  ['1.10.0', '23.10.2026', 'Zuständige Person: Liegt im Archivordner die Mitarbeiterliste der Projektzentrale, erkennt FotoKit das Kürzel am Ende des Projektordners (z. B. „26.0123 Köln Nad“). Der Ort im Dateinamen von PDF und ZIP, in der Kopfzeile und in _Projekt.json steht dann ohne Kürzel. Die Leiste oben zeigt „Nr. Ort · zuständige Person“.'],
   ['1.9.5', '21.10.2026', 'Einheitliche Bildnummern: Alle aktiven Bilder zählen in Listenreihenfolge ab 1, auch ohne Beschreibung. Vorschau, PDF, ZIP, CSV und Labor-Fotoreferenzen verwenden dieselben Nummern; eine Exportauswahl behält diese bei. Die Dateinummer folgt mit der eingestellten Startnummer derselben Position. Originalname und geplanter Dateiname sind sichtbar. Sortieren ändert keine Dateien; geplante Änderungen müssen ausdrücklich ausgeführt werden. Umbenennen erhält die Dokumentationsreihenfolge als manuelle Sortierung.'],
   ['1.9.4', '20.10.2026', 'Projektzentrale und Spektron-Leiste übergeben Projekte jetzt über #projekt im Fragment. Sonderzeichen bleiben erhalten; alte ?projekt-Links funktionieren weiterhin und werden nach dem Laden bereinigt. Projektwechsel laden auch bereits geöffnete App-Fenster neu; eine Warnung vor ungesicherten Eingaben kann den Wechsel abbrechen. Speicherfehler nach Umbenennen oder Rückgängig bleiben sichtbar. Erneut speichern sichert die Metadaten unter den bereits geänderten Dateinamen, einschließlich neuer Eingaben; die Dateiaktion wird dabei nicht wiederholt. Eine Erfolgsmeldung erscheint erst nach erfolgreicher Speicherung.'],
   ['1.9.3', '20.10.2026', 'Projektkontext: FotoKit, URL und Spektron-Leiste verwenden erst nach erfolgreichem Öffnen dieselbe Projektzuordnung. Fehlgeschlagene Wechsel erhalten das bisherige Projekt. Unbekannte Fotoordner entfernen eine alte Zuordnung; nachträgliches Zuordnen erhält die Bildinformationen. Bestehende Speicherabsicherung und geschützter Modus bleiben erhalten.'],
@@ -1041,7 +1042,7 @@ function dateFromName(n){
    Contract shared with Projektzentrale (keep identical there):
      • IndexedDB „mosaik-suite“ v1, store „kv“, key „archiv“ → handle of „Mosaik Archivordner“
        (all apps on kaspersebastian83-dot.github.io share this database)
-     • project folders „<YY>.<Nummer> <Schadenort>“, e.g. „26.0123 Köln“, photos in the subfolder „Fotos“
+     • project folders „<YY>.<Nummer> <Schadenort> <Kürzel>“, e.g. „26.0123 Köln Nad“, photos in the subfolder „Fotos“
      • _Projekt.json in the project folder: shared project data. Read fresh → patch changed fields → write;
        unknown fields are kept. Projektnummer and Schadenort come from the folder name.               */
 const SUITE = {
@@ -1060,9 +1061,48 @@ const SUITE = {
   }
 };
 const PROJ_RE = /^(\d{2})\.(\d{2,6})(?:[\s_-]+(.*))?$/;
-function parseProjName(name){
+/* SPEKTRON-ORDNERNAME v1 – in allen Apps identisch halten.
+   Liest den Ordnernamen von hinten: Am Ende wird ein Kürzel der Mitarbeiterliste gesucht (bis zu drei Wörter, längster Treffer
+   zuerst; verglichen ohne Groß-/Kleinschreibung, Leerzeichen und Punkte, also „Dr. Ka“ = „Dr.Ka“ = „dr ka“). Alles zwischen
+   Projektnummer und Kürzel ist der Ort, mit oder ohne Straße. Nichts wird geraten: Kein Treffer → Ort = ganzer Rest, Hinweis.
+   Ohne Mitarbeiterliste wird nichts abgetrennt (Verhalten wie vor 1.12). Kennung bleibt immer der volle Ordnername. */
+const maNorm = s => String(s ?? '').normalize('NFC').toLowerCase().replace(/[\s.]+/g, '');
+function leseProjektordner(name, personen){
   const m = PROJ_RE.exec(String(name).normalize('NFC').trim());
-  return m ? { nr: `${m[1]}.${m[2]}`, ort: (m[3] || '').trim() } : null;
+  if (!m) return null;
+  const rest = (m[3] || '').trim();
+  const r = { nr: `${m[1]}.${m[2]}`, yy: m[1], ort: rest, key: (+m[1]) * 1e6 + (+m[2]), kuerzel: '', hinweis: '' };
+  if (!Array.isArray(personen) || !personen.length) return r;
+  const woerter = [...rest.matchAll(/[^\s_]+/g)];
+  for (let n = Math.min(3, woerter.length); n >= 1; n--){
+    const ende = maNorm(woerter.slice(-n).map(w => w[0]).join(''));
+    const p = personen.find(x => x && maNorm(x.ordnerKuerzel) === ende);
+    if (!p) continue;
+    r.kuerzel = String(p.ordnerKuerzel).trim();
+    r.ort = rest.slice(0, woerter[woerter.length - n].index).replace(/[\s_-]+$/, '');
+    if (!r.ort) r.hinweis = 'Im Ordnernamen fehlt der Ort.';
+    return r;
+  }
+  r.hinweis = rest ? 'Kein bekanntes Kürzel am Ende des Ordnernamens.' : 'Im Ordnernamen fehlen Ort und Kürzel.';
+  return r;
+}
+/* SPEKTRON-ORDNERNAME-ENDE */
+/* Mitarbeiterliste der Projektzentrale (<Archivordner>/_Spektron-Mitarbeiter.json) – FotoKit liest sie nur, schreibt nie.
+   Ohne Liste oder ohne Leserecht auf den Archivordner wird nichts abgetrennt (Verhalten wie bisher). */
+const MA_FILE = '_Spektron-Mitarbeiter.json';
+let MA_PERSONEN = null;
+async function maVomArchiv(archiv){
+  MA_PERSONEN = null;
+  try{
+    if (!archiv) archiv = await SUITE.get('archiv');
+    if (!archiv || (await archiv.queryPermission({ mode: 'read' })) !== 'granted') return;
+    const o = JSON.parse(await (await (await archiv.getFileHandle(MA_FILE)).getFile()).text());
+    if (o && o.format === 'spektron-mitarbeiter' && Array.isArray(o.personen)) MA_PERSONEN = o.personen.filter(p => p && typeof p.ordnerKuerzel === 'string' && p.ordnerKuerzel.trim());
+  }catch(e){ MA_PERSONEN = null; }
+}
+function parseProjName(name){
+  const r = leseProjektordner(name, MA_PERSONEN);
+  return r ? { nr: r.nr, ort: r.ort, kuerzel: r.kuerzel } : null;
 }
 const FOTOS_DIR = 'Fotos';
 const PJ_FILE = '_Projekt.json';
@@ -1248,6 +1288,7 @@ async function assignProject(){
     let projDir;
     try{ projDir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'fotokit-projekt', startIn: fotos }); }
     catch(e){ if (e.name !== 'AbortError') banner('err', 'Ordner konnte nicht geöffnet werden: ' + esc(e.message)); return; }
+    await maVomArchiv();
     const p = parseProjName(projDir.name), sub = await findSubdir(projDir, FOTOS_DIR);
     if (!p || !sub || !(await sub.isSameEntry(fotos))){
       banner('err', `„${esc(projDir.name)}“ ist nicht der Projektordner dieses „Fotos“-Ordners. Bitte den Ordner wählen, in dem „Fotos“ liegt (z. B. „26.0123 Köln“).`);
@@ -1260,6 +1301,7 @@ async function assignProject(){
 
 /* open a project folder („26.0123 Köln“): works on its „Fotos“ subfolder */
 async function openProject(projDir){
+  await maVomArchiv();
   const p = parseProjName(projDir.name);
   let fotos = await findSubdir(projDir, FOTOS_DIR);
   if (!fotos){
@@ -1315,6 +1357,7 @@ async function projectOf(dir, ask = false){
     if (st !== 'granted') return null;
     const path = await archiv.resolve(dir);
     if (!path || path.length !== 2 || path[1].normalize('NFC').toLowerCase() !== FOTOS_DIR.toLowerCase()) return null;
+    await maVomArchiv(archiv);
     const p = parseProjName(path[0]);
     if (!p) return null;
     return { dir: await archiv.getDirectoryHandle(path[0]), name: path[0], nr: p.nr, ort: p.ort };
@@ -3907,6 +3950,34 @@ updateExample();
   var ZENTRALE = '../Projektzentrale/', MAX = 6;
   var ich = '', kompakt = false, projektName = null, name = '', stand = null, zuletzt = [], bar = null, pop = null, timer = 0, lauf = 0;
   var nfc = function(s){ try{ return String(s).normalize('NFC'); }catch(e){ return String(s); } };
+  /* Kurzfassung von SPEKTRON-ORDNERNAME v1 (Projektzentrale): Kürzel am Ende des Ordnernamens anhand der Mitarbeiterliste */
+  var maNorm = function(x){ return nfc(x == null ? '' : x).toLowerCase().replace(/[\s.]+/g, ''); };
+  function ordnerName(n, personen){
+    var m = /^(\d{2})\.(\d{2,6})(?:[\s_-]+(.*))?$/.exec(nfc(n).trim());
+    if (!m) return null;
+    var rest = (m[3] || '').trim(), r = { nr: m[1] + '.' + m[2], ort: rest, kuerzel: '' };
+    if (!personen || !personen.length) return r;
+    var w = [], re = /[^\s_]+/g, x;
+    while ((x = re.exec(rest))) w.push(x);
+    for (var k = Math.min(3, w.length); k >= 1; k--){
+      var ende = maNorm(w.slice(-k).map(function(y){ return y[0]; }).join(''));
+      var p = personen.find(function(q){ return q && maNorm(q.ordnerKuerzel) === ende; });
+      if (p){ r.kuerzel = String(p.ordnerKuerzel).trim(); r.ort = rest.slice(0, w[w.length - k].index).replace(/[\s_-]+$/, ''); return r; }
+    }
+    return r;
+  }
+  /* Anzeige „Nr. Ort“ und zuständige Person (manuell aus _Projekt.json, sonst aus dem Ordnernamen) */
+  async function personUndAnzeige(arch, s, zust){
+    var personen = null;
+    try{
+      var mt = await arch.getFileHandle('_Spektron-Mitarbeiter.json').then(function(f){ return f.getFile(); }).then(function(f){ return f.text(); });
+      var mj = JSON.parse(mt); if (mj && mj.format === 'spektron-mitarbeiter' && Array.isArray(mj.personen)) personen = mj.personen;
+    }catch(e){}
+    var o = ordnerName(name, personen);
+    if (o) s.anzeige = o.nr + (o.ort ? ' ' + o.ort : '');
+    var k = zust && typeof zust === 'object' && typeof zust.kuerzel === 'string' ? zust.kuerzel : (o ? o.kuerzel : '');
+    if (k){ var pp = (personen || []).find(function(q){ return q && maNorm(q.ordnerKuerzel) === maNorm(k); }); s.person = pp && pp.name ? pp.name : k; }
+  }
   var h = function(tag, attrs){
     var el = document.createElement(tag);
     for (var k in (attrs || {})){ if (k === 'text') el.textContent = attrs[k]; else el.setAttribute(k, attrs[k]); }
@@ -3980,11 +4051,12 @@ updateExample();
       try{ for await (var e of arch.values()) if (e.kind === 'directory' && nfc(e.name) === nfc(name)){ proj = e; break; } }catch(e2){}
     }
     if (!proj) return null;
-    var s = { label: false, fotos: false, plan: false, beleg: false, objekt: '' };
+    var s = { label: false, fotos: false, plan: false, beleg: false, objekt: '', anzeige: '', person: '' }, zust = null;
     try{
       var pj = await proj.getFileHandle('_Projekt.json').then(function(f){ return f.getFile(); }).then(function(f){ return f.text(); }).catch(function(){ return ''; });
-      if (pj){ var j = JSON.parse(pj), o = j && (typeof j.objekt === 'string' ? j.objekt : j.daten && j.daten.objekt); if (typeof o === 'string') s.objekt = o.trim(); }   // Projektzentrale schreibt die Felder direkt in _Projekt.json (ältere Testdateien: unter „daten“)
+      if (pj){ var j = JSON.parse(pj), o = j && (typeof j.objekt === 'string' ? j.objekt : j.daten && j.daten.objekt); if (typeof o === 'string') s.objekt = o.trim(); zust = j && j.zustaendig; }   // Projektzentrale schreibt die Felder direkt in _Projekt.json (ältere Testdateien: unter „daten“)
     }catch(e3){}
+    await personUndAnzeige(arch, s, zust);
     try{ var fo = await unterordner(proj, 'Fotos'); if (fo) s.fotos = await fo.getFileHandle('_Bildumbenenner.json').then(function(){ return true; }, function(){ return false; }); }catch(e4){}
     try{
       var la = await unterordner(proj, 'Laboraufträge');
@@ -4016,7 +4088,7 @@ updateExample();
       '#mosaikLeiste .ml-home,#mosaikLeiste .ml-proj{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;color:#c9d6df}' +
       '#mosaikLeiste .ml-home:hover,#mosaikLeiste .ml-proj:hover,#mosaikLeiste .ml-proj[aria-expanded=true]{background:rgba(255,255,255,.1);color:#fff}' +
       '#mosaikLeiste .ml-marke{flex:none;padding:0 6px 0 2px;color:#8fb3d1;font-weight:700;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;white-space:nowrap}' +
-      '#mosaikLeiste .ml-proj b{color:#fff;font-weight:650}#mosaikLeiste .ml-obj{color:#9fb1be;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto;max-width:34ch}' +
+      '#mosaikLeiste .ml-proj b{color:#fff;font-weight:650}#mosaikLeiste .ml-obj{color:#9fb1be;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto;max-width:34ch}#mosaikLeiste .ml-wer{color:#dfe8ee;flex:0 0 auto}' +
       '#mosaikLeiste .ml-sp{flex:1 1 0;min-width:4px}' +
       '#mosaikLeiste .ml-steps{display:flex;align-items:center;gap:2px}' +
       '#mosaikLeiste .ml-step{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;color:#b9c8d3;position:relative}' +
@@ -4066,9 +4138,10 @@ updateExample();
     bar.appendChild(h('span', { class: 'ml-marke', title: 'Spektron – die Büro-Apps', text: 'Spektron' }));
     bar.appendChild(h('a', { class: 'ml-home', href: ZENTRALE, target: 'projektzentrale', title: 'Alle Projekte (Projektzentrale)' }, h('b', { text: '⌂', 'aria-hidden': 'true' }), h('span', { text: 'Projektzentrale' })));
     if (name){
-      var pb = h('button', { class: 'ml-proj', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', title: 'Anderes Projekt öffnen' }, h('b', { text: name }), h('span', { text: '▾', 'aria-hidden': 'true' }));
+      var pb = h('button', { class: 'ml-proj', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', title: 'Anderes Projekt öffnen' }, h('b', { text: (stand && stand.anzeige) || name, title: name }), h('span', { text: '▾', 'aria-hidden': 'true' }));
       pb.onclick = function(ev){ ev.stopPropagation(); oeffnePop(pb); };
       bar.appendChild(pb);
+      if (stand && stand.person) bar.appendChild(h('span', { class: 'ml-obj ml-wer', text: '· ' + stand.person, title: 'Zuständig: ' + stand.person }));
       if (stand && stand.objekt) bar.appendChild(h('span', { class: 'ml-obj', text: stand.objekt, title: stand.objekt }));
       bar.appendChild(h('span', { class: 'ml-sp' }));
       var steps = h('span', { class: 'ml-steps' });
