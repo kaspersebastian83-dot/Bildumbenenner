@@ -1,0 +1,81 @@
+FotoKit: PDF-Bilddokumentation
+
+Scope
+Only the PDF writer/layout block in index.html changes. Every application byte
+outside that block is checked against main b616164f5ab24faa5371f4eb714276f6080a8bf3.
+The temporary F3/F6/N2 composition checks the same invariant against its own
+security baseline. Storage, recovery, project identity, renaming, original image
+handling, CSV, ZIP and PDF save/overwrite checks remain outside the changed block.
+
+Design
+A4, restrained blue, compact repeating header, original company symbol, separate
+photo-number badges and captions, consistent footer and page totals. All previous
+project fields remain on a flowing cover/index. Portrait/landscape photos use
+contain scaling, never cropping. Two photos per page remains the normal maximum;
+long captions can require one photo per page or caption continuation pages.
+The sampling table repeats its column headings on continuation pages.
+
+Original company asset
+Source: reisekosten-pro/lib/assets/firmenlogo.png
+Source commit: 30d74d63707b632c520f84032f3379c8f1c8ce74
+PNG: 517 x 462 pixels, RGBA, 46011 bytes.
+SHA-256: eab176efea3766f58976157f969ae6b61da0a395b96d8a79f1f3d6be0774d057
+assets/firmenlogo.png is a byte-exact copy, not a recreated logo.
+Palette follows SpesenKit lib/pdf-statement.ts: navy 33/48/62, blue 53/109/168,
+muted 98/120/143. Company name: Dr. Schiffers & Partner.
+tools/embed-pdf-logo.py embeds lossless RGB and alpha streams, preserving the
+original aspect ratio. Runtime PDF export requires no additional file request,
+library or network access. The PNG is retained as a verifiable source resource.
+One shared logo image/soft mask per PDF; header width 36 pt, watermark width
+258 pt, opacity 0.035. The watermark is painted behind all body content and photos.
+Combined compressed image/alpha streams occupy 40020 bytes per file, independent
+of page count. Branding and readable text add bounded overhead; PDFs are not
+claimed to have identical total sizes to main. Image JPEG bytes are identical.
+
+Verification
+node tests/pdf-layout.cjs
+node tests/pdf-layout-browser.cjs chromium
+node tests/pdf-layout-browser.cjs webkit
+The browser test exposes the existing internal writer only in the served test
+response, on both current and pinned-main pages. Production HTML has no test API.
+The test compares actual canvas JPEG streams with main, including shrink options,
+portrait/landscape, selected numbering, long captions and 1/5/50/150 photos.
+Existing real-UI PDF/CSV/ZIP/rename/undo tests are retained unchanged.
+
+Temporary security composition
+node tools/pdf-compose-compat.cjs <new-directory>
+Pins: F3 5617ff033cd29c0a3fa43bb4246be598830cbfcd
+      F6 9c7929b6aebca4dc7fe8d95d7b518ea0946a66d0
+      N2 063b91d1f253c2c05fac221cd55b071be19fba59
+Reuses N2's reviewed F3/F6 conflict resolution and byte-capable F6 test fixture;
+the original security assertions remain unchanged. PDF patch applies separately.
+PDF_COMBINED=1 node tests/pdf-layout.cjs
+Run all existing Node and *-browser.cjs tests in that disposable clone.
+CI additionally runs the pinned producer/consumer/security integration and the
+shared F3 protocol against unchanged pinned Projektzentrale sources. Its N2
+archive fixture adapter is unchanged; existing security branches are never edited.
+
+Synthetic visual sample
+node tools/pdf-sample.cjs <six-synthetic-source-pngs> <output-directory>
+Expected names: photo-01.png ... photo-06.png. Uses the real export dialog and an
+isolated OPFS project, never a real project directory. Copies no generated sample
+photos into the application. Source-image checksums prove originals unchanged.
+Render and visually inspect every output page with an independent PDF renderer.
+
+Limits
+Existing Helvetica/WinAnsi character support is retained, including German
+umlauts and Euro. Existing unsupported-script fallback is not redesigned here.
+Native directory API tests retain their existing WebKit skips; the new PDF tests
+run in both engines without those skips. Synthetic browser tests and PDF rendering
+do not establish Windows/SMB/RDP or power-loss durability. No merge or deployment.
+The entire SPEKTRON suite remains NO-GO until independent audit and practical
+Windows/SMB/RDP acceptance have succeeded.
+
+PR #34 follow-up from 6d26c66f3e3c5a7a0b160d7dfbaa00676e9f2b30
+The long-text oracle now asserts ENDEBILD, ENDEABSCHNITT and ENDEOBJEKT
+individually. The German-character assertion remains separate. Three deliberate
+mutations remove one marker at a time from the actual exported PDF text and must
+raise exactly that marker assertion while the other markers/characters remain.
+Filename/date detail text uses 8 pt with 10 pt leading; wrapping and measured
+caption space use the same values. Full filenames and continuation pages remain.
+No application code outside the PDF block or security PRs is changed.
