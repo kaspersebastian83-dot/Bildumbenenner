@@ -7,5 +7,7 @@ const { waitForAsync } = require('./await-condition.cjs');
   const h = await waitForAsync(page, async () => ++tries === 3 ? { confirmed:true } : false, undefined, { timeout: 100 });
   assert.equal(await h.evaluate(v => v.confirmed), true); assert.equal(tries, 3); assert.ok(disposed >= 2);
   await assert.rejects(waitForAsync(page, async () => { throw Error('read failure'); }), /read failure/);
+  const hanging = {...page,evaluateHandle:()=>new Promise(()=>{})};
+  await assert.rejects(waitForAsync(hanging,async()=>true,undefined,{timeout:30}),/without a positive result/);
   console.log('PASS N3 async waits: false fails, eventual positive retries, read errors propagate');
 })().catch(e => { console.error(e); process.exitCode = 1; });

@@ -1,5 +1,7 @@
 # N3 – Nach-Audit: Altclients, Befund und Nachweise
 
+Historischer Bericht zum ursprünglichen N3-Stand. Die Findings und Korrekturen des Nachaudits sind in [N3-Audit-Fixes.md](N3-Audit-Fixes.md) dokumentiert. Die ursprünglichen Offline-/Testaussagen unten sind durch diese Nachweise eingeschränkt.
+
 Stand: 22.10.2026. **SPEKTRON bleibt NO-GO** bis unabhängigem Gesamtaudit und praktischer Windows-/SMB-/RDP-Abnahme. Kein Merge, kein Deployment, ausschließlich synthetische Daten.
 
 ## Geprüfte Ausgangsstände

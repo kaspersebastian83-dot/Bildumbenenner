@@ -47,7 +47,8 @@ try{
  await p.route('**/index.html',r=>r.fulfill({contentType:'text/html',body:protectedHTML}));await p.reload();await p.evaluate(()=>{window.n3Protected();document.getElementById('btnUpd').hidden=false;});let navigations=0;p.on('framenavigated',()=>navigations++);await p.locator('#btnUpd').click();await p.locator('#banner').filter({hasText:/Neuladen abgebrochen/}).waitFor();assert.equal(navigations,0);
  console.log('PASS N3 UPDATE: protected mode blocks app update; real input recovery tested separately');
  await assert.rejects(waitForAsync(p,async()=>false,undefined,{timeout:100}),/without a positive result/);
- console.log('PASS N3 NEGATIVE: actual browser async false condition reliably rejects');
+ await assert.rejects(waitForAsync(p,async()=>new Promise(()=>{}),undefined,{timeout:100}),/without a positive result/);
+ console.log('PASS N3 NEGATIVE: actual browser async false and hanging conditions reliably reject');
  assert.deepEqual(errors,[]);
 }finally{await context.close();await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exit(1);});

@@ -41,7 +41,7 @@ async function page(openProject=true){
    case'remove':await fs.rm(f,{recursive:!!arg.recursive});return true;
   }}catch(e){if(e.code==='ENOENT')return{missing:true};throw e;}
  });
- await bridge(context,PROJECT);const p=await context.newPage();p.on('pageerror',e=>pageErrors.push(e.message));await p.goto(base);if(openProject){await p.locator('#btnOpen').click();await p.waitForFunction(()=>!document.body.inert&&!document.getElementById('btnMeta').disabled);}return{p,context};
+ await bridge(context,PROJECT);const p=await context.newPage();p.on('pageerror',e=>{pageErrors.push(e.message);console.error('BROWSER ERROR',e.stack||e.message);});await p.goto(base);if(openProject){await p.locator('#btnOpen').click();await p.waitForFunction(()=>!document.body.inert&&!document.getElementById('btnMeta').disabled);}return{p,context};
 }
 async function openRecovery(p,exact){
  await p.locator('#btnVersions').click();await p.locator('[data-photo-version]').first().waitFor();let found=false;
@@ -93,6 +93,8 @@ await A2.p.locator('#list .desc').nth(0).fill('A existing writable denied');awai
 await A2.p.locator('#banner').filter({hasText:/nicht gespeichert|konnte nicht gespeichert/}).waitFor();assert.equal(await disk(),beforeFence);
 evidence.events.push({step:'external synthetic authority denies commit on existing stream',unchanged:true});
 console.log('PASS N3 FENCE MODEL: external commit denial blocks existing old-client stream; native SMB still requires acceptance');
+// Completed writer/recovery phases must not run background updates during the isolated offline phase.
+await restarted.context.close();await A2.context.close();
 // Old offline cache in another, independent browser profile remains runnable.
 serving=old;const C=await page(false);await C.p.evaluate(()=>navigator.serviceWorker.ready);await C.p.waitForFunction(()=>!!navigator.serviceWorker.controller);const offlineStart=originRequests.length;networkDown=true;serving=root;await C.p.reload();assert.equal(await C.p.locator('#buildStatus').count(),0);assert.equal(await C.p.locator('#btnInfo').textContent(),aIdentity);
 assert.ok(originRequests.slice(offlineStart).every(r=>r.blocked),'no online response during offline navigation');evidence.offlineRequests=originRequests.slice(offlineStart);
