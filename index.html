@@ -454,11 +454,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.13.0';
+const APP_VERSION = '1.13.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:62b0e150ab5dadcdc0d4f776e0d31c0d75b76295588f54134e589e497e3e9282';
+const APP_BUILD = 'sha256:8ceb0994ce12db7d44d37fe2ecf1abdb2d1d0aaa206c13b664d19580e04048db';
 const APP_DATE = '2026-10-24';
 const CHANGELOG = [
+  ['1.13.1', '24.10.2026', 'Behoben: Sehr lange Angaben auf dem Deckblatt der Bilddokumentation (z. B. Schadenereignis) laufen zeilenweise auf der nächsten Seite weiter, statt unten abgeschnitten zu werden.'],
   ['1.13.0', '24.10.2026', 'Neues Erscheinungsbild der Bilddokumentation (PDF): ruhiger Seitenkopf mit Firmenzeichen und Büroanschrift, Deckblatt mit klarer Titelzeile und Projektangaben, Fotos mit feinem Rahmen und Bildunterschrift in Firmenblau, Übersicht der Probenahmestellen als schlichte Tabelle. Im Dokument steht nur noch die Firma, kein Programmname. Das helle Firmenzeichen erscheint nur noch auf dem Deckblatt. Die kopierte Ergebnistabelle für Word hat denselben Stil: feine Linien zwischen den Zeilen, keine senkrechten Linien, Kopfzeile hell mit blauer Linie.'],
   ['1.12.1', '24.10.2026', 'Aufgeräumt: Die Zeile zum Programmstand ist kleiner und in verständlichen Worten („Aktuell“, „neu laden“); „Sitzungssicherungen“ heißt jetzt „Gesicherte Eingaben“. Die Leiste oben ist in allen Apps wieder identisch; Speicherkandidaten und Kopien von PlanKit zählen dort nicht als Plan.'],
   ['1.12.0', '24.10.2026', 'Ergebnistabelle: gleiche Skalenregel wie PlanKit – ist eine Nutzung gewählt (Ergebniskarte in PlanKit, sonst Projektzentrale) und gibt es für den Parameter eine VdS-Referenz, gilt sie, auch in der in PlanKit angepassten Fassung; sonst die eigene Skala. Immer die neueste XML in „Laborergebnisse“ (ein endgültiger Bericht nach dem vorläufigen wird ohne neues Öffnen genommen); eine von Hand gewählte Datei bleibt bis zum Projektwechsel. Vorläufige Berichte deutlich gekennzeichnet.'],
@@ -2892,9 +2893,12 @@ async function buildAnnex(meta, items, progress){
     pg.line(PDF_M,y+14,PDF_W-PDF_M,y+14,0.5,PDF_CD.rule);
     for(let k=0;k<facts.length;k+=2){
       const pair=facts.slice(k,k+2).map(([l,v])=>({l,ls:wrapWords(words(v,'R'),10.5,colW)}));
-      const h=Math.max(...pair.map(x=>x.ls.length))*14+22;room(h+6);
-      pair.forEach((x,j)=>{const cx=PDF_M+j*(colW+24);pg.label(cx,y,x.l,6.6,PDF_CD.muted,0.7);x.ls.forEach((l,n)=>pg.wrapped(cx,y-15-n*14,l,10.5,PDF_CD.ink));});
-      y-=h;pg.line(PDF_M,y+10,PDF_W-PDF_M,y+10,0.5,PDF_CD.rule);y-=8;
+      // Ein Paar bleibt zusammen, wenn es auf eine Seite passt; sehr lange Angaben laufen zeilenweise auf Folgeseiten weiter (nichts geht verloren).
+      const L=Math.max(...pair.map(x=>x.ls.length)),h=L*14+22;room(h+6<=PDF_TOP-60-(PDF_BOTTOM+12)?h+6:35);
+      const cx=j=>PDF_M+j*(colW+24);
+      pair.forEach((x,j)=>pg.label(cx(j),y,x.l,6.6,PDF_CD.muted,0.7));y-=15;
+      for(let n=0;n<L;n++){room(14);pair.forEach((x,j)=>{if(x.ls[n])pg.wrapped(cx(j),y,x.ls[n],10.5,PDF_CD.ink);});y-=14;}
+      y-=7;pg.line(PDF_M,y+10,PDF_W-PDF_M,y+10,0.5,PDF_CD.rule);y-=8;
     }
     const block=(title,lines)=>{
       if(!lines.length)return;room(70);y-=22;
