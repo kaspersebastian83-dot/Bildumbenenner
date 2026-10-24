@@ -17,7 +17,8 @@ function check(data,expected){
  const pdf=parse(data);assert.ok(pdf.pages.length>=2);
  const logos=new Set();pdf.pages.forEach((p,i)=>{
   assert.ok(p.text.includes('Bilddokumentation'));assert.ok(p.text.includes('Dr. Schiffers & Partner'));assert.ok(p.text.includes(`Seite ${i+1} von ${pdf.pages.length}`));
-  assert.equal((p.ops.match(/\/BrandLogo Do/g)||[]).length,2);assert.match(p.ops,/^q \/Watermark gs /);logos.add(/\/BrandLogo (\d+) 0 R/.exec(p.p)[1]);
+  // Kopf-Logo auf jeder Seite; das helle Firmenzeichen (Wasserzeichen) nur auf dem Deckblatt.
+  assert.equal((p.ops.match(/\/BrandLogo Do/g)||[]).length,i===0?2:1);if(i===0)assert.match(p.ops,/^q \/Watermark gs /);else assert.doesNotMatch(p.ops,/\/Watermark gs/);logos.add(/\/BrandLogo (\d+) 0 R/.exec(p.p)[1]);
   const photoRefs=new Map([...p.p.matchAll(/\/Im(\d+) (\d+) 0 R/g)].map(m=>[m[1],pdf.obj(Number(m[2]))]));
   for(const m of p.ops.matchAll(/([\d.]+) 0 0 ([\d.]+) ([\d.]+) ([\d.]+) cm \/Im(\d+) Do/g)){
    const[w,h,x,y]=m.slice(1,5).map(Number),o=photoRefs.get(m[5]),iw=Number(/\/Width (\d+)/.exec(o)[1]),ih=Number(/\/Height (\d+)/.exec(o)[1]);
