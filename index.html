@@ -454,11 +454,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.10.2';
+const APP_VERSION = '1.11.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:a1cfc940c9be05d3b9867897873adcf4be0fc83ae6a39026e28a43537efa41ad';
+const APP_BUILD = 'sha256:ed24bcf63901d06f453160f6b5229023293e93b4b1e265684644f37bf697e3dd';
 const APP_DATE = '2026-10-23';
 const CHANGELOG = [
+  ['1.11.0', '24.10.2026', 'Neu: Bohrkern-Fotos. In „Probe-Nr.“ darf die Kern-ID (z. B. EG-WZ-B-7) oder Segment-ID (EG-WZ-B-7-T2) stehen – so wie auf dem Schild im Bild. Die Ergebnistabelle ordnet sie über die LabelKit-Datei in „Laboraufträge“ den Proben im Prüfbericht zu (Kern-ID → alle analysierten Segmente; Rückstellproben zählen nicht). PlanKit nimmt diese Fotos ab 1.25.0 in die Anlage.'],
   ['1.10.2', '24.10.2026', 'Behoben: Projektdaten-Dialog speichert nur noch, was Sie darin ändern. Bisher schrieb schon das Öffnen von Projektdaten, ZIP oder PDF einen in der Projektzentrale geleerten Wert (z. B. Objekt) aus FotoKits eigener Kopie zurück und trug bei leerem Sachverständigen den persönlichen Vorschlag ein. Der Schadenort in _Projekt.json bleibt, wie die Projektzentrale ihn gesetzt hat. Hilfetext der Skala korrigiert: Werte unter der BG, n.n. und n.b. erhalten keine Kategorie.'],
   ['1.10.1', '24.10.2026', 'Aufgeräumt: In _FotoKit_Fassungen und _Projekt_Sicherungen bleiben nur noch die Sicherungen der letzten 5 Speichervorgänge, ältere werden beim Speichern entfernt.'],
   ['1.10.0', '23.10.2026', 'Zuständige Person: Liegt im Archivordner die Mitarbeiterliste der Projektzentrale, erkennt FotoKit das Kürzel am Ende des Projektordners (z. B. „26.0123 Köln Nad“). Der Ort im Dateinamen von PDF und ZIP, in der Kopfzeile und in _Projekt.json steht dann ohne Kürzel. Die Leiste oben zeigt „Nr. Ort · zuständige Person“.'],
@@ -3394,6 +3395,41 @@ const normProbe = s => {
   const t = String(s || '').trim(), m = /^(?:p|probe)?\s*-?\s*0*(\d+)\s*([a-z]?)$/i.exec(t);
   return m ? 'P' + m[1] + m[2].toLowerCase() : t.toUpperCase();
 };
+/* Bohrkerne: Auf Fotos steht die Kern-ID (z. B. „EG-WZ-B-7“) oder Segment-ID („EG-WZ-B-7-T2“), im Laborbericht „Probe n“.
+   Die Zuordnung kommt aus der neuesten LabelKit-Projektdatei (Laboraufträge/…_Daten.json): Kern-ID → alle analysierten
+   Segmente, Segment-ID → genau dieses. Rückstellproben haben keinen Laborwert und zählen nicht. Gleiche Regel in PlanKit (annex.ts). */
+const BK_RUECKSTELL = 'Rückstellprobe – nicht analysieren';
+function bohrkernNummern(daten){
+  const map = new Map(), liste = daten && Array.isArray(daten.sonstigeProben) ? daten.sonstigeProben : [];
+  const add = (k, pn) => { k = String(k || '').trim().toUpperCase(); if (!k) return; if (!map.has(k)) map.set(k, []); if (!map.get(k).includes(pn)) map.get(k).push(pn); };
+  for (const p of liste){
+    if (!p || typeof p !== 'object' || p.matrix !== 'Bohrkern') continue;
+    if (String(p.bkStatus || '').trim().toUpperCase() === 'R' || String(p.notiz || '').trim() === BK_RUECKSTELL) continue;
+    const n = [p._nr, p.chloridNr, p.id].map(Number).find(v => Number.isSafeInteger(v) && v > 0 && v < 1e9);
+    if (!n) continue;
+    const id = String(p.bkId || '').trim();
+    add(id, 'P' + n); add(id.replace(/-T\d+$/i, ''), 'P' + n); add(p.bkBez, 'P' + n);
+  }
+  return map;
+}
+/** Probe-Nr. eines Fotos → Probennummern; Bohrkern-IDs über die LabelKit-Zuordnung, Unbekanntes bleibt wie geschrieben. */
+const fotoProben = (text, bk) => [...new Set(String(text || '').split(/[,;\/]+/).map(x => x.trim()).filter(Boolean)
+  .flatMap(x => { const p = normProbe(x); return (!/^P\d+[a-z]?$/.test(p) && bk && bk.get(p)) || [p]; }))];
+const BK = { map: new Map(), datei: '' };
+async function loadBohrkernZuordnung(){
+  BK.map = new Map(); BK.datei = '';
+  if (!S.proj) return;
+  try{
+    const d = await findSubdir(S.proj.dir, 'Laboraufträge'); if (!d) return;
+    let best = null;
+    for await (const h of d.values()){
+      if (h.kind !== 'file' || !/_Daten\.json$/i.test(h.name)) continue;
+      const f = await h.getFile(); if (!best || f.lastModified > best.lastModified) best = f;
+    }
+    if (!best) return;
+    BK.map = bohrkernNummern(JSON.parse(await best.text())); BK.datei = best.name;
+  }catch(e){ BK.map = new Map(); BK.datei = ''; }
+}
 const berlinDate = iso => {
   const d = new Date(iso); if (isNaN(d)) return '';
   return new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
@@ -3480,7 +3516,7 @@ function rate(scale, v){
 function photoNumbers(){        // Probe-Nr. → picture numbers as in the PDF / Bildverzeichnis
   const map = new Map();
   zipSelection(loadMeta().onlyDesc).forEach(it => {
-    it.probe.split(/[,;\/]+/).map(x => x.trim()).filter(Boolean).map(normProbe)
+    fotoProben(it.probe, BK.map)
       .forEach(p => { if (!map.has(p)) map.set(p, []); map.get(p).push(it.docNr); });
   });
   return map;
@@ -3516,7 +3552,8 @@ function labTables(rep, o){
     groups.get(key).proben.push(pr);
   }
   const known = new Set(rep.proben.map(p => p.label));
-  for (const [pn, ns] of photos) if (!known.has(pn)) warn.push(`Probe-Nr. ${pn} (Bild ${ns.join(', ')}) kommt im Prüfbericht nicht vor.`);
+  for (const [pn, ns] of photos) if (!known.has(pn)) warn.push(`Probe-Nr. ${pn} (Bild ${ns.join(', ')}) kommt im Prüfbericht nicht vor.` +
+    (/^P\d/.test(pn) ? '' : BK.datei ? ` Als Bohrkern-ID in LabelKit (${BK.datei}) nicht gefunden.` : ' Bohrkern-IDs werden über die LabelKit-Datei in „Laboraufträge“ zugeordnet – dort liegt keine.'));
   const tables = [], noPhoto = [];
   let tno = +o.startNr || 1;
   for (const g of groups.values()){
@@ -3636,6 +3673,7 @@ async function openLabDialog(){
   if (!S.dir){ banner('info', 'Bitte zuerst den Projektordner öffnen.'); return; }
   recompute();
   await findLabFiles();
+  await loadBohrkernZuordnung();
   if (!LAB.rep && LAB.files.length){
     try{ await loadLabFile(await LAB.files[0].handle.getFile()); }catch(e){ LAB.rep = null; LAB.err = e.message; }
   }
@@ -3738,6 +3776,7 @@ async function openLabDialog(){
     const projMismatch = S.proj && rep.auftragsref && parseProjName(rep.auftragsref) && parseProjName(rep.auftragsref).nr !== S.proj.nr;
     $('lSrc').innerHTML = `<b>${esc(rep.datei)}</b> · Prüfbericht ${esc(rep.bericht)}${rep.datum ? ' vom ' + esc(rep.datum) : ''} · ${esc(rep.labor)} · ${rep.proben.length} Proben · Auftragsreferenz „${esc(rep.auftragsref || '–')}“` +
       (rep.vorlaeufig ? ' · <span class="warn">vorläufiger Bericht</span>' : '') +
+      (BK.map.size ? `<br>Bohrkern-IDs auf Fotos → Probe-Nr. laut LabelKit (${esc(BK.datei)})` : '') +
       (projMismatch ? `<br><span class="warn">Achtung: Der Prüfbericht gehört laut Auftragsreferenz zu ${esc(rep.auftragsref)}, geöffnet ist ${esc(S.proj.name)}.</span>` : '');
     if (withScale) renderScale();
     res = labTables(rep, r);
@@ -3800,7 +3839,7 @@ const HELP_HTML = `
       <li><b>Umbenennen</b> – benennt die Dateien im Ordner nach der Beschreibung (z. B. <code>03_P2_Küche_Decke.jpg</code>). Rückgängig ist danach möglich.</li>
       <li><b>Bilddokumentation erstellen …</b> – Bilddokumentation als PDF mit Deckblatt, 2 Bildern pro Seite und Probenahmestellen; wird im Ordner <code>Fotos</code> gespeichert als <code>Bilddokumentation_26.0123_Köln_2026-10-19.pdf</code> (ältere Dateien werden nie überschrieben), bei Bedarf in Teile ≤ 14 MB aufgeteilt.</li>
       <li><b>ZIP exportieren</b> – Bilder mit neuen Namen plus Anweisung, wenn eine KI die Dokumentation erstellen soll.</li>
-      <li><b>Ergebnistabelle …</b> – liest den XML-Export des Laborberichts (aus <code>Laborergebnisse</code>), ordnet die Proben über die Probe-Nr. den Fotos zu, bewertet nach eurer Skala und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
+      <li><b>Ergebnistabelle …</b> – liest den XML-Export des Laborberichts (aus <code>Laborergebnisse</code>), ordnet die Proben über die Probe-Nr. den Fotos zu (bei Bohrkernen auch über die Kern-ID, z. B. <code>EG-WZ-B-7</code> – Zuordnung aus LabelKit), bewertet nach eurer Skala und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
     </ul></li>
 </ol>
 <h4>Tastenkürzel</h4>
