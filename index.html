@@ -454,11 +454,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.10.1';
+const APP_VERSION = '1.10.2';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:9c197489f62f8c518d2713cd9e1d97b2bb33372fa5f6c26c0337d786a8026f46';
+const APP_BUILD = 'sha256:a1cfc940c9be05d3b9867897873adcf4be0fc83ae6a39026e28a43537efa41ad';
 const APP_DATE = '2026-10-23';
 const CHANGELOG = [
+  ['1.10.2', '24.10.2026', 'Behoben: Projektdaten-Dialog speichert nur noch, was Sie darin ändern. Bisher schrieb schon das Öffnen von Projektdaten, ZIP oder PDF einen in der Projektzentrale geleerten Wert (z. B. Objekt) aus FotoKits eigener Kopie zurück und trug bei leerem Sachverständigen den persönlichen Vorschlag ein. Der Schadenort in _Projekt.json bleibt, wie die Projektzentrale ihn gesetzt hat. Hilfetext der Skala korrigiert: Werte unter der BG, n.n. und n.b. erhalten keine Kategorie.'],
   ['1.10.1', '24.10.2026', 'Aufgeräumt: In _FotoKit_Fassungen und _Projekt_Sicherungen bleiben nur noch die Sicherungen der letzten 5 Speichervorgänge, ältere werden beim Speichern entfernt.'],
   ['1.10.0', '23.10.2026', 'Zuständige Person: Liegt im Archivordner die Mitarbeiterliste der Projektzentrale, erkennt FotoKit das Kürzel am Ende des Projektordners (z. B. „26.0123 Köln Nad“). Der Ort im Dateinamen von PDF und ZIP, in der Kopfzeile und in _Projekt.json steht dann ohne Kürzel. Die Leiste oben zeigt „Nr. Ort · zuständige Person“.'],
   ['1.9.5', '21.10.2026', 'Einheitliche Bildnummern: Alle aktiven Bilder zählen in Listenreihenfolge ab 1, auch ohne Beschreibung. Vorschau, PDF, ZIP, CSV und Labor-Fotoreferenzen verwenden dieselben Nummern; eine Exportauswahl behält diese bei. Die Dateinummer folgt mit der eingestellten Startnummer derselben Position. Originalname und geplanter Dateiname sind sichtbar. Sortieren ändert keine Dateien; geplante Änderungen müssen ausdrücklich ausgeführt werden. Umbenennen erhält die Dokumentationsreihenfolge als manuelle Sortierung.'],
@@ -1121,7 +1122,7 @@ const FOTOS_DIR = 'Fotos';
 const PJ_FILE = '_Projekt.json';
 // Bildumbenenner field ↔ _Projekt.json field
 const PJ_MAP = [['objekt', 'objekt'], ['ereignis', 'schadenereignis'], ['sdatum', 'schadendatum'], ['ort', 'ortstermin'], ['sv', 'sachverstaendiger']];
-const PJ = { data: null, sent: {}, pending: {}, timer: null, writing: Promise.resolve(true), writes: 0, failed: false };
+const PJ = { data: null, sent: {}, shown: null, pending: {}, timer: null, writing: Promise.resolve(true), writes: 0, failed: false };
 
 async function findSubdir(dir, name){
   const want = name.normalize('NFC').toLowerCase();
@@ -1157,7 +1158,7 @@ function mountPJRecovery(){
   });
 }
 async function loadPJ(){
-  PJ.data = null; PJ.sent = {}; PJ.pending = {}; PJ.failed = false;
+  PJ.data = null; PJ.sent = {}; PJ.shown = null; PJ.pending = {}; PJ.failed = false;
   if (!S.proj) return '';
   try{ PJ.data = await readPJ(S.proj.dir); }
   catch(e){ return `„${PJ_FILE}“ ist nicht lesbar (${esc(e.message)}) – gemeinsame Projektdaten werden in dieser Sitzung nicht übernommen.`; }
@@ -1170,6 +1171,10 @@ function queuePJ(m){
   if (P.readOnly || !S.proj || !PJ.data) return;
   for (const [k, pk] of PJ_MAP){
     const v = (m[k] || '').trim();
+    // Nur was im Dialog wirklich geändert wurde, geht in die Projektdatei: ein alter Wert aus FotoKits eigener Kopie
+    // (in der Projektzentrale inzwischen geleert) oder der persönliche Vorschlag für „Sachverständiger“ wird nicht still eingetragen.
+    if (PJ.shown && v === PJ.shown[pk]) continue;
+    if (PJ.shown) PJ.shown[pk] = v;
     if (v !== (PJ.sent[pk] || '')){ PJ.pending[pk] = v; PJ.sent[pk] = v; }
   }
   if (Object.keys(PJ.pending).length){ clearTimeout(PJ.timer); PJ.timer = setTimeout(flushPJ, 600); }
@@ -1189,7 +1194,7 @@ function flushPJ(){
       /* Lesen → ändern → Schreiben unter einer Sperre je Projekt: Projektzentrale (anderer Tab) schreibt dieselbe Datei und nimmt dieselbe Sperre. */
       const o = await ProjectStore.update(proj.dir, proj.name, cur => {
         const o = { ...cur, ...patch, format: 'mosaik-projekt', version: 1, hinweis: PJ_HINWEIS,
-          projektnummer: proj.nr, schadenort: proj.ort, geaendert: new Date().toISOString(), geaendertMit: APP_NAME + ' ' + APP_VERSION };
+          projektnummer: proj.nr, schadenort: String(cur?.schadenort || '').trim() || proj.ort, geaendert: new Date().toISOString(), geaendertMit: APP_NAME + ' ' + APP_VERSION };
         return o;
       }, {data:PJ.data,keys:Object.keys(patch)});
       if (S.proj === proj){ PJ.data = o; PJ.recoveryRefresh?.(); }
@@ -2414,6 +2419,7 @@ function openMetaDialog(mode){
   const forZip = mode === 'zip', forPdf = mode === 'pdf', forExp = forZip || forPdf;
   recompute();
   const m = loadMeta();
+  PJ.shown = Object.fromEntries(PJ_MAP.map(([k, pk]) => [pk, (m[k] || '').trim()]));   // Stand beim Öffnen: nur Änderungen daran werden gespeichert
   const active = S.view.filter(it => !it.discard);
   const withDesc = active.filter(it => it.nr != null).length;
   const fields = META_FIELDS.map(([key, label, ph, type, scope, hint]) =>
@@ -3686,7 +3692,7 @@ async function openLabDialog(){
     $('lScale').innerHTML = units.map(u => {
       const s = sc[scaleKey(r.p1, u)] || { name: '', cats: [{ name: '', from: 0 }] };
       return `<div class="scale" data-unit="${esc(u)}">
-        <div class="m">Skala für <b>${esc(shortParam(r.p1))} in ${esc(u)}</b> – Kategorien aufsteigend; ein Wert gehört zur letzten Kategorie, deren „ab“-Wert er erreicht. Werte unter der BG zählen als 0. Gilt für alle Projekte in diesem Browser.</div>
+        <div class="m">Skala für <b>${esc(shortParam(r.p1))} in ${esc(u)}</b> – Kategorien aufsteigend; ein Wert gehört zur letzten Kategorie, deren „ab“-Wert er erreicht. Werte unter der BG, n.n. und n.b. erhalten keine Kategorie. Gilt für alle Projekte in diesem Browser.</div>
         <label class="sname"><span class="lbl">Name der Skala</span><input type="text" class="sN" value="${esc(s.name)}" placeholder="z. B. PAK Wischproben, Stand 10/2026"></label>
         <table class="stab"><tr><th>Kategorie</th><th>ab ${esc(u)}</th><th></th></tr>
           ${s.cats.map((c, i) => `<tr><td><input type="text" class="cN" value="${esc(c.name)}" placeholder="z. B. unauffällig"></td>
