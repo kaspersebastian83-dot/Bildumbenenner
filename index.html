@@ -326,10 +326,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
     <span class="projbadge" id="projBadge" hidden></span>
     <span class="folder" id="folderName"></span>
   </div>
-  <div class="bar" style="font-size:12px;flex-wrap:wrap" aria-label="Programmstand">
+  <div class="bar" style="font-size:11.5px;flex-wrap:wrap;color:#6b7785" aria-label="Programmstand">
     <span id="buildStatus" role="status">Programmstand wird geprüft …</span>
     <button id="btnCheckUpdate">Programmstand prüfen</button>
-    <button id="btnSessionRecovery">Sitzungssicherungen …</button><span id="recoveryStatus" role="status">Lokale Eingabekopien bleiben in diesem Browserprofil.</span>
+    <button id="btnSessionRecovery" title="Eingaben, die dieser Browser zusätzlich gesichert hat (z. B. nach einem Absturz)">Gesicherte Eingaben …</button><span id="recoveryStatus" role="status">Eingaben werden zusätzlich in diesem Browser gesichert.</span>
   </div>
   <div class="bar">
     <div class="toolgroup" role="group" aria-label="Projekt und Fotos">
@@ -454,11 +454,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.12.0';
+const APP_VERSION = '1.12.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:0698eba2486323ec2e706215f107c0c48cf2ae4ece003d9104522c7e04a30258';
+const APP_BUILD = 'sha256:cd9a85aa754bbcac3e23239fbc457fd37a6af48705bf7c12d41ae94bef4e9cbd';
 const APP_DATE = '2026-10-23';
 const CHANGELOG = [
+  ['1.12.1', '24.10.2026', 'Aufgeräumt: Die Zeile zum Programmstand ist kleiner und in verständlichen Worten („Aktuell“, „neu laden“); „Sitzungssicherungen“ heißt jetzt „Gesicherte Eingaben“. Die Leiste oben ist in allen Apps wieder identisch; Speicherkandidaten und Kopien von PlanKit zählen dort nicht als Plan.'],
   ['1.12.0', '24.10.2026', 'Ergebnistabelle: gleiche Skalenregel wie PlanKit – ist eine Nutzung gewählt (Ergebniskarte in PlanKit, sonst Projektzentrale) und gibt es für den Parameter eine VdS-Referenz, gilt sie, auch in der in PlanKit angepassten Fassung; sonst die eigene Skala. Immer die neueste XML in „Laborergebnisse“ (ein endgültiger Bericht nach dem vorläufigen wird ohne neues Öffnen genommen); eine von Hand gewählte Datei bleibt bis zum Projektwechsel. Vorläufige Berichte deutlich gekennzeichnet.'],
   ['1.11.0', '24.10.2026', 'Neu: Bohrkern-Fotos. In „Probe-Nr.“ darf die Kern-ID (z. B. EG-WZ-B-7) oder Segment-ID (EG-WZ-B-7-T2) stehen – so wie auf dem Schild im Bild. Die Ergebnistabelle ordnet sie über die LabelKit-Datei in „Laboraufträge“ den Proben im Prüfbericht zu (Kern-ID → alle analysierten Segmente; Rückstellproben zählen nicht). PlanKit nimmt diese Fotos ab 1.25.0 in die Anlage.'],
   ['1.10.2', '24.10.2026', 'Behoben: Projektdaten-Dialog speichert nur noch, was Sie darin ändern. Bisher schrieb schon das Öffnen von Projektdaten, ZIP oder PDF einen in der Projektzentrale geleerten Wert (z. B. Objekt) aus FotoKits eigener Kopie zurück und trug bei leerem Sachverständigen den persönlichen Vorschlag ein. Der Schadenort in _Projekt.json bleibt, wie die Projektzentrale ihn gesetzt hat. Hilfetext der Skala korrigiert: Werte unter der BG, n.n. und n.b. erhalten keine Kategorie.'],
@@ -3152,7 +3153,7 @@ function openRecovery(){
     catch(e){ invalid.push(key+': '+e.message); }
   }}catch(e){ recoveryStatus('Sitzungssicherungen nicht lesbar: '+e.message, true); return; }
   records.sort((a,b) => b.time.localeCompare(a.time));
-  showDialog('<h3>Lokale Sitzungssicherungen</h3><p>Nur dieses Browserprofil und diese Adresse. Keine Projektsicherung und keine Altclientsperre. Es wird nichts automatisch übernommen oder gelöscht.</p>'+
+  showDialog('<h3>Gesicherte Eingaben (nur dieser Browser)</h3><p>Nur dieses Browserprofil und diese Adresse. Keine Projektsicherung und keine Altclientsperre. Es wird nichts automatisch übernommen oder gelöscht.</p>'+
     (invalid.length ? '<p role="alert">Nicht lesbare Kopien bleiben erhalten: '+esc(invalid.join('; '))+'</p>' : '')+
     records.map((v,i) => '<p><button data-session-recovery="'+i+'">'+esc(v.project)+' · '+esc(v.time)+' · '+(v.pending ? 'Projektspeicherung unbestätigt' : 'Projekt gespeichert')+'</button></p>').join('')+
     (!records.length ? '<p>Keine lokalen Eingabekopien vorhanden.</p>' : '')+'<button id="rClose">Schließen</button>');
@@ -3232,7 +3233,7 @@ async function checkUpdate(){
   if (updateChecking) return;
   updateChecking = true;
   const abort = new AbortController(), timer = setTimeout(() => abort.abort(), 6000);
-  updateStatus('Online-Programmstand wird geprüft …');
+  updateStatus('Programmstand wird online geprüft …');
   try{
     const res = await fetch('./index.html?fotokit-update=1', { cache: 'no-store', signal: abort.signal });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -3244,12 +3245,12 @@ async function checkUpdate(){
     b.hidden = !different;
     b.textContent = `Anderer Programmstand ${v[1]} · ${build[1].slice(7, 19)} – sicher neu laden`;
     updateStatus(different
-      ? 'Anderer Online-Programmstand verfügbar. Sicher neu laden; weitere offene Fenster separat prüfen.'
-      : 'Geladener Build stimmt mit der Online-Antwort überein. Keine Bürofreigabe oder Prüfung anderer Sitzungen.');
+      ? 'Anderer Online-Programmstand verfügbar – bitte „neu laden“ (Eingaben werden vorher gesichert). Andere offene FotoKit-Fenster ebenfalls neu laden.'
+      : 'Aktuell: Der geladene Programmstand stimmt mit der Online-Antwort überein.');
     // Advisory only: an old client can ignore every check in this file.
     if (updateRegistration) updateRegistration.update().catch(() => {});
   }catch(e){
-    updateStatus('Online-Programmstand nicht bestätigt (offline, Zeitüberschreitung oder ungültige Antwort). Geladener Build bleibt aktiv.');
+    updateStatus('Programmstand online nicht bestätigt (offline oder keine Antwort) – die geladene Version läuft weiter.');
   }finally{ clearTimeout(timer); updateChecking = false; }
 }
 async function applyUpdate(){
@@ -3262,7 +3263,7 @@ async function applyUpdate(){
 setTimeout(checkUpdate, 4000);
 setInterval(checkUpdate, 30 * 60 * 1000);
 window.addEventListener('online', checkUpdate);
-window.addEventListener('offline', () => updateStatus('Offline: Online-Programmstand nicht bestätigt. Geladener Build bleibt aktiv.'));
+window.addEventListener('offline', () => updateStatus('Offline: Programmstand nicht bestätigt – die geladene Version läuft weiter.'));
 
 /* ---------- info dialog ---------- */
 async function openPhotoVersions(){
@@ -3968,7 +3969,7 @@ document.addEventListener('input', () => recoveryChanged());
 document.addEventListener('change', () => recoveryChanged());
 $('btnInfo').textContent = 'v' + APP_VERSION + ' · ' + APP_BUILD.slice(7, 19);
 $('btnInfo').title = 'Geladen: ' + APP_VERSION + ' / ' + APP_BUILD;
-updateStatus('Online-Programmstand noch nicht bestätigt. Andere Sitzungen werden nicht geprüft.');
+updateStatus('Programmstand wird gleich online geprüft …');
 document.title = `${APP_NAME} ${APP_VERSION}`;
 $('btnZip').onclick = openZipDialog;
 $('btnPdf').onclick = openPdfDialog;
@@ -4045,7 +4046,8 @@ updateExample();
    und „zuletzt“ (Liste der zuletzt geöffneten Projektnamen). Liest den Ordner nur, schreibt nie hinein und fragt nie selbst
    nach Ordnerrechten – ohne Recht (oder ohne Ordnerzugriff, z. B. Safari) fehlen nur die Haken. Aufruf: MosaikLeiste.start('label'|'fotos'|'plan'|'beleg'[, {kompakt: true}]),
    danach MosaikLeiste.aktualisieren() nach dem Öffnen oder Wechseln eines Projekts.
-   FotoKit kann mit opt.projektName eine bestätigte Projektzuordnung statt der angeforderten URL liefern. */
+   Optional opt.projektName: Funktion, die die bestätigte Projektzuordnung statt der angeforderten URL liefert (FotoKit).
+   Projektdaten: window.SpektronProjectData (LabelKit, PlanKit) liefert den aktuellen Stand samt „möglicherweise veraltet“; sonst _Projekt.json direkt. */
 (function(){
   if (window.MosaikLeiste) return;
   var APPS = [
@@ -4137,7 +4139,7 @@ updateExample();
       catch(e){ res(false); }
     }); });
   }
-  function urlName(){ try{ return projektName ? projektName() || '' : new URLSearchParams(location.search).get('projekt') || ''; }catch(e){ return ''; } }
+  function urlName(){ try{ return projektName ? projektName() || '' : new URLSearchParams(location.hash.slice(1)).get('projekt') ?? new URLSearchParams(location.search).get('projekt') ?? ''; }catch(e){ return ''; } }
   function href(app, projekt){ return (app[0] === ich ? '' : app[3]) + (projekt ? '#projekt=' + encodeURIComponent(projekt) : ''); }   // die eigene App relativ zur aktuellen Seite (auch ohne den Pfad /<App>/)
 
   /* Ordnerstand: nur Namen prüfen, Fotos nur über die eine Datei (der Ordner kann tausende Bilder enthalten) */
@@ -4159,7 +4161,9 @@ updateExample();
     }
     if (!proj) return null;
     var s = { label: false, fotos: false, plan: false, beleg: false, objekt: '', anzeige: '', person: '' }, zust = null;
-    try{
+    var activeData = window.SpektronProjectData && window.SpektronProjectData(name);
+    if (activeData){ var activeObjekt = typeof activeData.data.objekt === 'string' ? activeData.data.objekt : activeData.data.daten && activeData.data.daten.objekt; if (typeof activeObjekt === 'string') s.objekt = activeObjekt.trim(); zust = activeData.data.zustaendig; }
+    else try{
       var pj = await proj.getFileHandle('_Projekt.json').then(function(f){ return f.getFile(); }).then(function(f){ return f.text(); }).catch(function(){ return ''; });
       if (pj){ var j = JSON.parse(pj), o = j && (typeof j.objekt === 'string' ? j.objekt : j.daten && j.daten.objekt); if (typeof o === 'string') s.objekt = o.trim(); zust = j && j.zustaendig; }   // Projektzentrale schreibt die Felder direkt in _Projekt.json (ältere Testdateien: unter „daten“)
     }catch(e3){}
@@ -4171,7 +4175,7 @@ updateExample();
     }catch(e5){}
     try{
       var pl = await unterordner(proj, 'Pläne');
-      if (pl) for await (var g of pl.values()) if (g.kind === 'file' && /\.probenplan$/i.test(g.name) && !/ \((vorher|Wiederherstellung) [^)]*\)\.probenplan$/i.test(g.name)){ s.plan = true; break; }
+      if (pl) for await (var g of pl.values()) if (g.kind === 'file' && /\.probenplan$/i.test(g.name) && !/ \((vorher|Wiederherstellung|Speicherkandidat|Kopie)\b[^)]*\)\.probenplan$/i.test(g.name)){ s.plan = true; break; }
     }catch(e6){}
     try{
       var ab = await unterordner(proj, 'Abrechnung');
@@ -4248,8 +4252,12 @@ updateExample();
       var pb = h('button', { class: 'ml-proj', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', title: 'Anderes Projekt öffnen' }, h('b', { text: (stand && stand.anzeige) || name, title: name }), h('span', { text: '▾', 'aria-hidden': 'true' }));
       pb.onclick = function(ev){ ev.stopPropagation(); oeffnePop(pb); };
       bar.appendChild(pb);
+      var shared = window.SpektronProjectData && window.SpektronProjectData(name);
+      var sharedObjekt = shared && (typeof shared.data.objekt === 'string' ? shared.data.objekt : shared.data.daten && shared.data.daten.objekt);
+      var objekt = shared ? (typeof sharedObjekt === 'string' ? sharedObjekt.trim() : '') : stand && stand.objekt;
+      var suffix = shared && shared.stale ? ' · möglicherweise veraltet' : shared && shared.checking ? ' · wird geprüft' : '';
       if (stand && stand.person) bar.appendChild(h('span', { class: 'ml-obj ml-wer', text: '· ' + stand.person, title: 'Zuständig: ' + stand.person }));
-      if (stand && stand.objekt) bar.appendChild(h('span', { class: 'ml-obj', text: stand.objekt, title: stand.objekt }));
+      if (objekt) bar.appendChild(h('span', { class: 'ml-obj', text: objekt + suffix, title: objekt + suffix }));
       bar.appendChild(h('span', { class: 'ml-sp' }));
       var steps = h('span', { class: 'ml-steps' });
       var nx = naechster();
@@ -4281,7 +4289,7 @@ updateExample();
   }
   async function aktualisieren(){
     var n = urlName();
-    if (pop && n === name) return;   // Unveränderter Kontext: offenes Menü erhalten.
+    if (pop && n === name) return;   // Menü offen und Projekt unverändert: nicht neu zeichnen (würde es schließen)
     if (pop) schliessePop();
     var mein = ++lauf;
     if (n !== name){ name = n; stand = null; }
