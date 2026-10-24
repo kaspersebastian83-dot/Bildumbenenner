@@ -87,6 +87,12 @@ button.hbadge:hover{background:rgba(255,255,255,.26);color:#fff;border-color:rgb
 .appbar .folder .hint{font:12px var(--sans);color:#ffe2a8;margin-left:8px}
 .appbar .folder #btnAssign{font:12px var(--sans);padding:1px 8px;margin-left:6px;min-height:0;vertical-align:baseline}
 .dialog .form label.ro input{background:var(--panel2);color:var(--muted);cursor:default}
+/* Pflichtfelder (in allen Apps gleich): solange leer, warmes Gelb am Feld und „Pflicht“ am Namen; ausgefüllt wieder normal. */
+.pflicht-tag{display:none;margin-left:6px;padding:0 6px;border-radius:8px;font-size:10px;font-weight:600;line-height:15px;letter-spacing:.02em;color:#8a6500;background:rgba(217,164,0,.16);border:1px solid rgba(217,164,0,.45);vertical-align:1px}
+label.pflicht-offen .pflicht-tag{display:inline-block}
+.pflicht-zahl{display:inline-block;min-width:16px;margin-left:4px;padding:0 5px;border-radius:8px;font-size:11px;font-weight:700;line-height:16px;text-align:center;color:#8a6500;background:rgba(217,164,0,.2);border:1px solid rgba(217,164,0,.5)}
+label.pflicht-offen>input,label.pflicht-offen>select,label.pflicht-offen>textarea{border-color:#d9a400!important;background:#fff8e1;box-shadow:inset 3px 0 0 #d9a400}
+@media (prefers-color-scheme:dark){.pflicht-tag{color:#f0c850}label.pflicht-offen>input,label.pflicht-offen>select,label.pflicht-offen>textarea{background:rgba(217,164,0,.12)}}
 header{background:var(--panel);border-bottom:1px solid var(--line);display:flex;flex-direction:column;box-shadow:var(--shadow);position:relative;z-index:5}
 .bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 20px 4px}
 .ver{font:600 11px/1 var(--mono);padding:3px 6px;margin-left:4px;color:var(--muted);vertical-align:middle}
@@ -454,11 +460,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.13.1';
+const APP_VERSION = '1.14.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:8ceb0994ce12db7d44d37fe2ecf1abdb2d1d0aaa206c13b664d19580e04048db';
+const APP_BUILD = 'sha256:c397455864a4430deddf9b19edd5280c5e3880de63a5858bcdd3425f96356d8b';
 const APP_DATE = '2026-10-24';
 const CHANGELOG = [
+  ['1.14.0', '24.10.2026', 'Pflichtangaben wie in der Projektzentrale: Projektnummer, Anlagen-Nr., Objekt, Schadenereignis, Schadendatum, Ortstermin und Sachverständiger sind in „Projektdaten …“ gelb mit „Pflicht“ markiert, solange sie leer sind; der Knopf zeigt, wie viele fehlen. Speichern und Erstellen bleiben möglich.'],
   ['1.13.1', '24.10.2026', 'Behoben: Sehr lange Angaben auf dem Deckblatt der Bilddokumentation (z. B. Schadenereignis) laufen zeilenweise auf der nächsten Seite weiter, statt unten abgeschnitten zu werden.'],
   ['1.13.0', '24.10.2026', 'Neues Erscheinungsbild der Bilddokumentation (PDF): ruhiger Seitenkopf mit Firmenzeichen und Büroanschrift, Deckblatt mit klarer Titelzeile und Projektangaben, Fotos mit feinem Rahmen und Bildunterschrift in Firmenblau, Übersicht der Probenahmestellen als schlichte Tabelle. Im Dokument steht nur noch die Firma, kein Programmname. Das helle Firmenzeichen erscheint nur noch auf dem Deckblatt. Die kopierte Ergebnistabelle für Word hat denselben Stil: feine Linien zwischen den Zeilen, keine senkrechten Linien, Kopfzeile hell mit blauer Linie.'],
   ['1.12.1', '24.10.2026', 'Aufgeräumt: Die Zeile zum Programmstand ist kleiner und in verständlichen Worten („Aktuell“, „neu laden“); „Sitzungssicherungen“ heißt jetzt „Gesicherte Eingaben“. Die Leiste oben ist in allen Apps wieder identisch; Speicherkandidaten und Kopien von PlanKit zählen dort nicht als Plan.'],
@@ -1408,7 +1415,7 @@ async function openDir(dir, proj = null){
       if (P.dirty) scheduleProjSave();
       await recoveryOpened(); // N3 recovery hook
       $('btnReload').disabled = false;
-      $('btnMeta').disabled = false;
+      $('btnMeta').disabled = false; metaKnopf();
       $('btnVersions').disabled = false;
       $('btnLab').disabled = false; LAB.rep = null; LAB.err = ''; LAB.manuell = false; LAB.geladen = '';
       if (note) banner(P.readOnly ? 'err' : 'info', note);
@@ -2258,6 +2265,8 @@ const TXT_NAME = '00_Anweisung_Bilddokumentation.txt';
 const SUM_NAME = 'Pruefsummen.sha256';
 
 /* ---------- project data + AI instructions ---------- */
+/* Pflichtangaben (wie Projektzentrale „Projektdaten“): stehen auf dem Deckblatt der Bilddokumentation. Nur hervorgehoben, nie blockierend. */
+const META_PFLICHT = ['proj', 'anlage', 'objekt', 'ereignis', 'sdatum', 'ort', 'sv'];
 const META_FIELDS = [
   // key, label, placeholder name, input type, scope
   ['proj',     'Projektnummer',            'Projektnummer',    'text', 'project', 'z. B. P2026-114'],
@@ -2324,6 +2333,14 @@ function saveMeta(m){
   // inside a project the name belongs to the project (_Projekt.json); the personal default only fills an empty one
   store.set('bu-global', { sv: S.proj && PJ.data && own ? own : sv, template: template === DEFAULT_TEMPLATE ? '' : template });
   queuePJ(m);
+  metaKnopf();
+}
+/** „Projektdaten …“ zeigt, wie viele Pflichtangaben noch fehlen (gelbe Zahl wie in der Projektzentrale). */
+function metaKnopf(){
+  const b = $('btnMeta'); if (!b) return;
+  const m = S.dir ? loadMeta() : null, leer = m ? META_PFLICHT.filter(k => !String(m[k] || '').trim()) : [];
+  b.innerHTML = 'Projektdaten …' + (leer.length ? ` <span class="pflicht-zahl">${leer.length}</span>` : '');
+  b.title = leer.length ? `${leer.length === 1 ? '1 Pflichtangabe fehlt' : leer.length + ' Pflichtangaben fehlen'}: ` + leer.map(k => META_FIELDS.find(f => f[0] === k)[1]).join(', ') : '';
 }
 const fieldValue = (m, key, type) => type === 'date' ? deDate(m[key]) : (m[key] || '').trim();
 
@@ -2428,7 +2445,7 @@ function openMetaDialog(mode){
   const active = S.view.filter(it => !it.discard);
   const withDesc = active.filter(it => it.nr != null).length;
   const fields = META_FIELDS.map(([key, label, ph, type, scope, hint]) =>
-    `<label${key === 'objekt' || key === 'ereignis' ? ' class="wide"' : ''}>${label}${scope === 'global' ? ' <small>(für alle Projekte)</small>' : ''}
+    `<label class="${[key === 'objekt' || key === 'ereignis' ? 'wide' : '', META_PFLICHT.includes(key) ? 'pflicht' : ''].filter(Boolean).join(' ')}"><span>${label}${scope === 'global' ? ' <small>(für alle Projekte)</small>' : ''}${META_PFLICHT.includes(key) ? '<span class="pflicht-tag">Pflicht</span>' : ''}</span>
        <input type="${type}" id="m_${key}" placeholder="${esc(hint)}"></label>`).join('');
   // read-only from the Projektzentrale (_Projekt.json) – shown for orientation, not used in PDF/ZIP
   const pjInfo = S.proj && PJ.data ? [['auftraggeber', 'Auftraggeber'], ['schadennummer', 'Schaden-Nr.']]
@@ -2480,6 +2497,7 @@ function openMetaDialog(mode){
   };
   const update = () => {
     const r = read(); saveMeta(r);
+    for (const k of META_PFLICHT) $('m_' + k).closest('label').classList.toggle('pflicht-offen', !r[k]);
     const items = zipSelection(r.onlyDesc);
     const missing = META_FIELDS.filter(([key]) => !r[key]).map(f => f[1]);
     let html = missing.length
@@ -3912,7 +3930,7 @@ const HELP_HTML = `
   <li><b>Dateibenennung:</b> „Dateibenennung und weitere Einstellungen“ klappt die bisherigen Optionen auf. Die Bildnummer zählt aktive Bilder in Listenreihenfolge ab 1; die Dateinummer folgt derselben Position mit der eingestellten Startnummer. Ohne Beschreibung bleibt der Dateiname erhalten. Sortieren ändert keine Dateien: Geplante Namen werden erst mit „Ausführen“ und „Jetzt ausführen“ übernommen.</li>
   <li><b>Bilder beschreiben:</b> links ein Bild anklicken, rechts erscheint die Vorschau. Beschreibung eintippen, <kbd>Enter</kbd> springt zum nächsten Bild. Darunter optional <b>Abschnitt</b> (z. B. „Küche“ – gilt für die folgenden Bilder mit) und <b>Probe-Nr.</b> (z. B. „P1“).</li>
   <li><b>Aufräumen:</b> unbrauchbare Bilder mit ✕ aussortieren (sie wandern ans Ende, nichts wird gelöscht). Reihenfolge per Ziehen ändern oder mit Sortierung „nach Abschnitt (Begehung)“ nach Räumen ordnen, schiefe Bilder mit ↻ drehen.</li>
-  <li><b>Projektdaten prüfen:</b> „Projektdaten …“ – Anlagen-Nr., Objekt, Schadenereignis, Daten, Sachverständiger. Was in der Projektzentrale schon eingetragen ist, steht hier bereits.</li>
+  <li><b>Projektdaten prüfen:</b> „Projektdaten …“ – Anlagen-Nr., Objekt, Schadenereignis, Daten, Sachverständiger. Was in der Projektzentrale schon eingetragen ist, steht hier bereits. Gelb markierte Felder sind Pflicht (sie stehen auf dem Deckblatt); die Zahl am Knopf zeigt, wie viele noch fehlen.</li>
   <li><b>Ausgeben:</b>
     <ul>
       <li><b>Umbenennen</b> – benennt die Dateien im Ordner nach der Beschreibung (z. B. <code>03_P2_Küche_Decke.jpg</code>). Rückgängig ist danach möglich.</li>
