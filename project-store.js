@@ -68,8 +68,20 @@
     }finally{ if(w) try{ await w.abort(); }catch(_){} }
     const after = await snapshot(dir);
     if(!after.exists || !equal(after.bytes,bytes)) throw conflict();
-    // No cleanup: even a successfully confirmed candidate may be overwritten later.
+    await prune(dir);
     return data;
+  }
+  // Keep the project folder tidy: only the newest few versions stay.
+  const KEEP = 5;
+  async function prune(dir){
+    try{
+      const archive = await dir.getDirectoryHandle(ARCHIVE), names = [];
+      for await (const h of archive.values()) if(h.kind === 'file' && pattern.test(h.name)) names.push(h.name);
+      const stamp = n => n.slice(n.indexOf('_')+1);
+      names.sort((a,b) => stamp(b).localeCompare(stamp(a)));
+      const keep = new Set(names.filter(n => n.startsWith('kandidat_')).slice(0, KEEP));
+      for(const n of names) if(!keep.has(n)) { try{ await archive.removeEntry(n); }catch(_){} }
+    }catch(_){ /* tidying is best-effort; the main file is already saved */ }
   }
   function locked(name, fn){ return root.navigator?.locks ? root.navigator.locks.request('mosaik:projekt:'+name,fn) : fn(); }
   async function update(dir,name,build,expected){

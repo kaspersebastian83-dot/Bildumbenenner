@@ -69,6 +69,8 @@ Zum erneuten Öffnen über die URL benötigen die Apps wie bisher den passenden 
 | Sachverständiger, Standardanweisung für die KI, Export-Einstellungen, Bewertungsskalen der Ergebnistabelle | im Browser (persönlich, je Windows-Profil) |
 | Archivordner, zuletzt geöffnete Projekte | gemeinsamer Browser-Speicher der Suite (IndexedDB `mosaik-suite`, Schlüssel `archiv` und `zuletzt`) |
 
+Ältere Fassungen von `_Bildumbenenner.json` liegen in `_FotoKit_Fassungen/` – es bleiben nur die letzten 5, ältere entfernt die App beim Speichern automatisch.
+
 Originalbilder werden **nur umbenannt** bzw. nach `_aussortiert/` verschoben – nie verändert. Drehen und Verkleinern betrifft nur die Kopien im ZIP/PDF. Rückgängig ist nach jedem Umbenennen möglich.
 
 Ordnerwechsel, „Neu einlesen“ und App-Updates warten auf die Speicherung aller ausstehenden Änderungen, einschließlich der gemeinsamen Projektdaten. Schlägt sie fehl, bleibt das bisherige Projekt mit den Eingaben geöffnet. Nach Prüfen des Projektordners mit **„Erneut speichern“** wiederholen und anschließend den Wechsel erneut auslösen. Beim Schließen oder Neuladen über den Browser warnt FotoKit auch vor noch laufenden Schreibvorgängen; ein erzwungenes Schließen oder das Bestätigen von „Seite verlassen“ kann ungesicherte Änderungen weiterhin verwerfen.
@@ -87,13 +89,11 @@ Bei einem unbekannten Projektformat oder einer beschädigten/nicht lesbaren Proj
 
 **„Problem melden“** (im Fehlerhinweis oder im Info-Fenster über die Versionsnummer) kopiert einen kurzen Bericht in die Zwischenablage: Version, Browser, Ordner/Projekt, letzte Meldungen – keine Bilder, keine Beschreibungen. Einfach in eine E-Mail einfügen und kurz beschreiben, was passiert ist.
 
-## Programmstand und sichere Umstellung (N3)
+## Programmstand und Updates
 
-Die Kopfzeile zeigt die geladene Version und den kurzen HTML-Build; das Infofenster und der Problembericht enthalten den vollständigen SHA-256-Build. „Programmstand prüfen“ vergleicht mit der Online-Antwort, auch bei gleicher Versionsnummer. Offline/ungültige Antworten bestätigen keinen aktuellen Stand. Ein Service-Worker-Wechsel lädt offene Seiten nicht automatisch neu. „Sicher neu laden“ wartet auf die vorhandene Speicherabsicherung und bricht bei Fehlern oder geschütztem Projektmodus ab.
+Die Kopfzeile zeigt Version und kurzen Build; „Programmstand prüfen“ im Infofenster vergleicht mit der Online-Fassung. Nach einem Update einmal alle App-Fenster schließen (am Terminal am besten abmelden) und neu öffnen – dann läuft überall derselbe Stand.
 
-**Ein Update sperrt keine alten Clients.** Für die spätere Einführung ist die [verbindliche Büro-Umstellung](docs/N3-Buero-Umstellung.md) einschließlich tatsächlich geprüfter Schreibsperre, aller Browser-/RDP-Profile und externer Vollsicherung erforderlich. [Befund, Angriff und Testgrenzen](docs/N3-Pruefbericht.md). Die gesamte SPEKTRON-Suite bleibt NO-GO bis zum unabhängigen Audit und zur praktischen Windows-/SMB-/RDP-Abnahme.
-
-Für Betreuer: Nach jeder HTML-Änderung `node tools/build-identity.cjs` ausführen, mit `--check` prüfen und den endgültigen Kombinationsstand samt Commit/HTML-/Worker-/Helferhash dokumentieren. Der HTML-Build ist eine Artefaktkennung, keine digitale Signatur oder Bürofreigabe. Dieser Draft führt kein Merge/Deployment aus. Bei einer später autorisierten Veröffentlichung gelten zunächst die Schritte der Umstellungsanleitung. Alte Offlinecaches und Browserdaten werden durch N3 nicht automatisch gelöscht.
+Für Betreuer: Nach jeder HTML-Änderung `node tools/build-identity.cjs` ausführen (`--check` prüft es).
 
 ## Dateien
 
