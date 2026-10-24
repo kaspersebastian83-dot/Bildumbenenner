@@ -67,9 +67,7 @@ Existing Helvetica/WinAnsi character support is retained, including German
 umlauts and Euro. Existing unsupported-script fallback is not redesigned here.
 Native directory API tests retain their existing WebKit skips; the new PDF tests
 run in both engines without those skips. Synthetic browser tests and PDF rendering
-do not establish Windows/SMB/RDP or power-loss durability. No merge or deployment.
-The entire SPEKTRON suite remains NO-GO until independent audit and practical
-Windows/SMB/RDP acceptance have succeeded.
+do not establish Windows/SMB/RDP or power-loss durability.
 
 PR #34 follow-up from 6d26c66f3e3c5a7a0b160d7dfbaa00676e9f2b30
 The long-text oracle now asserts ENDEBILD, ENDEABSCHNITT and ENDEOBJEKT
