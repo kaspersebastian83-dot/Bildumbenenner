@@ -1,7 +1,5 @@
 # N2 – vollständige FotoKit-Fassungen erhalten
 
-SPEKTRON bleibt **NO-GO** bis zur unabhängigen Gesamtprüfung und praktischen Büroabnahme. Dieser Fix ist keine Freigabe, kein Deployment und keine Windows-/SMB-Abnahme.
-
 ## Fehler und deterministischer Nachweis
 
 Ausgang: `main` = `b616164f5ab24faa5371f4eb714276f6080a8bf3`.
@@ -76,8 +74,6 @@ WebKit-SKIPs für fehlenden nativen Ordnerzugriff sind **keine bestandenen nativ
 Die Browser-Dateischnittstelle bietet keine profil-/rechnerübergreifende Compare-and-Swap-Transaktion, keinen anwendungsseitig erzwingbaren exklusiven Create-Namen und kein `fsync` für einen SMB-Server. Web Locks koordinieren keine unabhängigen Browserprofile, Windows-Sitzungen oder Terminalserver. Eine erfolgreiche Close-/Rückleseprüfung beweist nicht, dass Daten bei Stromausfall, Server-/Controllerfehlern oder RDP-Abbruch bereits physisch dauerhaft gespeichert sind. Die UUID-Namensgebung vermeidet praktische Kollisionen, ist aber kein exklusives Dateisystem-Lock.
 
 Der Fix erhält verifizierte Vollfassungen im geprüften API-Modell; er kann keine Zusicherung gegen externes Löschen, Beschädigen, unkooperative ältere Schreiber oder den Verlust des gesamten Projektlaufwerks geben. Gleichzeitige physische Umbenennungen desselben Originalbilds sind keine verteilte Dateisystemtransaktion und werden dadurch nicht automatisch rückgängig gemacht. Die Tests konkurrierender disjunkter Umbenennungen belegen Metadaten-Erhalt und unangetastete Bildbytes, keine allgemeine sichere gleichzeitige Bearbeitung desselben Originals.
-
-Vor einer Bürofreigabe sind mindestens unabhängige Windows-/RDP-Sitzungen am tatsächlichen SMB-Speicher, beide Schreibreihenfolgen, Server-/Client-Caches, Verbindungs-/Prozessabbruch, Berechtigungs-/Speicherplatzfehler sowie Wiederherstellung nach Ab- und Anmeldung praktisch zu prüfen. Die Suite bleibt bis zur unabhängigen Gesamtprüfung und praktischen Büroabnahme auf **NO-GO**.
 
 ## Lokaler Prüfstand vom 22.10.2026
 
