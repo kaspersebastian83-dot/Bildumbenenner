@@ -46,6 +46,9 @@ jobs:
       fail-fast: false
       matrix:
         browser: [chromium]
+    env:
+      # Bei einem Abbruch steht die Fehlermeldung als Hinweis am Lauf (tests/ci-fehler.cjs)
+      NODE_OPTIONS: --require ${{ github.workspace }}/tests/ci-fehler.cjs
     steps:
       - uses: actions/checkout@v6
         with:
