@@ -132,6 +132,25 @@ const PROJ = '26.0142 Teststadt';
   const version = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').match(/APP_VERSION = '([\d.]+)'/)[1];
   assert.equal(d.geaendertMit, 'FotoKit ' + version);
 
+  // 3) In der Projektzentrale geleerte Felder: Öffnen des Dialogs schreibt weder den alten Wert aus FotoKits Kopie
+  //    noch den persönlichen Vorschlag für „Sachverständiger“ zurück; der Schadenort bleibt, wie er in der Datei steht.
+  await page.reload(); await page.waitForFunction(() => !document.getElementById('btnMeta').disabled, null, { timeout: 8000 });
+  await aendereDatei({ objekt: '', sachverstaendiger: '', schadenort: 'Teststadt (Projektzentrale)' });
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.waitForFunction(() => /neu übernommen/.test(document.getElementById('banner').textContent));
+  await meta();
+  await page.waitForTimeout(1500);
+  const geleert = await datei();
+  assert.equal(geleert.objekt, '', 'geleertes Objekt kommt nicht zurück');
+  assert.equal(geleert.sachverstaendiger, '', 'kein still eingetragener Sachverständiger');
+  // eine echte Eingabe wird weiterhin gespeichert, der Schadenort aus der Datei bleibt
+  await page.locator('#btnMeta').click(); await page.locator('#m_objekt').fill('EFH, Neu 4'); await page.locator('#zCancel').click();
+  await page.waitForTimeout(1500);
+  const neu = await datei();
+  assert.equal(neu.objekt, 'EFH, Neu 4');
+  assert.equal(neu.sachverstaendiger, '');
+  assert.equal(neu.schadenort, 'Teststadt (Projektzentrale)');
+
   assert.deepEqual(errors, []);
   await browser.close(); server.close();
   console.log(`OK (${name})`);
