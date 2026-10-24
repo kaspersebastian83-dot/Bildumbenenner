@@ -454,11 +454,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.11.0';
+const APP_VERSION = '1.12.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:ed24bcf63901d06f453160f6b5229023293e93b4b1e265684644f37bf697e3dd';
+const APP_BUILD = 'sha256:0698eba2486323ec2e706215f107c0c48cf2ae4ece003d9104522c7e04a30258';
 const APP_DATE = '2026-10-23';
 const CHANGELOG = [
+  ['1.12.0', '24.10.2026', 'Ergebnistabelle: gleiche Skalenregel wie PlanKit – ist eine Nutzung gewählt (Ergebniskarte in PlanKit, sonst Projektzentrale) und gibt es für den Parameter eine VdS-Referenz, gilt sie, auch in der in PlanKit angepassten Fassung; sonst die eigene Skala. Immer die neueste XML in „Laborergebnisse“ (ein endgültiger Bericht nach dem vorläufigen wird ohne neues Öffnen genommen); eine von Hand gewählte Datei bleibt bis zum Projektwechsel. Vorläufige Berichte deutlich gekennzeichnet.'],
   ['1.11.0', '24.10.2026', 'Neu: Bohrkern-Fotos. In „Probe-Nr.“ darf die Kern-ID (z. B. EG-WZ-B-7) oder Segment-ID (EG-WZ-B-7-T2) stehen – so wie auf dem Schild im Bild. Die Ergebnistabelle ordnet sie über die LabelKit-Datei in „Laboraufträge“ den Proben im Prüfbericht zu (Kern-ID → alle analysierten Segmente; Rückstellproben zählen nicht). PlanKit nimmt diese Fotos ab 1.25.0 in die Anlage.'],
   ['1.10.2', '24.10.2026', 'Behoben: Projektdaten-Dialog speichert nur noch, was Sie darin ändern. Bisher schrieb schon das Öffnen von Projektdaten, ZIP oder PDF einen in der Projektzentrale geleerten Wert (z. B. Objekt) aus FotoKits eigener Kopie zurück und trug bei leerem Sachverständigen den persönlichen Vorschlag ein. Der Schadenort in _Projekt.json bleibt, wie die Projektzentrale ihn gesetzt hat. Hilfetext der Skala korrigiert: Werte unter der BG, n.n. und n.b. erhalten keine Kategorie.'],
   ['1.10.1', '24.10.2026', 'Aufgeräumt: In _FotoKit_Fassungen und _Projekt_Sicherungen bleiben nur noch die Sicherungen der letzten 5 Speichervorgänge, ältere werden beim Speichern entfernt.'],
@@ -1406,7 +1407,7 @@ async function openDir(dir, proj = null){
       $('btnReload').disabled = false;
       $('btnMeta').disabled = false;
       $('btnVersions').disabled = false;
-      $('btnLab').disabled = false; LAB.rep = null; LAB.err = '';
+      $('btnLab').disabled = false; LAB.rep = null; LAB.err = ''; LAB.manuell = false; LAB.geladen = '';
       if (note) banner(P.readOnly ? 'err' : 'info', note);
     }catch(e){
       clearTimeout(P.timer); clearTimeout(PJ.timer);
@@ -3504,9 +3505,46 @@ function parseLabXml(text, fileName){
   if (!rep.proben.length) throw new Error('Im Prüfbericht wurden keine Proben gefunden.');
   return rep;
 }
-const LAB = { rep: null, files: [] };
+const LAB = { rep: null, files: [], manuell: false, geladen: '' };   // manuell: per „Andere Datei“ gewählt; geladen: Name + Stand der Ordnerdatei
 const scaleKey = (param, unit) => `${param}|${unit}`;
 const loadScales = () => store.get('bu-scales', {});
+/* Skalenregel wie PlanKit (ab 1.27): Ist eine Nutzung gewählt und gibt es für Parameter und Einheit eine VdS-Referenz, gilt sie
+   (oder ihre in PlanKit angepasste Fassung); sonst die eigene Skala. Quelle der Nutzung: die Ergebniskarte im PlanKit-Projekt
+   („Pläne/Probenplan <Ordner>.probenplan“), sonst die Nutzung aus _Projekt.json. Werte der Referenz wie PlanKit (results.ts,
+   VdS 2357; Quelle: LANUV, Bericht Steinhagen 15.02.2023, S. 7). Keine weiteren Skalen werden erfunden. */
+const SK = { usage: '', nutzung: '', vds: {}, quelle: '' };
+const VDS_WOHNEN = ['Wohnen', 'Büro', 'Öffentlich', 'Gesundheit & Labor'], VDS_INDUSTRIE = ['Gewerbe/Industrie', 'Landwirtschaft'];
+function vdsSkala(param, unit){
+  if (!SK.usage || !/^(?:Summe|Σ)\s*16\s*EPA[-– ]PAK(?:\s.*)?$/i.test(param || '')) return null;
+  const u = String(unit || '').replace(/μ/g, 'µ').replace(/²/g, '2').replace(/\s+/g, '').toLowerCase();
+  const factor = { 'µg/m2': 1, 'µg/100cm2': .01, 'mg/m2': .001, 'ng/m2': 1000 }[u]; if (!factor) return null;
+  const limit = (SK.usage === 'residential' ? 10 : 100) * factor;
+  const label = SK.usage === 'industrial' ? 'Industrie' : SK.nutzung === 'Gesundheit & Labor' ? 'Gesundheit & Labor, Referenz < 10 µg/m²' : 'Wohn-/Büroräume';
+  return { name: `VdS 2357 · ${label} · Hintergrundreferenz`, cats: [{ name: 'unter Referenzwert', from: 0 }, { name: 'Referenzwert erreicht/überschritten', from: limit }] };
+}
+/** Wirksame Skala für Parameter/Einheit: { scale, vds, angepasst }. */
+function skalaFuer(param, unit){
+  const key = scaleKey(param, unit), vds = vdsSkala(param, unit);
+  if (vds){ const a = SK.vds[key]; return a && Array.isArray(a.cats) && a.cats.length ? { scale: { name: a.name || vds.name, cats: a.cats.map(c => ({ name: c.name, from: c.from })) }, vds, angepasst: true } : { scale: vds, vds, angepasst: false }; }
+  return { scale: loadScales()[key] || null, vds: null, angepasst: false };
+}
+async function loadSkalenregel(){
+  SK.usage = ''; SK.nutzung = String((PJ.data && PJ.data.nutzung) || '').trim(); SK.vds = {}; SK.quelle = '';
+  if (!S.proj) return;
+  try{
+    const d = await findSubdir(S.proj.dir, 'Pläne');
+    const h = d ? await d.getFileHandle(`Probenplan ${S.proj.name}.probenplan`).catch(() => null) : null;
+    const r = h ? JSON.parse(await (await h.getFile()).text()).results : null;
+    if (r && typeof r === 'object'){
+      SK.usage = r.usage === 'residential' || r.usage === 'industrial' ? r.usage : '';
+      SK.vds = r.vds && typeof r.vds === 'object' && !Array.isArray(r.vds) ? r.vds : {};
+      SK.quelle = 'PlanKit (Ergebniskarte)';
+      return;
+    }
+  }catch(e){ /* PlanKit-Projekt nicht lesbar: Nutzung aus den Projektdaten */ }
+  SK.usage = VDS_WOHNEN.includes(SK.nutzung) ? 'residential' : VDS_INDUSTRIE.includes(SK.nutzung) ? 'industrial' : '';
+  if (SK.usage) SK.quelle = `Nutzung „${SK.nutzung}“ (Projektzentrale)`;
+}
 function rate(scale, v){
   if (!scale || !scale.cats || !scale.cats.length || !isFinite(v)) return '';
   let c = scale.cats[0].name;
@@ -3557,7 +3595,7 @@ function labTables(rep, o){
   const tables = [], noPhoto = [];
   let tno = +o.startNr || 1;
   for (const g of groups.values()){
-    const scale = g.unit ? scales[scaleKey(p1, g.unit)] : null;
+    const scale = g.unit ? skalaFuer(p1, g.unit).scale : null;
     const u2 = labCommonUnit(g.proben.map(pr => line(pr, p2)));
     if (o.mode === 'einzel'){
       const params = [];
@@ -3674,8 +3712,14 @@ async function openLabDialog(){
   recompute();
   await findLabFiles();
   await loadBohrkernZuordnung();
-  if (!LAB.rep && LAB.files.length){
-    try{ await loadLabFile(await LAB.files[0].handle.getFile()); }catch(e){ LAB.rep = null; LAB.err = e.message; }
+  // Immer die neueste XML in „Laborergebnisse“ – kommt ein endgültiger Bericht nach dem vorläufigen dazu, gilt er ohne neues Öffnen.
+  // Eine von Hand gewählte Datei bleibt, bis das Projekt neu geöffnet wird.
+  await loadSkalenregel();
+  if (!LAB.manuell && LAB.files.length){
+    const f = LAB.files[0], stand = f.name + '|' + f.mod;
+    if (!LAB.rep || LAB.geladen !== stand){
+      try{ await loadLabFile(await f.handle.getFile()); LAB.geladen = stand; LAB.err = ''; }catch(e){ LAB.rep = null; LAB.err = e.message; LAB.geladen = ''; }
+    }
   }
   const o = Object.assign({ mode: 'uebersicht', title: 'Ergebnisse der Wischproben', startNr: 1, cFlaeche: true, cRating: true, cFoto: true, p1: '', p2: '' }, store.get('bu-labtab', {}));
   showDialog(`<h3>Ergebnistabelle aus dem Laborbericht</h3>
@@ -3716,10 +3760,10 @@ async function openLabDialog(){
   const read = () => ({ mode: $('lMode').value, title: $('lTitle').value.trim(), startNr: +$('lNr').value || 1,
     cFlaeche: $('lFl').checked, cRating: $('lRa').checked, cFoto: $('lFo').checked, p1: $('lP1').value, p2: $('lP2').value });
   const scaleInfo = () => {
-    const r = read(), rep = LAB.rep, sc = loadScales();
+    const r = read(), rep = LAB.rep;
     if (!rep || !r.p1){ $('lScaleInfo').textContent = ''; return; }
     const units = [...new Set(rep.proben.map(pr => (pr.lines.find(l => l.param === r.p1) || {}).unit).filter(Boolean))];
-    $('lScaleInfo').textContent = units.map(u => sc[scaleKey(r.p1, u)] ? `· ${shortParam(r.p1)} [${u}]: „${sc[scaleKey(r.p1, u)].name || 'ohne Namen'}“` : `· ${shortParam(r.p1)} [${u}]: noch keine`).join(' ');
+    $('lScaleInfo').textContent = units.map(u => { const s = skalaFuer(r.p1, u).scale; return s ? `· ${shortParam(r.p1)} [${u}]: „${s.name || 'ohne Namen'}“` : `· ${shortParam(r.p1)} [${u}]: noch keine`; }).join(' ');
   };
   const renderScale = () => {
     const r = read(), rep = LAB.rep;
@@ -3728,6 +3772,10 @@ async function openLabDialog(){
     const sc = loadScales();
     scaleInfo();
     $('lScale').innerHTML = units.map(u => {
+      const eff = skalaFuer(r.p1, u);
+      if (eff.vds) return `<div class="scale vds" data-unit="${esc(u)}"><div class="m">Skala für <b>${esc(shortParam(r.p1))} in ${esc(u)}</b>: ${eff.angepasst ? `in PlanKit angepasst aus „${esc(eff.vds.name)}“` : `VdS-Referenz „${esc(eff.vds.name)}“`} – gilt, weil die Nutzung gewählt ist (${esc(SK.quelle)}).
+        Ändern in <b>PlanKit → Ergebniskarte</b>; die Änderung gilt dann auch hier.</div>
+        <table class="stab"><tr><th>Kategorie</th><th>Bereich</th></tr>${eff.scale.cats.map((c, i) => `<tr><td>${esc(c.name)}</td><td>${esc(i === 0 ? (eff.scale.cats[1] ? `< ${eff.scale.cats[1].from.toLocaleString('de-DE')} ${u}` : 'alle Werte') : `≥ ${c.from.toLocaleString('de-DE')} ${u}`)}</td></tr>`).join('')}</table></div>`;
       const s = sc[scaleKey(r.p1, u)] || { name: '', cats: [{ name: '', from: 0 }] };
       return `<div class="scale" data-unit="${esc(u)}">
         <div class="m">Skala für <b>${esc(shortParam(r.p1))} in ${esc(u)}</b> – Kategorien aufsteigend; ein Wert gehört zur letzten Kategorie, deren „ab“-Wert er erreicht. Werte unter der BG, n.n. und n.b. erhalten keine Kategorie. Gilt für alle Projekte in diesem Browser.</div>
@@ -3749,7 +3797,7 @@ async function openLabDialog(){
       scaleInfo();
       update(false);
     };
-    $('lScale').querySelectorAll('.scale').forEach(el => {
+    $('lScale').querySelectorAll('.scale:not(.vds)').forEach(el => {
       el.querySelectorAll('input').forEach(i => i.addEventListener('change', () => save(el)));
       el.querySelector('.cAdd').onclick = () => {
         const tr = document.createElement('tr');
@@ -3775,7 +3823,8 @@ async function openLabDialog(){
     }
     const projMismatch = S.proj && rep.auftragsref && parseProjName(rep.auftragsref) && parseProjName(rep.auftragsref).nr !== S.proj.nr;
     $('lSrc').innerHTML = `<b>${esc(rep.datei)}</b> · Prüfbericht ${esc(rep.bericht)}${rep.datum ? ' vom ' + esc(rep.datum) : ''} · ${esc(rep.labor)} · ${rep.proben.length} Proben · Auftragsreferenz „${esc(rep.auftragsref || '–')}“` +
-      (rep.vorlaeufig ? ' · <span class="warn">vorläufiger Bericht</span>' : '') +
+      (LAB.manuell ? ' · von Hand gewählt' : LAB.geladen ? ` · neueste Datei in „${LAB_DIR}“` : '') +
+      (rep.vorlaeufig ? '<br><span class="warn">⚠ Vorläufiger Prüfbericht – die Werte können sich mit dem endgültigen Bericht noch ändern. Liegt er in „' + LAB_DIR + '“, wird er beim nächsten Öffnen automatisch genommen.</span>' : '') +
       (BK.map.size ? `<br>Bohrkern-IDs auf Fotos → Probe-Nr. laut LabelKit (${esc(BK.datei)})` : '') +
       (projMismatch ? `<br><span class="warn">Achtung: Der Prüfbericht gehört laut Auftragsreferenz zu ${esc(rep.auftragsref)}, geöffnet ist ${esc(S.proj.name)}.</span>` : '');
     if (withScale) renderScale();
@@ -3791,14 +3840,14 @@ async function openLabDialog(){
     if (window.showOpenFilePicker){
       try{
         const [h] = await window.showOpenFilePicker({ id: 'laborbericht', types: [{ description: 'XML-Export Prüfbericht', accept: { 'application/xml': ['.xml'] } }] });
-        await loadLabFile(await h.getFile()); LAB.err = '';
+        await loadLabFile(await h.getFile()); LAB.err = ''; LAB.manuell = true; LAB.geladen = '';
       }catch(e){ if (e.name !== 'AbortError'){ LAB.rep = null; LAB.err = e.message; } }
       fillParams(); update(true);
     } else $('lFileIn').click();
   };
   $('lFileIn').onchange = async () => {
     const f = $('lFileIn').files[0]; if (!f) return;
-    try{ await loadLabFile(f); LAB.err = ''; }catch(e){ LAB.rep = null; LAB.err = e.message; }
+    try{ await loadLabFile(f); LAB.err = ''; LAB.manuell = true; LAB.geladen = ''; }catch(e){ LAB.rep = null; LAB.err = e.message; }
     fillParams(); update(true);
   };
   $('lCopy').onclick = async () => {
