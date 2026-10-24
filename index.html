@@ -460,11 +460,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.14.0';
+const APP_VERSION = '1.15.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:c397455864a4430deddf9b19edd5280c5e3880de63a5858bcdd3425f96356d8b';
+const APP_BUILD = 'sha256:73b2275eab2a1d626a94d2d8c5c733ad9bf16b67f8585ef3f39b4461a2f99a25';
 const APP_DATE = '2026-10-24';
 const CHANGELOG = [
+  ['1.15.0', '24.10.2026', 'Eigene Bewertungsskalen gelten fürs ganze Büro: Sie liegen im Archivordner in „_Spektron-Skalen.json“ (wie die Mitarbeiterliste) und werden beim Öffnen eines Projekts geholt; Ändern oder Löschen wirkt bei allen. Beim ersten Mal werden die eigenen Skalen dieses Browsers übernommen. Ohne Archivordner bleibt alles wie bisher im Browser. Die VdS-2357-Referenz ist eingebaut und unverändert.'],
   ['1.14.0', '24.10.2026', 'Pflichtangaben wie in der Projektzentrale: Projektnummer, Anlagen-Nr., Objekt, Schadenereignis, Schadendatum, Ortstermin und Sachverständiger sind in „Projektdaten …“ gelb mit „Pflicht“ markiert, solange sie leer sind; der Knopf zeigt, wie viele fehlen. Speichern und Erstellen bleiben möglich.'],
   ['1.13.1', '24.10.2026', 'Behoben: Sehr lange Angaben auf dem Deckblatt der Bilddokumentation (z. B. Schadenereignis) laufen zeilenweise auf der nächsten Seite weiter, statt unten abgeschnitten zu werden.'],
   ['1.13.0', '24.10.2026', 'Neues Erscheinungsbild der Bilddokumentation (PDF): ruhiger Seitenkopf mit Firmenzeichen und Büroanschrift, Deckblatt mit klarer Titelzeile und Projektangaben, Fotos mit feinem Rahmen und Bildunterschrift in Firmenblau, Übersicht der Probenahmestellen als schlichte Tabelle. Im Dokument steht nur noch die Firma, kein Programmname. Das helle Firmenzeichen erscheint nur noch auf dem Deckblatt. Die kopierte Ergebnistabelle für Word hat denselben Stil: feine Linien zwischen den Zeilen, keine senkrechten Linien, Kopfzeile hell mit blauer Linie.'],
@@ -1126,6 +1127,86 @@ async function maVomArchiv(archiv){
     if (o && o.format === 'spektron-mitarbeiter' && Array.isArray(o.personen)) MA_PERSONEN = o.personen.filter(p => p && typeof p.ordnerKuerzel === 'string' && p.ordnerKuerzel.trim());
   }catch(e){ MA_PERSONEN = null; }
 }
+/* SPEKTRON-SKALEN v1 – in FotoKit (index.html, zwischen SPEKTRON-SKALEN und SPEKTRON-SKALEN-ENDE) und PlanKit
+   (src/skalen-archiv.js) wörtlich gleich halten.
+   Eigene Bewertungsskalen gelten fürs ganze Büro: <Archivordner>/_Spektron-Skalen.json ist maßgeblich; der
+   Browser-Speicher „bu-scales“ ist nur die Arbeitskopie, die FotoKit und PlanKit wie bisher lesen.
+   • Öffnen (skalenAbgleich): Datei → Arbeitskopie. Eigene, noch nicht geteilte Änderungen bleiben erhalten.
+   • Ändern/Löschen (skalaTeilen): Arbeitskopie sofort, Datei kurz danach (frisch gelesen, nur diese Skala geändert).
+   • Erster Abgleich eines Browsers: eigene Skalen, die in der Datei fehlen, werden übernommen; danach gilt die Datei,
+     auch für Löschungen anderer.
+   Ohne Archivordner, ohne Recht oder bei Lesefehler bleibt alles lokal wie bisher – nichts geht verloren, nichts blockiert.
+   Die VdS-2357-Referenz ist eingebaut und steht nicht in dieser Datei. */
+const SKALEN_DATEI = '_Spektron-Skalen.json';
+const SKALEN_LOKAL = 'bu-scales', SKALEN_OFFEN = 'bu-scales-offen', SKALEN_MERKER = 'bu-scales-geteilt';
+const skLesen = (k, d) => { try{ const v = JSON.parse(localStorage.getItem(k) || 'null'); return v && typeof v === 'object' && !Array.isArray(v) ? v : d; }catch(e){ return d; } };
+const skSchreiben = (k, v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
+const skalaGueltig = s => !!s && typeof s === 'object' && typeof s.name === 'string' && Array.isArray(s.cats);
+/** Archivordner aus dem gemeinsamen Browser-Speicher (wie Projektzentrale); null ohne Recht. Schreibrecht wird nur auf Wunsch erfragt (nach einem Klick). */
+async function skalenArchiv(modus, fragen){
+  try{
+    const db = await new Promise((res, rej) => { const r = indexedDB.open('mosaik-suite', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+    const a = await new Promise((res, rej) => { const r = db.transaction('kv').objectStore('kv').get('archiv'); r.onsuccess = () => res(r.result || null); r.onerror = () => rej(r.error); });
+    db.close();
+    if (!a || typeof a.getFileHandle !== 'function') return null;
+    let p = await a.queryPermission({ mode: modus });
+    if (p === 'prompt' && fragen) p = await a.requestPermission({ mode: modus });
+    return p === 'granted' ? a : null;
+  }catch(e){ return null; }
+}
+async function skalenDatei(a){
+  let f;
+  try{ f = await (await a.getFileHandle(SKALEN_DATEI)).getFile(); }catch(e){ if (e && e.name === 'NotFoundError') return { skalen: null, roh: null }; throw e; }
+  const o = JSON.parse(await f.text());
+  if (!o || o.format !== 'spektron-skalen' || !o.skalen || typeof o.skalen !== 'object' || Array.isArray(o.skalen)) throw Error(SKALEN_DATEI + ': unbekanntes Format');
+  const skalen = {};
+  for (const [k, v] of Object.entries(o.skalen)) if (skalaGueltig(v)) skalen[k] = v;
+  return { skalen, roh: o };
+}
+/** Stand der Datei plus eigene, noch nicht geteilte Änderungen (und beim ersten Mal: eigene Skalen, die dort fehlen). */
+function skalenZusammen(datei, lokal, offen, erst){
+  const s = Object.assign({}, datei || {}), o = Object.assign({}, offen);
+  if (erst) for (const k of Object.keys(lokal)) if (!(k in s)) o[k] = 1;
+  for (const [k, v] of Object.entries(o)){ if (v && skalaGueltig(lokal[k])) s[k] = lokal[k]; else if (!v) delete s[k]; }
+  return { skalen: s, offen: o };
+}
+let skalenTimer = null, skalenWartend = [], skalenLaeuft = Promise.resolve();
+/** Datei schreiben, wenn Schreibrecht da ist (fragen = nach einem Klick nachfragen dürfen). true = geteilt. */
+function skalenHochladen(fragen){
+  skalenLaeuft = skalenLaeuft.then(async () => {
+    const a = await skalenArchiv('readwrite', fragen); if (!a) return false;
+    try{
+      const d = await skalenDatei(a), z = skalenZusammen(d.skalen, skLesen(SKALEN_LOKAL, {}), skLesen(SKALEN_OFFEN, {}), localStorage.getItem(SKALEN_MERKER) !== '1');
+      if (!Object.keys(z.offen).length){ if (d.skalen) skSchreiben(SKALEN_LOKAL, z.skalen); return true; }
+      const o = Object.assign({}, d.roh || {}, { format: 'spektron-skalen', version: 1, geaendert: new Date().toISOString(), skalen: z.skalen });
+      const w = await (await a.getFileHandle(SKALEN_DATEI, { create: true })).createWritable();
+      await w.write(JSON.stringify(o, null, 2)); await w.close();
+      skSchreiben(SKALEN_LOKAL, z.skalen); skSchreiben(SKALEN_OFFEN, {}); localStorage.setItem(SKALEN_MERKER, '1');
+      return true;
+    }catch(e){ return false; }
+  });
+  return skalenLaeuft;
+}
+/** Beim Öffnen eines Projekts: gemeinsame Skalen holen. 'datei' = Stand des Archivordners, 'lokal' = ohne Archiv/Recht. */
+async function skalenAbgleich(){
+  const a = await skalenArchiv('read', false); if (!a) return 'lokal';
+  try{
+    const d = await skalenDatei(a), lokal = skLesen(SKALEN_LOKAL, {}), z = skalenZusammen(d.skalen, lokal, skLesen(SKALEN_OFFEN, {}), localStorage.getItem(SKALEN_MERKER) !== '1');
+    if (!d.skalen && !Object.keys(z.offen).length) return 'lokal';
+    skSchreiben(SKALEN_LOKAL, z.skalen);
+    if (Object.keys(z.offen).length){ skSchreiben(SKALEN_OFFEN, z.offen); if (!(await skalenHochladen(false)) && !d.skalen) return 'lokal'; }
+    else if (d.skalen) localStorage.setItem(SKALEN_MERKER, '1');
+    return 'datei';
+  }catch(e){ return 'lokal'; }
+}
+/** Nach dem Ändern (skala) oder Löschen (null) einer Skala in der Arbeitskopie: fürs Büro merken und kurz danach in die Datei. */
+function skalaTeilen(key, skala){
+  const o = skLesen(SKALEN_OFFEN, {}); o[key] = skala ? 1 : 0; skSchreiben(SKALEN_OFFEN, o);
+  clearTimeout(skalenTimer);
+  return new Promise(res => { skalenWartend.push(res); skalenTimer = setTimeout(() => { const w = skalenWartend; skalenWartend = []; skalenHochladen(true).then(ok => w.forEach(f => f(ok))); }, 700); });
+}
+/* SPEKTRON-SKALEN-ENDE */
+let SKALEN_STAND = 'lokal';   // 'datei' = gemeinsame Skalen aus dem Archivordner
 function parseProjName(name){
   const r = leseProjektordner(name, MA_PERSONEN);
   return r ? { nr: r.nr, ort: r.ort, kuerzel: r.kuerzel } : null;
@@ -1408,6 +1489,7 @@ async function openDir(dir, proj = null){
       S.dir = dir; S.proj = proj; S.lastRun = null;
       let note = await loadProject(dir);
       const pjNote = await loadPJ();
+      SKALEN_STAND = await skalenAbgleich();   // gemeinsame Bewertungsskalen des Büros (Archivordner)
       if (pjNote) note = note ? note + '<br>' + pjNote : pjNote;
       await loadItems();
       syncProjectContext();
@@ -3762,6 +3844,7 @@ async function openLabDialog(){
   await loadBohrkernZuordnung();
   // Immer die neueste XML in „Laborergebnisse“ – kommt ein endgültiger Bericht nach dem vorläufigen dazu, gilt er ohne neues Öffnen.
   // Eine von Hand gewählte Datei bleibt, bis das Projekt neu geöffnet wird.
+  SKALEN_STAND = await skalenAbgleich();
   await loadSkalenregel();
   if (!LAB.manuell && LAB.files.length){
     const f = LAB.files[0], stand = f.name + '|' + f.mod;
@@ -3811,7 +3894,8 @@ async function openLabDialog(){
     const r = read(), rep = LAB.rep;
     if (!rep || !r.p1){ $('lScaleInfo').textContent = ''; return; }
     const units = [...new Set(rep.proben.map(pr => (pr.lines.find(l => l.param === r.p1) || {}).unit).filter(Boolean))];
-    $('lScaleInfo').textContent = units.map(u => { const s = skalaFuer(r.p1, u).scale; return s ? `· ${shortParam(r.p1)} [${u}]: „${s.name || 'ohne Namen'}“` : `· ${shortParam(r.p1)} [${u}]: noch keine`; }).join(' ');
+    $('lScaleInfo').textContent = units.map(u => { const s = skalaFuer(r.p1, u).scale; return s ? `· ${shortParam(r.p1)} [${u}]: „${s.name || 'ohne Namen'}“` : `· ${shortParam(r.p1)} [${u}]: noch keine`; }).join(' ')
+      + (SKALEN_STAND === 'datei' ? ' · eigene Skalen gelten fürs ganze Büro (Archivordner)' : ' · eigene Skalen nur in diesem Browser – Archivordner in der Projektzentrale wählen, damit sie fürs Büro gelten');
   };
   const renderScale = () => {
     const r = read(), rep = LAB.rep;
@@ -3842,6 +3926,7 @@ async function openLabDialog(){
       all[scaleKey(read().p1, u)] = { name: el.querySelector('.sN').value.trim(), cats: cats.filter(c => c.name).sort((a, b) => (a.from || 0) - (b.from || 0)), geaendert: new Date().toISOString() };
       if (!all[scaleKey(read().p1, u)].cats.length) delete all[scaleKey(read().p1, u)];
       store.set('bu-scales', all);
+      skalaTeilen(scaleKey(read().p1, u), all[scaleKey(read().p1, u)] || null).then(ok => { SKALEN_STAND = ok ? 'datei' : 'lokal'; scaleInfo(); });
       scaleInfo();
       update(false);
     };
@@ -3856,7 +3941,7 @@ async function openLabDialog(){
         tr.querySelector('.cN').focus();
       };
       el.querySelectorAll('.cDel').forEach(b => b.onclick = () => { b.closest('tr').remove(); save(el); });
-      el.querySelector('.sDel').onclick = () => { const all = loadScales(); delete all[scaleKey(read().p1, el.dataset.unit)]; store.set('bu-scales', all); renderScale(); update(false); };
+      el.querySelector('.sDel').onclick = () => { const all = loadScales(); const key = scaleKey(read().p1, el.dataset.unit); delete all[key]; store.set('bu-scales', all); skalaTeilen(key, null).then(ok => { SKALEN_STAND = ok ? 'datei' : 'lokal'; scaleInfo(); }); renderScale(); update(false); };
     });
   };
   const update = (withScale = true) => {
@@ -3936,7 +4021,7 @@ const HELP_HTML = `
       <li><b>Umbenennen</b> – benennt die Dateien im Ordner nach der Beschreibung (z. B. <code>03_P2_Küche_Decke.jpg</code>). Rückgängig ist danach möglich.</li>
       <li><b>Bilddokumentation erstellen …</b> – Bilddokumentation als PDF mit Deckblatt, 2 Bildern pro Seite und Probenahmestellen; wird im Ordner <code>Fotos</code> gespeichert als <code>Bilddokumentation_26.0123_Köln_2026-10-19.pdf</code> (ältere Dateien werden nie überschrieben), bei Bedarf in Teile ≤ 14 MB aufgeteilt.</li>
       <li><b>ZIP exportieren</b> – Bilder mit neuen Namen plus Anweisung, wenn eine KI die Dokumentation erstellen soll.</li>
-      <li><b>Ergebnistabelle …</b> – liest den XML-Export des Laborberichts (aus <code>Laborergebnisse</code>), ordnet die Proben über die Probe-Nr. den Fotos zu (bei Bohrkernen auch über die Kern-ID, z. B. <code>EG-WZ-B-7</code> – Zuordnung aus LabelKit), bewertet nach eurer Skala und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
+      <li><b>Ergebnistabelle …</b> – liest den XML-Export des Laborberichts (aus <code>Laborergebnisse</code>), ordnet die Proben über die Probe-Nr. den Fotos zu (bei Bohrkernen auch über die Kern-ID, z. B. <code>EG-WZ-B-7</code> – Zuordnung aus LabelKit), bewertet nach eurer Skala (eigene Skalen liegen im Archivordner in <code>_Spektron-Skalen.json</code> und gelten fürs ganze Büro) und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
     </ul></li>
 </ol>
 <h4>Tastenkürzel</h4>
