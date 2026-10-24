@@ -456,10 +456,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.10.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:51f5eb004e9020d5741f6aec39dc39b92c0539f63c80b2a7bc2c3c379575c721';
+const APP_BUILD = 'sha256:9c197489f62f8c518d2713cd9e1d97b2bb33372fa5f6c26c0337d786a8026f46';
 const APP_DATE = '2026-10-23';
 const CHANGELOG = [
-  ['1.10.1', '24.10.2026', 'Aufgeräumt: Im Ordner _FotoKit_Fassungen bleiben nur noch die letzten 5 Fassungen der Projektdatei, ältere werden beim Speichern entfernt. Gilt ebenso für _Projekt_Sicherungen.'],
+  ['1.10.1', '24.10.2026', 'Aufgeräumt: In _FotoKit_Fassungen und _Projekt_Sicherungen bleiben nur noch die Sicherungen der letzten 5 Speichervorgänge, ältere werden beim Speichern entfernt.'],
   ['1.10.0', '23.10.2026', 'Zuständige Person: Liegt im Archivordner die Mitarbeiterliste der Projektzentrale, erkennt FotoKit das Kürzel am Ende des Projektordners (z. B. „26.0123 Köln Nad“). Der Ort im Dateinamen von PDF und ZIP, in der Kopfzeile und in _Projekt.json steht dann ohne Kürzel. Die Leiste oben zeigt „Nr. Ort · zuständige Person“.'],
   ['1.9.5', '21.10.2026', 'Einheitliche Bildnummern: Alle aktiven Bilder zählen in Listenreihenfolge ab 1, auch ohne Beschreibung. Vorschau, PDF, ZIP, CSV und Labor-Fotoreferenzen verwenden dieselben Nummern; eine Exportauswahl behält diese bei. Die Dateinummer folgt mit der eingestellten Startnummer derselben Position. Originalname und geplanter Dateiname sind sichtbar. Sortieren ändert keine Dateien; geplante Änderungen müssen ausdrücklich ausgeführt werden. Umbenennen erhält die Dokumentationsreihenfolge als manuelle Sortierung.'],
   ['1.9.4', '20.10.2026', 'Projektzentrale und Spektron-Leiste übergeben Projekte jetzt über #projekt im Fragment. Sonderzeichen bleiben erhalten; alte ?projekt-Links funktionieren weiterhin und werden nach dem Laden bereinigt. Projektwechsel laden auch bereits geöffnete App-Fenster neu; eine Warnung vor ungesicherten Eingaben kann den Wechsel abbrechen. Speicherfehler nach Umbenennen oder Rückgängig bleiben sichtbar. Erneut speichern sichert die Metadaten unter den bereits geänderten Dateinamen, einschließlich neuer Eingaben; die Dateiaktion wird dabei nicht wiederholt. Eine Erfolgsmeldung erscheint erst nach erfolgreicher Speicherung.'],
@@ -653,16 +653,15 @@ async function photoCommit(dir, before, bytes, active = () => true){
   await photoBackup(dir, 'bestaetigt', bytes);
   await photoPrune(dir);
 }
-// Keep the project folder tidy: only the newest few confirmed versions stay.
-const PHOTO_KEEP = 5;
+// Keep the project folder tidy: only the files of the last ~5 saves stay (up to 4 files per save).
+const PHOTO_KEEP = 20;
 async function photoPrune(dir){
   try{
     const archive = await dir.getDirectoryHandle(PHOTO_ARCHIVE), names = [];
     for await (const h of archive.values()) if (h.kind === 'file' && PHOTO_VERSION.test(h.name)) names.push(h.name);
     const stamp = n => n.slice(n.indexOf('_') + 1);
     names.sort((a, b) => stamp(b).localeCompare(stamp(a)));
-    const keep = new Set(names.filter(n => n.startsWith('bestaetigt_')).slice(0, PHOTO_KEEP));
-    for (const n of names) if (!keep.has(n)) { try{ await archive.removeEntry(n); }catch(_){} }
+    for (const n of names.slice(PHOTO_KEEP)) { try{ await archive.removeEntry(n); }catch(_){} }
   }catch(_){ /* tidying is best-effort; the main file is already saved */ }
 }
 async function photoVersions(dir){

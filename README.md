@@ -69,7 +69,7 @@ Zum erneuten Öffnen über die URL benötigen die Apps wie bisher den passenden 
 | Sachverständiger, Standardanweisung für die KI, Export-Einstellungen, Bewertungsskalen der Ergebnistabelle | im Browser (persönlich, je Windows-Profil) |
 | Archivordner, zuletzt geöffnete Projekte | gemeinsamer Browser-Speicher der Suite (IndexedDB `mosaik-suite`, Schlüssel `archiv` und `zuletzt`) |
 
-Ältere Fassungen von `_Bildumbenenner.json` liegen in `_FotoKit_Fassungen/` – es bleiben nur die letzten 5, ältere entfernt die App beim Speichern automatisch.
+Ältere Fassungen von `_Bildumbenenner.json` liegen in `_FotoKit_Fassungen/` – es bleiben nur die Sicherungen der letzten 5 Speichervorgänge, ältere entfernt die App beim Speichern automatisch.
 
 Originalbilder werden **nur umbenannt** bzw. nach `_aussortiert/` verschoben – nie verändert. Drehen und Verkleinern betrifft nur die Kopien im ZIP/PDF. Rückgängig ist nach jedem Umbenennen möglich.
 
