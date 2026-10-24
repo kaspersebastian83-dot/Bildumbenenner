@@ -460,11 +460,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.15.0';
+const APP_VERSION = '1.15.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:73b2275eab2a1d626a94d2d8c5c733ad9bf16b67f8585ef3f39b4461a2f99a25';
+const APP_BUILD = 'sha256:3b39e45791ad5a8be2a28015c14aadba8f12a25222869836f590531ab93e488a';
 const APP_DATE = '2026-10-24';
 const CHANGELOG = [
+  ['1.15.1', '24.10.2026', 'Hilfetexte aktualisiert: Skala gilt mit Archivordner fürs ganze Büro; Knopf in der Projektzentrale heißt „Fotos & Dokumentation“. Schritt für Schritt steht im Handbuch (AidKit).'],
   ['1.15.0', '24.10.2026', 'Eigene Bewertungsskalen gelten fürs ganze Büro: Sie liegen im Archivordner in „_Spektron-Skalen.json“ (wie die Mitarbeiterliste) und werden beim Öffnen eines Projekts geholt; Ändern oder Löschen wirkt bei allen. Beim ersten Mal werden die eigenen Skalen dieses Browsers übernommen. Ohne Archivordner bleibt alles wie bisher im Browser. Die VdS-2357-Referenz ist eingebaut und unverändert.'],
   ['1.14.0', '24.10.2026', 'Pflichtangaben wie in der Projektzentrale: Projektnummer, Anlagen-Nr., Objekt, Schadenereignis, Schadendatum, Ortstermin und Sachverständiger sind in „Projektdaten …“ gelb mit „Pflicht“ markiert, solange sie leer sind; der Knopf zeigt, wie viele fehlen. Speichern und Erstellen bleiben möglich.'],
   ['1.13.1', '24.10.2026', 'Behoben: Sehr lange Angaben auf dem Deckblatt der Bilddokumentation (z. B. Schadenereignis) laufen zeilenweise auf der nächsten Seite weiter, statt unten abgeschnitten zu werden.'],
@@ -3910,7 +3911,7 @@ async function openLabDialog(){
         <table class="stab"><tr><th>Kategorie</th><th>Bereich</th></tr>${eff.scale.cats.map((c, i) => `<tr><td>${esc(c.name)}</td><td>${esc(i === 0 ? (eff.scale.cats[1] ? `< ${eff.scale.cats[1].from.toLocaleString('de-DE')} ${u}` : 'alle Werte') : `≥ ${c.from.toLocaleString('de-DE')} ${u}`)}</td></tr>`).join('')}</table></div>`;
       const s = sc[scaleKey(r.p1, u)] || { name: '', cats: [{ name: '', from: 0 }] };
       return `<div class="scale" data-unit="${esc(u)}">
-        <div class="m">Skala für <b>${esc(shortParam(r.p1))} in ${esc(u)}</b> – Kategorien aufsteigend; ein Wert gehört zur letzten Kategorie, deren „ab“-Wert er erreicht. Werte unter der BG, n.n. und n.b. erhalten keine Kategorie. Gilt für alle Projekte in diesem Browser.</div>
+        <div class="m">Skala für <b>${esc(shortParam(r.p1))} in ${esc(u)}</b> – Kategorien aufsteigend; ein Wert gehört zur letzten Kategorie, deren „ab“-Wert er erreicht. Werte unter der BG, n.n. und n.b. erhalten keine Kategorie. Mit Archivordner gilt sie fürs ganze Büro (<code>_Spektron-Skalen.json</code>), sonst nur in diesem Browser.</div>
         <label class="sname"><span class="lbl">Name der Skala</span><input type="text" class="sN" value="${esc(s.name)}" placeholder="z. B. PAK Wischproben, Stand 10/2026"></label>
         <table class="stab"><tr><th>Kategorie</th><th>ab ${esc(u)}</th><th></th></tr>
           ${s.cats.map((c, i) => `<tr><td><input type="text" class="cN" value="${esc(c.name)}" placeholder="z. B. unauffällig"></td>
@@ -4011,7 +4012,7 @@ const HELP_HTML = `
 </ul>
 <h4>In 5 Schritten zur Bilddokumentation</h4>
 <ol>
-  <li><b>Projekt öffnen:</b> in der Projektzentrale „Fotos bearbeiten → FotoKit“ – oder hier „Projekt öffnen …“ und den Projektordner (z. B. <code>26.0123 Köln</code>) wählen. Oben in der blauen Leiste stehen dann Projektnummer und Ort. Wurde nur der Ordner <code>Fotos</code> gewählt, oben „Projekt zuordnen …“ klicken. Neue Fotos in diesen Ordner kopieren und „Fotos neu einlesen“ wählen.</li>
+  <li><b>Projekt öffnen:</b> in der Projektzentrale „Fotos &amp; Dokumentation“ – oder hier „Projekt öffnen …“ und den Projektordner (z. B. <code>26.0123 Köln</code>) wählen. Oben in der blauen Leiste stehen dann Projektnummer und Ort. Wurde nur der Ordner <code>Fotos</code> gewählt, oben „Projekt zuordnen …“ klicken. Neue Fotos in diesen Ordner kopieren und „Fotos neu einlesen“ wählen.</li>
   <li><b>Dateibenennung:</b> „Dateibenennung und weitere Einstellungen“ klappt die bisherigen Optionen auf. Die Bildnummer zählt aktive Bilder in Listenreihenfolge ab 1; die Dateinummer folgt derselben Position mit der eingestellten Startnummer. Ohne Beschreibung bleibt der Dateiname erhalten. Sortieren ändert keine Dateien: Geplante Namen werden erst mit „Ausführen“ und „Jetzt ausführen“ übernommen.</li>
   <li><b>Bilder beschreiben:</b> links ein Bild anklicken, rechts erscheint die Vorschau. Beschreibung eintippen, <kbd>Enter</kbd> springt zum nächsten Bild. Darunter optional <b>Abschnitt</b> (z. B. „Küche“ – gilt für die folgenden Bilder mit) und <b>Probe-Nr.</b> (z. B. „P1“).</li>
   <li><b>Aufräumen:</b> unbrauchbare Bilder mit ✕ aussortieren (sie wandern ans Ende, nichts wird gelöscht). Reihenfolge per Ziehen ändern oder mit Sortierung „nach Abschnitt (Begehung)“ nach Räumen ordnen, schiefe Bilder mit ↻ drehen.</li>
