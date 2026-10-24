@@ -1,4 +1,5 @@
 const { waitForAsync } = require('./await-condition.cjs');
+let aktuellesSzenario = '';   // für die Fehlermeldung in GitHub Actions (Logs sind dort nicht immer abrufbar)
 // Synthetische OPFS-Projekte; echte App, URL, Leiste und Picker-Bedienung.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -20,6 +21,7 @@ let browser, server;
   const base = `http://127.0.0.1:${server.address().port}/index.html`;
   browser = await playwright[name].launch();
   async function scenario(title, run, initialRead = '') {
+    aktuellesSzenario = title;
     const ctx = await browser.newContext({viewport: {width: 1280, height: 900}});
     try {
       const page = await ctx.newPage(), errors = [], dialogs = [];
@@ -329,4 +331,5 @@ let browser, server;
     const u = await disk('U');assert.deepEqual(u.bytes, beforeU.bytes);
     assert.deepEqual(u.json.bilder['U_01.jpg'], {...beforeU.json.bilder['U_01.jpg'], beschreibung: 'U nachträgliche Beschreibung'});
   });
-})().catch(e => {console.error(e);process.exitCode = 1;}).finally(async () => {if (browser) await browser.close();if (server) await new Promise(r => server.close(r));});
+})().catch(e => {console.error(e);process.exitCode = 1;
+  if (process.env.GITHUB_ACTIONS) console.log(`::error title=Projektkontext: ${aktuellesSzenario.replace(/[\r\n:,]/g, ' ')}::${String(e && e.stack || e).slice(0, 1500).replace(/%/g, '%25').replace(/\r/g, '').replace(/\n/g, '%0A')}`);}).finally(async () => {if (browser) await browser.close();if (server) await new Promise(r => server.close(r));});
