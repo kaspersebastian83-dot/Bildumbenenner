@@ -2,11 +2,17 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.15.1** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.16.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
 Die Webadresse, die Projektdatei `_Bildumbenenner.json` und die gespeicherten Einstellungen behalten den alten Namen – so funktionieren bestehende Projekte, Lesezeichen und installierte Apps weiter. Die aktuelle Version steht oben links in der blauen Kopfzeile (Klick darauf: Änderungen, Problem melden). Daneben öffnet „? Kurzanleitung“ (oder F1) die Kurzanleitung – auch zum Ausdrucken.
+
+## Neu in 1.16.0 · 25.10.2026 – Beschreibungen schneller
+
+- **Vorschlag beim Tippen:** Aus den Beschreibungen dieses Projekts (zuletzt verwendete zuerst) und aus Räumen und Proben in LabelKit. Der ergänzte Rest ist markiert: **Enter** übernimmt und geht zum nächsten Bild, **Tab** übernimmt und man tippt weiter, Weitertippen ersetzt den Vorschlag, **Esc** verwirft ihn. Wer das Feld ohne Übernahme verlässt, behält nur das Getippte.
+- **Probennummer + Enter:** „P7“ tippen → die Beschreibung kommt aus LabelKit (Raum / Ort, Oberflächenart, Beaufschlagung; Asbest: Raum, Bauteil / Material), „P7“ wandert ins Feld Probe-Nr. Gilt nur für Proben, die in der neuesten LabelKit-Projektdatei (`Laboraufträge/…_Daten.json`) stehen, und nur, wenn „Probe-Nr. im Namen“ an ist und das Feld Probe-Nr. leer war. Nummerierung wie in LabelKit (PAK → Chlorid → Asbest → Sonstige).
+- Die LabelKit-Datei wird beim Öffnen des Projekts im Hintergrund gelesen, nie geschrieben. Abschaltbar unter „Dateibenennung und weitere Einstellungen“ → **„Vorschläge beim Tippen“** (gilt je Browser).
 
 ## Neu in 1.9.5 · 21.10.2026
 
