@@ -375,6 +375,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
     <label><input type="checkbox" id="oUml"> ä → ae</label>
     <label><input type="checkbox" id="oLower"> Endung klein</label>
     <label title="z. B. 03_P2_Küche_Decke.jpg"><input type="checkbox" id="oProbe"> Probe-Nr. im Namen</label>
+    <label title="Beim Tippen der Beschreibung: Vorschlag aus diesem Projekt und aus LabelKit (markiert – Enter/Tab übernimmt, Weitertippen ersetzt). „P7“ + Enter füllt die Beschreibung aus LabelKit."><input type="checkbox" id="oVorschlag"> Vorschläge beim Tippen</label>
     <label>Aussortierte
       <select id="oDiscard"><option value="move">→ Unterordner _aussortiert</option><option value="keep">im Ordner lassen</option></select>
     </label>
@@ -419,7 +420,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 <footer id="foot" style="display:none">
   <span id="stats"></span>
-  <span class="keys" title="Enter / ↓: nächstes Bild · Shift+Enter / ↑: vorheriges Bild · Strg+D: Text vom vorherigen Bild übernehmen · Alt+X: aussortieren / wiederherstellen · Alt+R / Alt+Shift+R: drehen · Vorschaubild ziehen: verschieben · Esc: Vollbild schließen"><kbd>↵</kbd> nächstes · <kbd>⇧↵</kbd> vorheriges · <kbd>Strg D</kbd> übernehmen · <kbd>Alt X</kbd> aussortieren · <kbd>Alt R</kbd> drehen</span>
+  <span class="keys" title="Tippen: Vorschlag erscheint markiert – Enter/Tab übernimmt, Esc verwirft · P7 + Enter: Beschreibung aus LabelKit · Enter / ↓: nächstes Bild · Shift+Enter / ↑: vorheriges Bild · Strg+D: Text vom vorherigen Bild übernehmen · Alt+X: aussortieren / wiederherstellen · Alt+R / Alt+Shift+R: drehen · Vorschaubild ziehen: verschieben · Esc: Vollbild schließen"><kbd>↵</kbd> nächstes · <kbd>⇧↵</kbd> vorheriges · <kbd>Strg D</kbd> übernehmen · <kbd>Alt X</kbd> aussortieren · <kbd>Alt R</kbd> drehen</span>
   <button id="btnRename" disabled title="Originaldateien umbenennen und aussortierte Bilder gegebenenfalls verschieben – unabhängig vom PDF-/ZIP-Export">Umbenennen</button>
   <div class="toolgroup export-actions" role="group" aria-label="Bilddokumentation und Export">
     <button id="btnPdf" class="primary" disabled title="Bilddokumentation direkt als PDF erstellen (Deckblatt, 2 Bilder pro Seite, max. 14 MB je Datei)">Bilddokumentation erstellen …</button>
@@ -460,11 +461,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.15.1';
+const APP_VERSION = '1.16.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:3b39e45791ad5a8be2a28015c14aadba8f12a25222869836f590531ab93e488a';
+const APP_BUILD = 'sha256:02b430496ea4dfbd7d689aa68f02be8291d88a1d864c6985232bcf2ba833c7e0';
 const APP_DATE = '2026-10-24';
 const CHANGELOG = [
+  ['1.16.0', '25.10.2026', 'Beschreibungen schneller: Beim Tippen schlägt FotoKit den Rest vor – aus den Beschreibungen dieses Projekts (die zuletzt verwendeten zuerst) und aus Räumen und Proben in LabelKit. Der Vorschlag ist markiert: Enter oder Tab übernimmt, Weitertippen ersetzt, Esc verwirft. Probennummer tippen („P7“) und Enter: Die Beschreibung kommt aus LabelKit (Raum, Oberflächenart, Beaufschlagung), „P7“ wandert ins Feld Probe-Nr. Abschaltbar unter „Dateibenennung und weitere Einstellungen“ → „Vorschläge beim Tippen“. LabelKit wird nur gelesen.'],
   ['1.15.1', '24.10.2026', 'Hilfetexte aktualisiert: Skala gilt mit Archivordner fürs ganze Büro; Knopf in der Projektzentrale heißt „Fotos & Dokumentation“. Schritt für Schritt steht im Handbuch (AidKit).'],
   ['1.15.0', '24.10.2026', 'Eigene Bewertungsskalen gelten fürs ganze Büro: Sie liegen im Archivordner in „_Spektron-Skalen.json“ (wie die Mitarbeiterliste) und werden beim Öffnen eines Projekts geholt; Ändern oder Löschen wirkt bei allen. Beim ersten Mal werden die eigenen Skalen dieses Browsers übernommen. Ohne Archivordner bleibt alles wie bisher im Browser. Die VdS-2357-Referenz ist eingebaut und unverändert.'],
   ['1.14.0', '24.10.2026', 'Pflichtangaben wie in der Projektzentrale: Projektnummer, Anlagen-Nr., Objekt, Schadenereignis, Schadendatum, Ortstermin und Sachverständiger sind in „Projektdaten …“ gelb mit „Pflicht“ markiert, solange sie leer sind; der Knopf zeigt, wie viele fehlen. Speichern und Erstellen bleiben möglich.'],
@@ -931,8 +933,8 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /* ---------- settings ---------- */
-const OPT = { prefix:'oPrefix', date:'oDate', num:'oNum', start:'oStart', digits:'oDigits', sep:'oSep', spaces:'oSpaces', uml:'oUml', lower:'oLower', probe:'oProbe', discard:'oDiscard' };
-const defaults = { prefix:'', date:false, num:true, start:1, digits:2, sep:'_', spaces:true, uml:false, lower:true, probe:true, discard:'move', sort:'name' };
+const OPT = { prefix:'oPrefix', date:'oDate', num:'oNum', start:'oStart', digits:'oDigits', sep:'oSep', spaces:'oSpaces', uml:'oUml', lower:'oLower', probe:'oProbe', discard:'oDiscard', vorschlag:'oVorschlag' };
+const defaults = { prefix:'', date:false, num:true, start:1, digits:2, sep:'_', spaces:true, uml:false, lower:true, probe:true, discard:'move', sort:'name', vorschlag:true };
 let cfg = Object.assign({}, defaults, store.get('bu-settings', {}));
 function applyCfgToUI(){
   for (const [k,id] of Object.entries(OPT)){
@@ -1501,6 +1503,7 @@ async function openDir(dir, proj = null){
       $('btnMeta').disabled = false; metaKnopf();
       $('btnVersions').disabled = false;
       $('btnLab').disabled = false; LAB.rep = null; LAB.err = ''; LAB.manuell = false; LAB.geladen = '';
+      loadBohrkernZuordnung();   // LabelKit-Proben für Vorschläge und Bohrkern-Zuordnung – im Hintergrund, blockiert das Öffnen nie
       if (note) banner(P.readOnly ? 'err' : 'info', note);
     }catch(e){
       clearTimeout(P.timer); clearTimeout(PJ.timer);
@@ -1651,7 +1654,16 @@ function buildRows(){
       sectionStatus.id = 'section-status-' + (++nextRowId);
       r.querySelector('.sec').setAttribute('aria-describedby', sectionStatus.id);
       inp.value = it.desc;
-      inp.addEventListener('input', () => { if (it.discard) return; it.desc = inp.value; recompute(); saveDrafts(); });
+      inp.addEventListener('input', e => {
+        if (it.discard) return;
+        inp._geist = null;
+        if (cfg.vorschlag && e.inputType === 'insertText' && !e.isComposing && inp.selectionStart === inp.value.length){
+          const v = vorschlagFuer(it, inp.value);
+          if (v){ const n = inp.value.length; inp.value = v; inp.setSelectionRange(n, v.length); inp._geist = n; }
+        }
+        it.desc = inp.value; recompute(); saveDrafts();
+      });
+      inp.addEventListener('blur', () => { geistVerwerfen(it, inp); probeAusBeschreibung(it); });
       inp.addEventListener('focus', () => setFocus(S.view.indexOf(it), false));
       inp.addEventListener('keydown', onKey);
       for (const [cls, key] of [['sec', 'sec'], ['probe', 'probe']]){
@@ -1976,6 +1988,9 @@ function onKey(e){
   const i = S.focus;
   const navigation = !e.altKey && !e.ctrlKey && !e.metaKey;
   const description = e.target.classList.contains('desc');
+  if (description && geisterAktiv(e.target) && navigation && e.key === 'Tab' && !e.shiftKey){ e.preventDefault(); const n = e.target.value.length; e.target.setSelectionRange(n, n); e.target._geist = null; return; }
+  if (description && geisterAktiv(e.target) && e.key === 'Escape'){ e.preventDefault(); const it = S.view[i]; if (it) geistVerwerfen(it, e.target); return; }
+  if (description && navigation && e.key === 'Enter' && !e.shiftKey){ e.target._geist = null; const it = S.view[i]; if (it) probeAusBeschreibung(it); }
   if (navigation && ((e.key === 'Enter' && !e.shiftKey) || (description && e.key === 'ArrowDown'))){ e.preventDefault(); setFocus(i + 1, true); }
   else if (navigation && ((e.key === 'Enter' && e.shiftKey) || (description && e.key === 'ArrowUp'))){ e.preventDefault(); setFocus(i - 1, true); }
   else if (e.altKey && e.code === 'KeyR'){
@@ -3545,18 +3560,78 @@ const fotoProben = (text, bk) => [...new Set(String(text || '').split(/[,;\/]+/)
   .flatMap(x => { const p = normProbe(x); return (!/^P\d+[a-z]?$/.test(p) && bk && bk.get(p)) || [p]; }))];
 const BK = { map: new Map(), datei: '' };
 async function loadBohrkernZuordnung(){
-  BK.map = new Map(); BK.datei = '';
-  if (!S.proj) return;
+  BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.datei = '';
+  const proj = S.proj; if (!proj) return;
   try{
-    const d = await findSubdir(S.proj.dir, 'Laboraufträge'); if (!d) return;
+    const d = await findSubdir(proj.dir, 'Laboraufträge'); if (!d) return;
     let best = null;
     for await (const h of d.values()){
       if (h.kind !== 'file' || !/_Daten\.json$/i.test(h.name)) continue;
       const f = await h.getFile(); if (!best || f.lastModified > best.lastModified) best = f;
     }
     if (!best) return;
-    BK.map = bohrkernNummern(JSON.parse(await best.text())); BK.datei = best.name;
-  }catch(e){ BK.map = new Map(); BK.datei = ''; }
+    const daten = JSON.parse(await best.text());
+    if (S.proj !== proj) return;   // inzwischen anderes Projekt geöffnet
+    BK.map = bohrkernNummern(daten); BK.datei = best.name;
+    LK.proben = labelkitProben(daten); LK.datei = best.name;
+  }catch(e){ if (S.proj === proj){ BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.datei = ''; } }
+}
+/* ---------- Beschreibung schneller: Vorschläge ----------
+   1) Probe-Nr. → Beschreibung aus LabelKit (neueste …_Daten.json in „Laboraufträge“, nur gelesen):
+      Raum / Ort, Oberflächenart, Beaufschlagung (Asbest: Raum, Bauteil/Material). Nummerierung wie in LabelKit:
+      _nr, sonst fortlaufend ab probenStartNr über PAK → Chlorid → Asbest → Sonstige.
+   2) Beim Tippen: Ergänzung aus den Beschreibungen dieses Projekts (zuletzt verwendete zuerst) und den Räumen/Proben aus
+      LabelKit – wie in der Adresszeile des Browsers: der ergänzte Rest ist markiert, Enter/Tab übernimmt, Weitertippen ersetzt,
+      Entf/Rücktaste oder Esc verwirft. Ohne Übernahme (Klick woandershin) bleibt nur das Getippte. */
+const LK = { proben: new Map(), datei: '' };
+function labelkitProben(daten){
+  const out = new Map(); if (!daten || typeof daten !== 'object') return out;
+  const t = v => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+  let nr = Number.isSafeInteger(+daten.probenStartNr) && +daten.probenStartNr > 0 ? +daten.probenStartNr : 1;
+  for (const [liste, teile] of [['proben', p => [p.z2, p.z4, p.z3]], ['chloridProben', p => [p.z2, p.z4, p.z3]], ['asbestProben', p => [p.z2, p.z3]], ['sonstigeProben', p => [p.z2, p.z4, p.z3]]]){
+    for (const p of Array.isArray(daten[liste]) ? daten[liste] : []){
+      if (!p || typeof p !== 'object'){ nr++; continue; }
+      const n = Number.isSafeInteger(+p._nr) && +p._nr > 0 ? +p._nr : nr; nr = n + 1;
+      const text = teile(p).map(t).filter(Boolean).join(' ');
+      if (text) out.set('P' + n, { text: text.slice(0, 120), raum: t(p.z2) });
+    }
+  }
+  return out;
+}
+/** Kandidaten für die Ergänzung: Beschreibungen der vorherigen Bilder (nächstgelegene zuerst), dann häufige, dann LabelKit. */
+function vorschlagKandidaten(it){
+  const seen = new Set(), out = [], add = v => { v = String(v || '').trim(); const k = v.toLocaleLowerCase('de'); if (v && !seen.has(k)){ seen.add(k); out.push(v); } };
+  const i = S.view.indexOf(it);
+  for (let j = i - 1; j >= 0; j--) if (!S.view[j].discard) add(S.view[j].desc);
+  const zahl = new Map(); for (const x of S.view) if (x !== it && !x.discard && x.desc.trim()) zahl.set(x.desc.trim(), (zahl.get(x.desc.trim()) || 0) + 1);
+  [...zahl].sort((a, b) => b[1] - a[1]).forEach(([v]) => add(v));
+  for (const p of LK.proben.values()){ add(p.text); add(p.raum); }
+  return out;
+}
+/** Getippter Text → vollständiger Vorschlag oder ''. „P7“ (bekannte LabelKit-Probe) → „P7 Küche Untersicht verrußt“. */
+function vorschlagFuer(it, getippt){
+  const g = getippt.normalize('NFC'), k = g.toLocaleLowerCase('de').trim();
+  if (k.length < 2) return '';
+  const nr = /^p\d+[a-z]?$/i.test(g.trim()) ? normProbe(g) : '';
+  if (nr && LK.proben.has(nr)) return g.trim() + ' ' + LK.proben.get(nr).text;
+  for (const v of vorschlagKandidaten(it)) if (v.length > g.length && v.toLocaleLowerCase('de').startsWith(g.toLocaleLowerCase('de'))) return g + v.slice(g.length);
+  return '';
+}
+/** Beschreibung beginnt mit einer bekannten LabelKit-Probe und Probe-Nr. ist leer → Nummer ins Feld Probe-Nr., Rest bleibt Beschreibung. */
+function probeAusBeschreibung(it){
+  if (!cfg.probe || it.discard || (it.probe || '').trim()) return false;
+  const m = /^\s*(p\d+[a-z]?)\s+(\S[\s\S]*)$/i.exec(it.desc || ''); if (!m) return false;
+  const nr = normProbe(m[1]); if (!LK.proben.has(nr)) return false;
+  it.probe = nr; it.desc = m[2].trim();
+  if (it.el){ it.el.querySelector('.probe').value = it.probe; it.el.querySelector('.desc').value = it.desc; }
+  recompute(); saveDrafts(); saveExtra();
+  return true;
+}
+const geisterAktiv = inp => inp._geist != null && inp.selectionEnd === inp.value.length && inp.selectionStart === inp._geist && inp.selectionStart < inp.value.length;
+function geistVerwerfen(it, inp){
+  if (!geisterAktiv(inp)) { inp._geist = null; return; }
+  inp.value = inp.value.slice(0, inp._geist); inp._geist = null;
+  if (!it.discard){ it.desc = inp.value; recompute(); saveDrafts(); }
 }
 const berlinDate = iso => {
   const d = new Date(iso); if (isNaN(d)) return '';
@@ -4029,6 +4104,8 @@ const HELP_HTML = `
 <table>
   <tr><td><kbd>Enter</kbd> / <kbd>↓</kbd></td><td>nächstes Bild (Pfeiltasten im Beschreibungsfeld)</td></tr>
   <tr><td><kbd>Shift+Enter</kbd> / <kbd>↑</kbd></td><td>vorheriges Bild (Pfeiltasten im Beschreibungsfeld)</td></tr>
+  <tr><td>Tippen</td><td>Vorschlag aus diesem Projekt und LabelKit erscheint markiert: <kbd>Enter</kbd> übernimmt und geht weiter, <kbd>Tab</kbd> übernimmt und man tippt weiter, Weitertippen ersetzt ihn, <kbd>Esc</kbd> verwirft ihn</td></tr>
+  <tr><td><kbd>P7</kbd> + <kbd>Enter</kbd></td><td>Beschreibung aus LabelKit (Raum, Oberflächenart, Beaufschlagung) – „P7“ kommt ins Feld Probe-Nr.</td></tr>
   <tr><td><kbd>Strg+D</kbd></td><td>Angabe vom vorherigen Bild übernehmen: Beschreibung, wirksamer Abschnitt oder Probenummer – je nach aktivem Eingabefeld</td></tr>
   <tr><td><kbd>Alt+X</kbd></td><td>aussortieren / zurückholen</td></tr>
   <tr><td><kbd>Alt+R</kbd> / <kbd>Alt+Shift+R</kbd></td><td>rechts / links drehen</td></tr>

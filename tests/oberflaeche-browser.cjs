@@ -130,7 +130,7 @@ let browser, server;
       assert.equal(await page.getByRole('group', { name: 'Bilddokumentation und Export', exact: true }).count(), 1);
       await inspectLayout('eingeklappt');
       await toggle.click();
-      assert.equal(await page.locator('#namingOptions input, #namingOptions select').count(), 11);
+      assert.equal(await page.locator('#namingOptions input, #namingOptions select').count(), 12, '11 Benennungsfelder + „Vorschläge beim Tippen“');
       if (!protectedProject) {
         await page.locator('#oPrefix').fill('Test'); await page.locator('#oStart').fill('7'); await page.locator('#oDigits').fill('3');
         await page.locator('#oSep').selectOption('-'); await page.locator('#oSpaces').uncheck(); await page.locator('#oUml').check();
