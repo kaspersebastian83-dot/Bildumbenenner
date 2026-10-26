@@ -63,15 +63,15 @@ let browser, server;
     if ((await zustand(0)).wert !== 'P2' || Date.now() > ende) break;
     await page.waitForTimeout(200);
   }
-  assert.deepEqual(await zustand(0), { wert: 'P2 Flur Ansicht mit Ruß', markiert: ' Flur Ansicht mit Ruß' });
+  assert.deepEqual(await zustand(0), { wert: 'P2 Flur mit Ruß Ansicht', markiert: ' Flur mit Ruß Ansicht' });
   await page.keyboard.press('Enter');
-  assert.equal(await desc.nth(0).inputValue(), 'Flur Ansicht mit Ruß');
+  assert.equal(await desc.nth(0).inputValue(), 'Flur mit Ruß Ansicht');
   assert.equal(await rows.nth(0).locator('.probe').inputValue(), 'P2');
   assert.equal(await desc.nth(1).evaluate(e => e === document.activeElement), true, 'Enter geht zum nächsten Bild');
 
   // 2) Ergänzung aus der vorherigen Beschreibung; Weitertippen ersetzt den Vorschlag
   await tippe('Fl');
-  assert.deepEqual(await zustand(1), { wert: 'Flur Ansicht mit Ruß', markiert: 'ur Ansicht mit Ruß' });
+  assert.deepEqual(await zustand(1), { wert: 'Flur mit Ruß Ansicht', markiert: 'ur mit Ruß Ansicht' });
   await tippe('ur Decke');
   assert.deepEqual(await zustand(1), { wert: 'Flur Decke', markiert: '' });
   await page.keyboard.press('Enter');
@@ -80,15 +80,15 @@ let browser, server;
 
   // 3) Esc verwirft; Tab übernimmt und man tippt weiter (Vorschlag aus LabelKit)
   await tippe('Kü');
-  assert.deepEqual(await zustand(2), { wert: 'Küche Untersicht verrußt', markiert: 'che Untersicht verrußt' });
+  assert.deepEqual(await zustand(2), { wert: 'Küche verrußt Untersicht', markiert: 'che verrußt Untersicht' });
   await page.keyboard.press('Escape');
   assert.deepEqual(await zustand(2), { wert: 'Kü', markiert: '' });
   await tippe('che');
-  assert.equal((await zustand(2)).wert, 'Küche Untersicht verrußt');
+  assert.equal((await zustand(2)).wert, 'Küche verrußt Untersicht');
   await page.keyboard.press('Tab');
   assert.equal(await desc.nth(2).evaluate(e => e === document.activeElement), true, 'Tab bleibt im Feld, solange ein Vorschlag offen war');
   await tippe(' Detail');
-  assert.equal(await desc.nth(2).inputValue(), 'Küche Untersicht verrußt Detail');
+  assert.equal(await desc.nth(2).inputValue(), 'Küche verrußt Untersicht Detail');
   await page.keyboard.press('Enter');
 
   // 4) Verlassen ohne Übernahme (Klick woandershin) → nur das Getippte bleibt

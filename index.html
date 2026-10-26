@@ -461,11 +461,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.16.0';
+const APP_VERSION = '1.16.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:02b430496ea4dfbd7d689aa68f02be8291d88a1d864c6985232bcf2ba833c7e0';
+const APP_BUILD = 'sha256:9b3b37c10298329d4d16271e27761edfc5c0fafc215c94e81791002306fc6634';
 const APP_DATE = '2026-10-24';
 const CHANGELOG = [
+  ['1.16.1', '26.10.2026', 'Vorschlag aus LabelKit in derselben Reihenfolge wie die Laborübergabe: Raum, Beaufschlagung, Oberflächenart (z. B. „Küche verrußt Untersicht“).'],
   ['1.16.0', '25.10.2026', 'Beschreibungen schneller: Beim Tippen schlägt FotoKit den Rest vor – aus den Beschreibungen dieses Projekts (die zuletzt verwendeten zuerst) und aus Räumen und Proben in LabelKit. Der Vorschlag ist markiert: Enter oder Tab übernimmt, Weitertippen ersetzt, Esc verwirft. Probennummer tippen („P7“) und Enter: Die Beschreibung kommt aus LabelKit (Raum, Oberflächenart, Beaufschlagung), „P7“ wandert ins Feld Probe-Nr. Abschaltbar unter „Dateibenennung und weitere Einstellungen“ → „Vorschläge beim Tippen“. LabelKit wird nur gelesen.'],
   ['1.15.1', '24.10.2026', 'Hilfetexte aktualisiert: Skala gilt mit Archivordner fürs ganze Büro; Knopf in der Projektzentrale heißt „Fotos & Dokumentation“. Schritt für Schritt steht im Handbuch (AidKit).'],
   ['1.15.0', '24.10.2026', 'Eigene Bewertungsskalen gelten fürs ganze Büro: Sie liegen im Archivordner in „_Spektron-Skalen.json“ (wie die Mitarbeiterliste) und werden beim Öffnen eines Projekts geholt; Ändern oder Löschen wirkt bei allen. Beim ersten Mal werden die eigenen Skalen dieses Browsers übernommen. Ohne Archivordner bleibt alles wie bisher im Browser. Die VdS-2357-Referenz ist eingebaut und unverändert.'],
@@ -3578,7 +3579,7 @@ async function loadBohrkernZuordnung(){
 }
 /* ---------- Beschreibung schneller: Vorschläge ----------
    1) Probe-Nr. → Beschreibung aus LabelKit (neueste …_Daten.json in „Laboraufträge“, nur gelesen):
-      Raum / Ort, Oberflächenart, Beaufschlagung (Asbest: Raum, Bauteil/Material). Nummerierung wie in LabelKit:
+      Raum / Ort, Beaufschlagung, Oberflächenart – Reihenfolge der LabelKit-Übergabe an Eurofins (Asbest: Raum, Bauteil/Material). Nummerierung wie in LabelKit:
       _nr, sonst fortlaufend ab probenStartNr über PAK → Chlorid → Asbest → Sonstige.
    2) Beim Tippen: Ergänzung aus den Beschreibungen dieses Projekts (zuletzt verwendete zuerst) und den Räumen/Proben aus
       LabelKit – wie in der Adresszeile des Browsers: der ergänzte Rest ist markiert, Enter/Tab übernimmt, Weitertippen ersetzt,
@@ -3588,7 +3589,7 @@ function labelkitProben(daten){
   const out = new Map(); if (!daten || typeof daten !== 'object') return out;
   const t = v => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
   let nr = Number.isSafeInteger(+daten.probenStartNr) && +daten.probenStartNr > 0 ? +daten.probenStartNr : 1;
-  for (const [liste, teile] of [['proben', p => [p.z2, p.z4, p.z3]], ['chloridProben', p => [p.z2, p.z4, p.z3]], ['asbestProben', p => [p.z2, p.z3]], ['sonstigeProben', p => [p.z2, p.z4, p.z3]]]){
+  for (const [liste, teile] of [['proben', p => [p.z2, p.z3, p.z4]], ['chloridProben', p => [p.z2, p.z3, p.z4]], ['asbestProben', p => [p.z2, p.z3]], ['sonstigeProben', p => [p.z2, p.z3, p.z4]]]){
     for (const p of Array.isArray(daten[liste]) ? daten[liste] : []){
       if (!p || typeof p !== 'object'){ nr++; continue; }
       const n = Number.isSafeInteger(+p._nr) && +p._nr > 0 ? +p._nr : nr; nr = n + 1;
@@ -3608,7 +3609,7 @@ function vorschlagKandidaten(it){
   for (const p of LK.proben.values()){ add(p.text); add(p.raum); }
   return out;
 }
-/** Getippter Text → vollständiger Vorschlag oder ''. „P7“ (bekannte LabelKit-Probe) → „P7 Küche Untersicht verrußt“. */
+/** Getippter Text → vollständiger Vorschlag oder ''. „P7“ (bekannte LabelKit-Probe) → „P7 Küche verrußt Untersicht“. */
 function vorschlagFuer(it, getippt){
   const g = getippt.normalize('NFC'), k = g.toLocaleLowerCase('de').trim();
   if (k.length < 2) return '';
@@ -4105,7 +4106,7 @@ const HELP_HTML = `
   <tr><td><kbd>Enter</kbd> / <kbd>↓</kbd></td><td>nächstes Bild (Pfeiltasten im Beschreibungsfeld)</td></tr>
   <tr><td><kbd>Shift+Enter</kbd> / <kbd>↑</kbd></td><td>vorheriges Bild (Pfeiltasten im Beschreibungsfeld)</td></tr>
   <tr><td>Tippen</td><td>Vorschlag aus diesem Projekt und LabelKit erscheint markiert: <kbd>Enter</kbd> übernimmt und geht weiter, <kbd>Tab</kbd> übernimmt und man tippt weiter, Weitertippen ersetzt ihn, <kbd>Esc</kbd> verwirft ihn</td></tr>
-  <tr><td><kbd>P7</kbd> + <kbd>Enter</kbd></td><td>Beschreibung aus LabelKit (Raum, Oberflächenart, Beaufschlagung) – „P7“ kommt ins Feld Probe-Nr.</td></tr>
+  <tr><td><kbd>P7</kbd> + <kbd>Enter</kbd></td><td>Beschreibung aus LabelKit (Raum, Beaufschlagung, Oberflächenart) – „P7“ kommt ins Feld Probe-Nr.</td></tr>
   <tr><td><kbd>Strg+D</kbd></td><td>Angabe vom vorherigen Bild übernehmen: Beschreibung, wirksamer Abschnitt oder Probenummer – je nach aktivem Eingabefeld</td></tr>
   <tr><td><kbd>Alt+X</kbd></td><td>aussortieren / zurückholen</td></tr>
   <tr><td><kbd>Alt+R</kbd> / <kbd>Alt+Shift+R</kbd></td><td>rechts / links drehen</td></tr>
