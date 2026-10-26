@@ -245,6 +245,8 @@ let browser, server;
     await page.evaluate(() => {io.failRead = true;releaseRead();});
     await page.waitForFunction(() => !document.body.inert && document.querySelector('#banner').textContent.includes('konnte nicht geöffnet'));
     await stillA('A erhaltene Eingabe');
+    // 1.17: Projektfassungen stehen unter „⋯ Mehr“.
+    if (await page.locator('#morePanel').isHidden()) await page.locator('#btnMore').click();
     await page.locator('[data-pj-recovery]').click();
     await page.locator('[data-pj-recovery-dialog] h3').filter({hasText:projects.A}).waitFor();
     await page.locator('[data-pj-recovery-dialog]').getByRole('button',{name:'Schließen',exact:true}).click();
