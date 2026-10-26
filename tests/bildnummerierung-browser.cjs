@@ -216,8 +216,14 @@ function zipFiles(bytes) {
         const originalLabels = await active.evaluateAll(es => Object.fromEntries(es.map(e => [e.querySelector('.probe').value, e.querySelector('.orig').textContent])));
         await active.first().locator('.down').click(); const swapped = await snapshot();
         await rename(); await pdf();
+        // Eine nach dem Lauf geänderte Beschreibung überlebt das Rückgängigmachen
+        const edited = await active.first().locator('.probe').inputValue();
+        await active.first().locator('.desc').fill('Serie nach dem Lauf');
         await page.locator('#bUndo').click();
         await page.waitForFunction(() => /Rückgängig gemacht/.test(document.querySelector('#banner').textContent));
+        const descsAfter = await active.evaluateAll(es => Object.fromEntries(es.map(e => [e.querySelector('.probe').value, e.querySelector('.desc').value])));
+        assert.equal(descsAfter[edited], 'Serie nach dem Lauf', 'Undo überschreibt keine nach dem Lauf geänderte Beschreibung');
+        assert.ok(Object.entries(descsAfter).every(([pr, d]) => pr === edited || d === 'Serie'), 'übrige Beschreibungen wie vor dem Lauf');
         assert.deepEqual(await readFiles(), diskBeforeSwap, 'Namenskreislauf und Undo erhalten Bildbytes');
         assert.deepEqual((await snapshot()).map(x => [x.name, x.probe]), swapped.map(x => [x.name, x.probe]));
         const labelsAfter = await active.evaluateAll(es => Object.fromEntries(es.map(e => [e.querySelector('.probe').value, e.querySelector('.orig').textContent])));

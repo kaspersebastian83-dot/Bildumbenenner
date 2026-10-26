@@ -31,4 +31,11 @@ ctx.SK.usage = ''; ctx.SK.vds = {};
   assert.deepEqual([...ctx.skalaFuer('Chlorid', 'mg/m²').scale.cats.map(c => c.from)], [0, 50, 100], 'mg/m²: 1 µg/cm² = 10 mg/m²');
   assert.equal(ctx.skalaFuer('Chlorid', 'mg/kg').vds, null, 'Feststoff: keine Oberflächenreferenz');
   assert.match(r.scale.cats[1].name, /im Bereich der korrosionschemisch relevanten Größenordnung/); }
-console.log('OK Skalenregel: eigene, VdS (Wohnen/Industrie, Einheiten), MKW eigene, angepasst aus PlanKit, Chlorid VdS 2357');
+// Kategorie ohne „ab“-Wert (leeres Feld, in JSON als null gespeichert) bewertet keine Werte und wird nicht gespeichert
+{ const ra = html.indexOf('function rate(scale, v){'), rb = html.indexOf('function photoNumbers()'); assert.ok(ra > 0 && rb > ra, 'rate() in index.html');
+  const rc = {}; vm.runInNewContext(html.slice(ra, rb) + '\nthis.rate = rate;', rc);
+  const kaputt = JSON.parse(JSON.stringify({ name: 'x', cats: [{ name: 'niedrig', from: 0 }, { name: 'hoch', from: NaN }, { name: 'sehr hoch', from: 10 }] }));
+  assert.equal(kaputt.cats[1].from, null);
+  assert.deepEqual([0.1, 3, 50].map(v => rc.rate(kaputt, v)), ['niedrig', 'niedrig', 'sehr hoch'], 'from:null bewertet nicht jeden Wert');
+  assert.ok(html.includes(".filter((c, i) => (c.name || i === 0) && (i === 0 || Number.isFinite(c.from)))"), 'Skaleneditor speichert keine Kategorie ohne „ab“-Wert'); }
+console.log('OK Skalenregel: eigene, VdS (Wohnen/Industrie, Einheiten), MKW eigene, angepasst aus PlanKit, Chlorid VdS 2357, Kategorie ohne „ab“');

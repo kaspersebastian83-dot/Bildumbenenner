@@ -20,7 +20,7 @@ function welt({ archiv = true, lesen = 'granted', schreiben = 'granted', datei, 
     async getFileHandle(name, o = {}){
       if (!files.has(name) && !o.create){ const e = new Error('fehlt'); e.name = 'NotFoundError'; throw e; }
       return { async getFile(){ const t = files.get(name) ?? ''; return { async text(){ return t; } }; },
-        async createWritable(){ let buf = ''; return { async write(x){ buf += x; }, async close(){ files.set(name, buf); log.geschrieben++; } }; } };
+        async createWritable(){ let buf = ''; return { async write(x){ buf += x; }, async close(){ const f = log.beimSchreiben; log.beimSchreiben = null; if (f) await f(); files.set(name, buf); log.geschrieben++; } }; } };
     }
   };
   const idb = { open(){ const r = {}; setTimeout(() => { r.result = { close(){}, transaction(){ return { objectStore(){ return { get(){ const q = {}; setTimeout(() => { q.result = archiv ? dir : undefined; q.onsuccess(); }); return q; } }; } }; } }; r.onsuccess(); }); return r; } };
@@ -102,6 +102,15 @@ let n = 0; const check = async (name, fn) => { await fn(); n++; console.log('OK 
     await w.skalenAbgleich(); const l = {}; const ps = [];
     for (const [k, s] of [[MKW, S('MKW', 1000)], [PCB, S('PCB', 5)], [BAP, S('BaP', 2)]]){ l[k] = s; w.setLokal(l); ps.push(w.skalaTeilen(k, s)); }
     assert.deepEqual(await Promise.all(ps), [true, true, true]); assert.equal(w.log.geschrieben, 1); assert.equal(Object.keys(w.datei().skalen).length, 3);
+  });
+  await check('Änderung während des Schreibens bleibt lokal erhalten und wird nachgereicht (Review 1.38.0)', async () => {
+    const w = welt({ merker: true, datei: { format: 'spektron-skalen', version: 1, skalen: { [MKW]: S('MKW', 1000), [PCB]: S('PCB alt', 5) } } });
+    await w.skalenAbgleich(); const setze = (k, s) => { const l = w.lokal(); l[k] = s; w.setLokal(l); return w.skalaTeilen(k, s); };
+    let spaeter; w.log.beimSchreiben = async () => { spaeter = setze(PCB, S('PCB neu', 10)); };   // PCB wird geändert, während MKW geschrieben wird
+    assert.equal(await setze(MKW, S('MKW neu', 800)), true);
+    assert.equal(w.lokal()[PCB].name, 'PCB neu', 'Arbeitskopie nicht mit dem alten Stand überschrieben'); assert.deepEqual(plain(w.offen()), { [PCB]: 1 }, 'PCB bleibt offen');
+    assert.equal(w.lokal()[MKW].name, 'MKW neu');
+    assert.equal(await spaeter, true); assert.equal(w.datei().skalen[PCB].name, 'PCB neu'); assert.equal(w.datei().skalen[MKW].name, 'MKW neu'); assert.deepEqual(plain(w.offen()), {});
   });
   console.log(`${n} Prüfungen gemeinsame Skalen bestanden`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

@@ -151,6 +151,20 @@ const PROJ = '26.0142 Teststadt';
   assert.equal(neu.sachverstaendiger, '');
   assert.equal(neu.schadenort, 'Teststadt (Projektzentrale)');
 
+  // 4) Schadendatum „nicht bekannt“: Datumsfeld gesperrt, Pflicht erledigt, in _Projekt.json „unbekannt“ (wie Projektzentrale);
+  //    Schadenereignis ist keine Pflichtangabe mehr
+  await page.locator('#btnMeta').click(); await page.locator('#m_sdatum_nb').click();
+  assert.equal(await page.locator('#m_sdatum_nb').getAttribute('aria-pressed'), 'true');
+  assert.ok(await page.locator('#m_sdatum').isDisabled(), 'Datumsfeld gesperrt');
+  assert.equal(await page.locator('#m_sdatum').evaluate(e => e.closest('label').classList.contains('pflicht-offen')), false, 'nicht bekannt → erledigt');
+  assert.equal(await page.locator('#m_ereignis').evaluate(e => e.closest('label').classList.contains('pflicht')), false, 'Schadenereignis ist keine Pflicht');
+  await page.locator('#zCancel').click();
+  await page.waitForTimeout(1500);
+  assert.equal((await datei()).schadendatum, 'unbekannt');
+  await page.locator('#btnMeta').click();
+  assert.equal(await page.locator('#m_sdatum_nb').getAttribute('aria-pressed'), 'true', 'bleibt beim erneuten Öffnen');
+  await page.locator('#zCancel').click();
+
   assert.deepEqual(errors, []);
   await browser.close(); server.close();
   console.log(`OK (${name})`);

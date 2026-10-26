@@ -93,8 +93,11 @@ button.hbadge:hover{background:rgba(255,255,255,.26);color:#fff;border-color:rgb
 .pflicht-tag{display:none;margin-left:6px;padding:0 6px;border-radius:8px;font-size:10px;font-weight:600;line-height:15px;letter-spacing:.02em;color:#8a6500;background:rgba(217,164,0,.16);border:1px solid rgba(217,164,0,.45);vertical-align:1px}
 label.pflicht-offen .pflicht-tag{display:inline-block}
 .pflicht-zahl{display:inline-block;min-width:16px;margin-left:4px;padding:0 5px;border-radius:8px;font-size:11px;font-weight:700;line-height:16px;text-align:center;color:#8a6500;background:rgba(217,164,0,.2);border:1px solid rgba(217,164,0,.5)}
-label.pflicht-offen>input,label.pflicht-offen>select,label.pflicht-offen>textarea{border-color:#d9a400!important;background:#fff8e1;box-shadow:inset 3px 0 0 #d9a400}
-@media (prefers-color-scheme:dark){.pflicht-tag{color:#f0c850}label.pflicht-offen>input,label.pflicht-offen>select,label.pflicht-offen>textarea{background:rgba(217,164,0,.12)}}
+label.pflicht-offen>input,label.pflicht-offen>select,label.pflicht-offen>textarea,label.pflicht-offen>.datum-nb>input{border-color:#d9a400!important;background:#fff8e1;box-shadow:inset 3px 0 0 #d9a400}
+.datum-nb{display:flex;gap:6px;align-items:stretch}.datum-nb>input{flex:1;min-width:0}
+.datum-nb>.nb{flex:0 0 auto;font-size:12px;font-weight:400;text-transform:none;letter-spacing:0;padding:3px 9px;border-radius:6px;white-space:nowrap}
+.datum-nb>.nb[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+@media (prefers-color-scheme:dark){.pflicht-tag{color:#f0c850}label.pflicht-offen>input,label.pflicht-offen>select,label.pflicht-offen>textarea,label.pflicht-offen>.datum-nb>input{background:rgba(217,164,0,.12)}}
 header{background:var(--panel);border-bottom:1px solid var(--line);display:flex;flex-direction:column;box-shadow:var(--shadow);position:relative;z-index:5}
 .bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 20px 4px}
 .ver{font:600 11px/1 var(--mono);padding:3px 6px;margin-left:4px;color:var(--muted);vertical-align:middle}
@@ -497,11 +500,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.20.1';
+const APP_VERSION = '1.21.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:89d26d36098b3848b050b9b3399148dea14fb3e4e867700c84c0e6a9385b767a';
+const APP_BUILD = 'sha256:64842c078100595425940ecbb22a4a1492a7a963b262f655fed46cb072ea64e2';
 const APP_DATE = '2026-10-26';
 const CHANGELOG = [
+  ['1.21.0', '26.10.2026', 'Projektdaten: Das Schadendatum kann „nicht bekannt“ sein (Knopf neben dem Feld; gespeichert wie in der Projektzentrale als „unbekannt“, auf dem Deckblatt „nicht bekannt“). Das Schadenereignis ist keine Pflichtangabe mehr. Das helle Firmenzeichen auf dem Deckblatt steht jetzt waagrecht mittig. Umbenennen: Scheitert ein Schritt, nachdem Bilder schon ihre Nummern getauscht haben (z. B. erstes Bild ans Ende gezogen), werden alle Namen wieder richtig zurückgesetzt; lässt sich eine Datei nicht zurückbenennen, nennt die Meldung sie. Im Kopiermodus bleibt keine doppelte Kopie liegen, wenn das Original gesperrt ist. „Rückgängig“ überschreibt keine Beschreibung mehr, die nach dem Umbenennen geändert wurde. Bewertungsskala: Eine Kategorie ohne „ab“-Wert wird nicht gespeichert und bewertet keine Werte (vorher landete jeder Wert in ihr). Wiederherstellen einer Projektfassung prüft die Projektnummer jetzt auch bei 2–6-stelligen Nummern richtig. Gemeinsame Skalen: Eine Skala, die geändert wird, während eine andere gerade in die gemeinsame Datei geschrieben wird, geht nicht mehr verloren (wie PlanKit 1.38.0).'],
   ['1.20.1', '26.10.2026', 'Ergebnistabelle: Liefert das Labor denselben Parameter je Probe und je Fläche (Eurofins: Chlorid in µg/Probe und berechnet in mg/m²), steht in der Übersicht immer der Wert je Fläche – wie in ResultKit und PlanKit. Vorher konnte je nach Reihenfolge im Bericht der Wert je Probe in einer eigenen Tabelle landen.'],
   ['1.20.0', '26.10.2026', 'Ergebnistabelle: Chlorid wird bewertet – wie in ResultKit und PlanKit nach VdS 2357 (5–10 µg/cm² korrosionschemisch relevante Größenordnung): unterhalb (< 5), im Bereich (5 – < 10), oberhalb (≥ 10 µg/cm²), unabhängig von der Nutzung. Ältere Berichte in mg/m² mit umgerechneten Grenzen (1 µg/cm² = 10 mg/m²).'],
   ['1.19.0', '26.10.2026', 'Ergebnistabelle: Im Projekt kommen die Laborwerte jetzt aus ResultKit (dort importiert, geprüft und übernommen – „Laborergebnisse/_Ergebnisse.json“), mit allen geltenden Prüfberichten in einer Tabelle. Hinweis, wenn sich der Ordner seit der Übernahme geändert hat oder noch Proben fehlen; Knopf „🧪 ResultKit öffnen“. Eine XML direkt („Andere Datei …“) nur noch ohne Projektordner. Spektron-Leiste mit fünftem Schritt ResultKit, passt auch auf schmale Handys.'],
@@ -1218,17 +1222,24 @@ function skalenZusammen(datei, lokal, offen, erst){
   return { skalen: s, offen: o };
 }
 let skalenTimer = null, skalenWartend = [], skalenLaeuft = Promise.resolve();
+/** Nach dem Schreiben: Dateistand in die Arbeitskopie. Was während des Schreibens geändert wurde, bleibt lokal und offen –
+   erledigt sind nur hochgeladene Skalen, die seitdem unverändert sind. */
+function skalenNachHochladen(skalen, hochgeladen, lokalVorher){
+  const lokal = skLesen(SKALEN_LOKAL, {}), offen = skLesen(SKALEN_OFFEN, {}), rest = {};
+  for (const [k, v] of Object.entries(offen)) if (!(k in hochgeladen) || hochgeladen[k] !== v || JSON.stringify(lokal[k]) !== JSON.stringify(lokalVorher[k])) rest[k] = v;
+  skSchreiben(SKALEN_LOKAL, skalenZusammen(skalen, lokal, rest, false).skalen); skSchreiben(SKALEN_OFFEN, rest);
+}
 /** Datei schreiben, wenn Schreibrecht da ist (fragen = nach einem Klick nachfragen dürfen). true = geteilt. */
 function skalenHochladen(fragen){
   skalenLaeuft = skalenLaeuft.then(async () => {
     const a = await skalenArchiv('readwrite', fragen); if (!a) return false;
     try{
-      const d = await skalenDatei(a), z = skalenZusammen(d.skalen, skLesen(SKALEN_LOKAL, {}), skLesen(SKALEN_OFFEN, {}), localStorage.getItem(SKALEN_MERKER) !== '1');
+      const d = await skalenDatei(a), lokal = skLesen(SKALEN_LOKAL, {}), z = skalenZusammen(d.skalen, lokal, skLesen(SKALEN_OFFEN, {}), localStorage.getItem(SKALEN_MERKER) !== '1');
       if (!Object.keys(z.offen).length){ if (d.skalen) skSchreiben(SKALEN_LOKAL, z.skalen); return true; }
       const o = Object.assign({}, d.roh || {}, { format: 'spektron-skalen', version: 1, geaendert: new Date().toISOString(), skalen: z.skalen });
       const w = await (await a.getFileHandle(SKALEN_DATEI, { create: true })).createWritable();
       await w.write(JSON.stringify(o, null, 2)); await w.close();
-      skSchreiben(SKALEN_LOKAL, z.skalen); skSchreiben(SKALEN_OFFEN, {}); localStorage.setItem(SKALEN_MERKER, '1');
+      skalenNachHochladen(z.skalen, z.offen, lokal); localStorage.setItem(SKALEN_MERKER, '1');
       return true;
     }catch(e){ return false; }
   });
@@ -2116,8 +2127,16 @@ async function transfer(src, dst, from, to){
   }
   await dst.getFileHandle(to);                                          // throws if the copy is not there
   assertOriginalsWritable();
-  await src.removeEntry(from);
-  if (await exists(src, from)) throw new Error(`„${from}“ konnte nicht entfernt werden – ist die Datei in einem anderen Programm geöffnet?`);
+  let rmErr = null;
+  try{ await src.removeEntry(from); }catch(e){ rmErr = e; }
+  // Nur ein bestätigtes „nicht gefunden“ zählt als entfernt; scheitert die Prüfung selbst (Berechtigung, Laufwerk), gilt das Original als noch da.
+  const nochDa = await src.getFileHandle(from).then(() => true, e => !(e && e.name === 'NotFoundError'));
+  if (nochDa){
+    // the original stays – remove the copy again, otherwise the photo exists twice
+    assertOriginalsWritable();
+    try{ await dst.removeEntry(to); }catch(_){}
+    throw rmErr || new Error(`„${from}“ konnte nicht entfernt werden – ist die Datei in einem anderen Programm geöffnet?`);
+  }
 }
 const renameFile = (dir, from, to) => transfer(dir, dir, from, to);
 async function runPairs(pairs, onStep){
@@ -2126,20 +2145,27 @@ async function runPairs(pairs, onStep){
   const P = pairs.map((p, i) => ({ ...p, tmp: `${TMP_PREFIX}${stamp}_${i}${extOf(p.from)}` }));
   // pre-flight: let the browser vet every name BEFORE any file is touched
   for (const p of P){ await assertNameOk(dir, p.tmp); await assertNameOk(dir, p.to); }
-  const phase1 = [];
+  const phase1 = [], stuck = [];
+  const rolledBack = e => {      // a failed rollback must not stay silent: the file keeps a temporary (hidden) name
+    if (!stuck.length) return e;
+    return new Error(`${e && e.message} – ${stuck.length} Datei(en) konnten nicht zurückbenannt werden, z. B. „${stuck[0]}“; bitte den Ordner prüfen`);
+  };
   try{
     for (const p of P){ await renameFile(dir, p.from, p.tmp); phase1.push(p); onStep(); }
   }catch(e){
-    for (const p of phase1.reverse()){ try{ await renameFile(dir, p.tmp, p.from); }catch(_){} }
-    throw e;
+    for (const p of phase1.reverse()){ try{ await renameFile(dir, p.tmp, p.from); }catch(_){ stuck.push(p.tmp); } }
+    throw rolledBack(e);
   }
   const phase2 = [];
   try{
     for (const p of P){ await renameFile(dir, p.tmp, p.to); phase2.push(p); onStep(); }
   }catch(e){
-    for (const p of phase2){ try{ await renameFile(dir, p.to, p.from); }catch(_){} }
-    for (const p of P) if (!phase2.includes(p)){ try{ await renameFile(dir, p.tmp, p.from); }catch(_){} }
-    throw e;
+    // Two steps, as on the way there: a target name may be another file's original
+    // name (swapped numbers), so every target goes back to its free temporary name first.
+    const back = [];
+    for (const p of phase2.slice().reverse()){ try{ await renameFile(dir, p.to, p.tmp); back.push(p); }catch(_){ stuck.push(p.to); } }
+    for (const p of P) if (!phase2.includes(p) || back.includes(p)){ try{ await renameFile(dir, p.tmp, p.from); }catch(_){ stuck.push(p.tmp); } }
+    throw rolledBack(e);
   }
 }
 
@@ -2292,8 +2318,10 @@ async function undo(){
     closeDialog();
     const back = run.pairs.map(p => ({ from: p.to, to: p.from }));
     flushDrafts(); saveExtra();
+    const now = projGet('drafts', {});      // descriptions as they are now (renamed file names)
     const drafts = remapKeys('drafts', back);
-    run.rows.forEach(r => { if (r.desc) drafts[r.from] = r.desc; });
+    // a description changed after the run stays as it is now
+    run.rows.forEach(r => { if (r.desc && (now[r.to] || '').trim() === r.desc) drafts[r.from] = r.desc; });
     projSet('drafts', drafts);
     remapKeys('extra', back);
     remapKeys('hash', back);
@@ -2403,13 +2431,15 @@ class ZipWriter{
   }
 }
 
-const deDate = iso => { const m = (iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? `${m[3]}.${m[2]}.${m[1]}` : (iso || ''); };
+const deDate = iso => { if ((iso || '').trim() === 'unbekannt') return 'nicht bekannt'; const m = (iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? `${m[3]}.${m[2]}.${m[1]}` : (iso || ''); };
 const TXT_NAME = '00_Anweisung_Bilddokumentation.txt';
 const SUM_NAME = 'Pruefsummen.sha256';
 
 /* ---------- project data + AI instructions ---------- */
 /* Pflichtangaben (wie Projektzentrale „Projektdaten“): stehen auf dem Deckblatt der Bilddokumentation. Nur hervorgehoben, nie blockierend. */
-const META_PFLICHT = ['proj', 'anlage', 'objekt', 'ereignis', 'sdatum', 'ort', 'sv'];
+const META_PFLICHT = ['proj', 'anlage', 'objekt', 'sdatum', 'ort', 'sv'];
+/* Schadendatum darf „nicht bekannt“ sein: gespeichert als „unbekannt“ (wie Projektzentrale), angezeigt „nicht bekannt“. */
+const META_UNBEKANNT = ['sdatum'], UNBEKANNT = 'unbekannt';
 const META_FIELDS = [
   // key, label, placeholder name, input type, scope
   ['proj',     'Projektnummer',            'Projektnummer',    'text', 'project', 'z. B. P2026-114'],
@@ -2589,7 +2619,8 @@ function openMetaDialog(mode){
   const withDesc = active.filter(it => it.nr != null).length;
   const fields = META_FIELDS.map(([key, label, ph, type, scope, hint]) =>
     `<label class="${[key === 'objekt' || key === 'ereignis' ? 'wide' : '', META_PFLICHT.includes(key) ? 'pflicht' : ''].filter(Boolean).join(' ')}"><span>${label}${scope === 'global' ? ' <small>(für alle Projekte)</small>' : ''}${META_PFLICHT.includes(key) ? '<span class="pflicht-tag">Pflicht</span>' : ''}</span>
-       <input type="${type}" id="m_${key}" placeholder="${esc(hint)}"></label>`).join('');
+       ${META_UNBEKANNT.includes(key) ? `<span class="datum-nb"><input type="${type}" id="m_${key}"><button type="button" class="nb" id="m_${key}_nb" aria-pressed="false" title="Datum ist nicht bekannt – erscheint auf dem Deckblatt als „nicht bekannt“">nicht bekannt</button></span>`
+         : `<input type="${type}" id="m_${key}" placeholder="${esc(hint)}">`}</label>`).join('');
   // read-only from the Projektzentrale (_Projekt.json) – shown for orientation, not used in PDF/ZIP
   const pjInfo = S.proj && PJ.data ? [['auftraggeber', 'Auftraggeber'], ['schadennummer', 'Schaden-Nr.']]
     .map(([k, l]) => `<label class="ro">${l} <small>(Projektzentrale)</small><input type="text" id="m_pz_${k}" readonly tabindex="-1" value="${esc(String(PJ.data[k] || '').trim())}" placeholder="– nicht hinterlegt –"></label>`).join('') : '';
@@ -2620,6 +2651,8 @@ function openMetaDialog(mode){
       ${forZip ? '<button class="primary" id="zOk">ZIP speichern …</button>' : forPdf ? '<button class="primary" id="zOk">PDF erstellen</button>' : ''}</div>`);
   $('dialog').classList.add('wide');
   for (const [key] of META_FIELDS) $('m_' + key).value = m[key] || '';
+  const nbSetzen = (key, an) => { const nb = $('m_' + key + '_nb'); nb.setAttribute('aria-pressed', String(an)); $('m_' + key).disabled = an; if (an) $('m_' + key).value = ''; };
+  for (const key of META_UNBEKANNT) nbSetzen(key, (m[key] || '').trim() === UNBEKANNT);
   if (!forPdf){ $('m_notes').value = m.notes || ''; $('m_template').value = m.template; }
   const io0 = loadImgOpt(), po0 = loadPdfOpt();
   if (forExp){
@@ -2635,7 +2668,7 @@ function openMetaDialog(mode){
                 onlyDesc: forExp ? $('zOnly').checked : m.onlyDesc,
                 img: forExp ? { shrink: $('zShrink').checked, edge: +$('zEdge').value, q: +$('zQ').value, record: forZip ? $('zRecord').checked : io0.record } : io0,
                 pdf: forPdf ? { perPage: +$('pPer').value, maxMB: Math.min(200, Math.max(1, +$('pMax').value || 14)), secPage: $('pSecPage').checked } : po0 };
-    for (const [key] of META_FIELDS) r[key] = $('m_' + key).value.trim();
+    for (const [key] of META_FIELDS) r[key] = $('m_' + key + '_nb')?.getAttribute('aria-pressed') === 'true' ? UNBEKANNT : $('m_' + key).value.trim();
     return r;
   };
   const update = () => {
@@ -2673,6 +2706,7 @@ function openMetaDialog(mode){
     if (!forPdf && !$('m_preview').hidden) $('m_preview').textContent = buildTxt(r, items, new Date()).replace(/^﻿/, '');
   };
   $('dialog').querySelectorAll('input,textarea,select').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', update));
+  for (const key of META_UNBEKANNT) $('m_' + key + '_nb').onclick = () => { const an = $('m_' + key + '_nb').getAttribute('aria-pressed') !== 'true'; nbSetzen(key, an); update(); if (!an) $('m_' + key).focus(); };
   if (!forPdf){
     $('m_tplReset').onclick = () => { $('m_template').value = DEFAULT_TEMPLATE; update(); };
     $('m_prev').onclick = () => {
@@ -3167,8 +3201,8 @@ async function buildAnnex(meta, items, progress){
   };
   // Kopf und Fuß jeder Seite: Firmenzeichen und Büro links, Dokument und Projekt rechts; nur Firmenmarke, keine Softwarenamen.
   const decorate = (pages,pi,N) => pages.forEach((pg,k)=>{
-    // Großes, sehr helles Firmenzeichen nur auf dem Deckblatt (unten rechts angeschnitten); Bildseiten bleiben ruhig.
-    if(k===0&&pi===0){const watermarkW=330;pg.brand(PDF_W-watermarkW*0.72,PDF_BOTTOM-10,watermarkW,true);}
+    // Großes, sehr helles Firmenzeichen nur auf dem Deckblatt (unten, waagrecht mittig, ganz auf der Seite); Bildseiten bleiben ruhig.
+    if(k===0&&pi===0){const watermarkW=330;pg.brand((PDF_W-watermarkW)/2,PDF_BOTTOM-10,watermarkW,true);}
     pg.brand(PDF_M,PDF_H-66,31);
     pg.text(PDF_M+42,PDF_H-46,PDF_FIRMA.name,'B',10,PDF_CD.ink);
     pg.text(PDF_M+42,PDF_H-58.5,PDF_FIRMA.adresse,'R',7.6,PDF_CD.muted);
@@ -3809,7 +3843,7 @@ async function loadSkalenregel(){
 function rate(scale, v){
   if (!scale || !scale.cats || !scale.cats.length || !isFinite(v)) return '';
   let c = scale.cats[0].name;
-  for (const k of scale.cats) if (isFinite(k.from) && v >= k.from) c = k.name;
+  for (const k of scale.cats) if (typeof k.from === 'number' && Number.isFinite(k.from) && v >= k.from) c = k.name;
   return c;
 }
 function photoNumbers(){        // Probe-Nr. → picture numbers as in the PDF / Bildverzeichnis
@@ -4117,7 +4151,7 @@ async function openLabDialog(){
     }).join('');
     const save = el => {
       const u = el.dataset.unit, cats = [...el.querySelectorAll('.stab tr')].slice(1).map((tr, i) => ({ name: tr.querySelector('.cN').value.trim(), from: i === 0 ? 0 : parseFloat(tr.querySelector('.cF').value) }))
-        .filter((c, i) => c.name || i === 0);
+        .filter((c, i) => (c.name || i === 0) && (i === 0 || Number.isFinite(c.from)));   // without an „ab“ value a category is not saved yet
       const all = loadScales();
       all[scaleKey(read().p1, u)] = { name: el.querySelector('.sN').value.trim(), cats: cats.filter(c => c.name).sort((a, b) => (a.from || 0) - (b.from || 0)), geaendert: new Date().toISOString() };
       if (!all[scaleKey(read().p1, u)].cats.length) delete all[scaleKey(read().p1, u)];

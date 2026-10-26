@@ -122,7 +122,7 @@
       if(!pattern.test(choice.name)) throw Error('Ungültiger Sicherungsname.');
       const selected=await readNamed(archive,choice.name);
       if(selected.revision!==choice.revision) throw Error('Die ausgewählte Sicherung wurde geändert. Bitte erneut prüfen.');
-      const nr=/^\d{2}\.\d{4}/.exec(name)?.[0];
+      const nr=/^\d{2}\.\d{2,6}(?=[\s_-]|$)/.exec(name)?.[0];
       if(nr && selected.data.projektnummer && selected.data.projektnummer!==nr) throw Error('Die Sicherung gehört zu einer anderen Projektnummer.');
       return commit(dir,base,selected.data);
     });
