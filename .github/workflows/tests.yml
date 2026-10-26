@@ -89,6 +89,8 @@ jobs:
         run: node tests/ci-wiederholen.cjs tests/serienbeschriftung-browser.cjs ${{ matrix.browser }}
       - name: Vorschläge beim Tippen der Beschreibung (LabelKit-Proben, Projektbeschreibungen)
         run: node tests/ci-wiederholen.cjs tests/beschreibung-vorschlag-browser.cjs ${{ matrix.browser }}
+      - name: Planned name and conflicts stay visible in the photo row (320, 390, 1280 px)
+        run: node tests/ci-wiederholen.cjs tests/zeile-geplant-browser.cjs ${{ matrix.browser }}
       - name: Consistent numbering and actual PDF, CSV and ZIP output with 5, 50 and 150 images
         run: node tests/ci-wiederholen.cjs tests/bildnummerierung-browser.cjs ${{ matrix.browser }}
       - name: Active project context stays consistent across URL, FotoKit and suite navigation
