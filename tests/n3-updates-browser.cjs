@@ -29,8 +29,8 @@ server=http.createServer((req,res)=>{
 await new Promise(r=>server.listen(0,'127.0.0.1',r));browser=await pw[engine].launch();const context=await browser.newContext({serviceWorkers:'block',viewport:{width:1400,height:1000}}),p=await context.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
 try{
  await p.goto('http://localhost:'+server.address().port+'/index.html');
- assert.ok((await p.locator('#btnInfo').textContent()).includes(build.slice(7,19)));await p.locator('#btnInfo').click();assert.ok((await p.locator('#dialog').textContent()).includes(build));await p.locator('#iClose').click();
- const check=async expected=>{await p.locator('#btnCheckUpdate').click();await p.locator('#buildStatus').filter({hasText:expected}).waitFor();};
+ assert.ok((await p.locator('#btnInfo').textContent()).includes(build.slice(7,19)));(await p.locator('#morePanel').isHidden()&&await p.locator('#btnMore').click());await p.locator('#btnInfo').click();assert.ok((await p.locator('#dialog').textContent()).includes(build));await p.locator('#iClose').click();
+ const check=async expected=>{(await p.locator('#morePanel').isHidden()&&await p.locator('#btnMore').click());await p.locator('#btnCheckUpdate').click();await p.locator('#buildStatus').filter({hasText:expected}).waitFor();};
  await check(/stimmt mit der Online-Antwort/);assert.equal(await p.locator('#btnUpd').isVisible(),false);
  console.log('PASS N3 UPDATE: complete current HTML digest matches; actual loaded identity visible');
  for(mode of ['different','rollback','newer']){

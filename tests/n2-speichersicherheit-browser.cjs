@@ -59,7 +59,7 @@ B.barrier.release.resolve();const bBytes=await confirmed('N2 B bestätigt');asse
 await A.context.close();await B.context.close();
 const restarted=await page();
 async function restore(description,exact){
- await restarted.p.locator('#btnVersions').click();await restarted.p.locator('[data-photo-version]').first().waitFor();
+ (await restarted.p.locator('#morePanel').isHidden()&&await restarted.p.locator('#btnMore').click());await restarted.p.locator('#btnVersions').click();await restarted.p.locator('[data-photo-version]').first().waitFor();
  const total=await restarted.p.locator('[data-photo-version]').count();let selected=false;
  for(let i=0;i<total;i++){
   const row=restarted.p.locator('[data-photo-version]').nth(i).locator('..');
