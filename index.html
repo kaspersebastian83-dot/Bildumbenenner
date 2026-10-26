@@ -497,11 +497,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.19.0';
+const APP_VERSION = '1.20.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:bb95304747ba2142a3757fa975760a82eb19066896a78c72bf693d11cd2ab385';
+const APP_BUILD = 'sha256:e7926944b2b25d0d93e8ff67be1bfd1580d062aa0bebf7a2ebf8e114bfcbe399';
 const APP_DATE = '2026-10-26';
 const CHANGELOG = [
+  ['1.20.0', '26.10.2026', 'Ergebnistabelle: Chlorid wird bewertet – wie in ResultKit und PlanKit nach VdS 2357 (5–10 µg/cm² korrosionschemisch relevante Größenordnung): unterhalb (< 5), im Bereich (5 – < 10), oberhalb (≥ 10 µg/cm²), unabhängig von der Nutzung. Ältere Berichte in mg/m² mit umgerechneten Grenzen (1 µg/cm² = 10 mg/m²).'],
   ['1.19.0', '26.10.2026', 'Ergebnistabelle: Im Projekt kommen die Laborwerte jetzt aus ResultKit (dort importiert, geprüft und übernommen – „Laborergebnisse/_Ergebnisse.json“), mit allen geltenden Prüfberichten in einer Tabelle. Hinweis, wenn sich der Ordner seit der Übernahme geändert hat oder noch Proben fehlen; Knopf „🧪 ResultKit öffnen“. Eine XML direkt („Andere Datei …“) nur noch ohne Projektordner. Spektron-Leiste mit fünftem Schritt ResultKit, passt auch auf schmale Handys.'],
   ['1.18.0', '26.10.2026', 'Spektron-Leiste oben: rechts „💬 Rückmeldung“ (bei schmalem Fenster nur 💬, auf dem Handy im Projektmenü ▾). Öffnet das Rückmeldeformular in einem eigenen Fenster; Programm, Version und – bei geöffnetem Projekt – die Projektnummer sind schon eingetragen (nur die Nummer, kein Ort). Die Leiste ist in allen Apps gleich.'],
   ['1.17.1', '26.10.2026', 'Bildzeile: Der geplante neue Name bleibt sichtbar, auch bei langen Originalnamen und in schmalen Fenstern – reicht der Platz nicht, steht er in einer eigenen Zeile. „Name doppelt“ und „aussortiert“ stehen immer vollständig in eigener Zeile, lange Namen brechen dabei um.'],
@@ -3760,7 +3761,20 @@ const loadScales = () => store.get('bu-scales', {});
    VdS 2357; Quelle: LANUV, Bericht Steinhagen 15.02.2023, S. 7). Keine weiteren Skalen werden erfunden. */
 const SK = { usage: '', nutzung: '', vds: {}, quelle: '' };
 const VDS_WOHNEN = ['Wohnen', 'Büro', 'Öffentlich', 'Gesundheit & Labor'], VDS_INDUSTRIE = ['Gewerbe/Industrie', 'Landwirtschaft'];
+/* ===== KORROSION-CHLORID v1 – in ResultKit, PlanKit (TypeScript) und FotoKit (JavaScript) gleich halten =====
+   Chlorid auf Oberflächen: VdS 2357 nennt 5–10 µg/cm² als korrosionschemisch relevante Größenordnung (Vorgabe des Büros).
+   Gilt unabhängig von der Nutzung. Die Grenzen werden in die Einheit des Berichts umgerechnet (1 µg/cm² = 10 mg/m²),
+   damit ältere Berichte in mg/m² gleich bewertet werden. Wie die PAK-Referenz in PlanKit anpassbar (dann nur im Projekt). */
+const CHLORID_JE_UG_CM2 = { 'µg/cm2': 1, 'mg/m2': 10, 'µg/m2': 10000, 'mg/cm2': .001, 'µg/100cm2': 100, 'mg/dm2': .1 };
+const chloridEinheit = unit => CHLORID_JE_UG_CM2[String(unit || '').replace(/μ/g, 'µ').replace(/²/g, '2').replace(/\s+/g, '').toLowerCase()];
+function chloridSkala(param, unit){
+  const f = /^Chlorid\b/i.test(String(param || '').trim()) ? chloridEinheit(unit) : undefined; if (!f) return null;
+  return { name: 'VdS 2357 · Chlorid · korrosionschemisch relevant 5–10 µg/cm²', cats: [{ name: 'unterhalb der korrosionschemisch relevanten Größenordnung', from: 0 },
+    { name: 'im Bereich der korrosionschemisch relevanten Größenordnung', from: 5 * f }, { name: 'oberhalb der korrosionschemisch relevanten Größenordnung', from: 10 * f }] };
+}
+/* ===== Ende KORROSION-CHLORID v1 ===== */
 function vdsSkala(param, unit){
+  const chlorid = chloridSkala(param, unit); if (chlorid) return chlorid;   // gilt ohne Nutzung
   if (!SK.usage || !/^(?:Summe|Σ)\s*16\s*EPA[-– ]PAK(?:\s.*)?$/i.test(param || '')) return null;
   const u = String(unit || '').replace(/μ/g, 'µ').replace(/²/g, '2').replace(/\s+/g, '').toLowerCase();
   const factor = { 'µg/m2': 1, 'µg/100cm2': .01, 'mg/m2': .001, 'ng/m2': 1000 }[u]; if (!factor) return null;

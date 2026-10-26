@@ -24,4 +24,10 @@ SK.vds = { [`${PAK}|µg/m²`]: { name: 'VdS angepasst', cats: [{ name: 'a', from
 const ang = skalaFuer(PAK, 'µg/m²'); assert.equal(ang.angepasst, true); assert.equal(ang.scale.cats[1].from, 20, 'in PlanKit angepasste Referenz gilt');
 SK.nutzung = 'Gesundheit & Labor'; SK.usage = 'residential'; SK.vds = {}; assert.match(skalaFuer(PAK, 'µg/m²').scale.name, /Gesundheit & Labor/);
 assert.ok(/const scale = g\.unit \? skalaFuer\(p1, g\.unit\)\.scale : null;/.test(html), 'Ergebnistabelle nutzt die Regel');
-console.log('OK Skalenregel: eigene, VdS (Wohnen/Industrie, Einheiten), MKW eigene, angepasst aus PlanKit');
+// Chlorid nach VdS 2357 (5–10 µg/cm², KORROSION-CHLORID v1): ohne Nutzung, Grenzen in die Berichtseinheit umgerechnet
+ctx.SK.usage = ''; ctx.SK.vds = {};
+{ const r = ctx.skalaFuer('Chlorid', 'µg/cm²'); assert.ok(r.vds, 'Chlorid-Referenz ohne Nutzung'); assert.deepEqual([...r.scale.cats.map(c => c.from)], [0, 5, 10]);
+  assert.deepEqual([...ctx.skalaFuer('Chlorid', 'mg/m²').scale.cats.map(c => c.from)], [0, 50, 100], 'mg/m²: 1 µg/cm² = 10 mg/m²');
+  assert.equal(ctx.skalaFuer('Chlorid', 'mg/kg').vds, null, 'Feststoff: keine Oberflächenreferenz');
+  assert.match(r.scale.cats[1].name, /im Bereich der korrosionschemisch relevanten Größenordnung/); }
+console.log('OK Skalenregel: eigene, VdS (Wohnen/Industrie, Einheiten), MKW eigene, angepasst aus PlanKit, Chlorid VdS 2357');
