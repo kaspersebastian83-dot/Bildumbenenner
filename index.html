@@ -502,10 +502,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.21.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:1d984f4016f96f477035444d9c4792cfffd84e3322c1ebe2d87ca270f9380fca';
+const APP_BUILD = 'sha256:3caf714721199b279613a55ff1a643d3394b9a3442fc34cb304b46073980e461';
 const APP_DATE = '2026-10-26';
 const CHANGELOG = [
-  ['1.21.0', '26.10.2026', 'Projektdaten: Das Schadendatum kann „nicht bekannt“ sein (Knopf neben dem Feld; gespeichert wie in der Projektzentrale als „unbekannt“, auf dem Deckblatt „nicht bekannt“). Das Schadenereignis ist keine Pflichtangabe mehr. Das helle Firmenzeichen auf dem Deckblatt steht jetzt waagrecht mittig. Umbenennen: Scheitert ein Schritt, nachdem Bilder schon ihre Nummern getauscht haben (z. B. erstes Bild ans Ende gezogen), werden alle Namen wieder richtig zurückgesetzt; lässt sich eine Datei nicht zurückbenennen, nennt die Meldung sie. Im Kopiermodus bleibt keine doppelte Kopie liegen, wenn das Original gesperrt ist. „Rückgängig“ überschreibt keine Beschreibung mehr, die nach dem Umbenennen geändert wurde. Bewertungsskala: Eine Kategorie ohne „ab“-Wert wird nicht gespeichert und bewertet keine Werte (vorher landete jeder Wert in ihr). Wiederherstellen einer Projektfassung prüft die Projektnummer jetzt auch bei 2–6-stelligen Nummern richtig.'],
+  ['1.21.0', '26.10.2026', 'Projektdaten: Das Schadendatum kann „nicht bekannt“ sein (Knopf neben dem Feld; gespeichert wie in der Projektzentrale als „unbekannt“, auf dem Deckblatt „nicht bekannt“). Das Schadenereignis ist keine Pflichtangabe mehr. Das helle Firmenzeichen auf dem Deckblatt steht jetzt waagrecht mittig. Umbenennen: Scheitert ein Schritt, nachdem Bilder schon ihre Nummern getauscht haben (z. B. erstes Bild ans Ende gezogen), werden alle Namen wieder richtig zurückgesetzt; lässt sich eine Datei nicht zurückbenennen, nennt die Meldung sie. Im Kopiermodus bleibt keine doppelte Kopie liegen, wenn das Original gesperrt ist. „Rückgängig“ überschreibt keine Beschreibung mehr, die nach dem Umbenennen geändert wurde. Bewertungsskala: Eine Kategorie ohne „ab“-Wert wird nicht gespeichert und bewertet keine Werte (vorher landete jeder Wert in ihr). Wiederherstellen einer Projektfassung prüft die Projektnummer jetzt auch bei 2–6-stelligen Nummern richtig. Gemeinsame Skalen: Eine Skala, die geändert wird, während eine andere gerade in die gemeinsame Datei geschrieben wird, geht nicht mehr verloren (wie PlanKit 1.38.0).'],
   ['1.20.1', '26.10.2026', 'Ergebnistabelle: Liefert das Labor denselben Parameter je Probe und je Fläche (Eurofins: Chlorid in µg/Probe und berechnet in mg/m²), steht in der Übersicht immer der Wert je Fläche – wie in ResultKit und PlanKit. Vorher konnte je nach Reihenfolge im Bericht der Wert je Probe in einer eigenen Tabelle landen.'],
   ['1.20.0', '26.10.2026', 'Ergebnistabelle: Chlorid wird bewertet – wie in ResultKit und PlanKit nach VdS 2357 (5–10 µg/cm² korrosionschemisch relevante Größenordnung): unterhalb (< 5), im Bereich (5 – < 10), oberhalb (≥ 10 µg/cm²), unabhängig von der Nutzung. Ältere Berichte in mg/m² mit umgerechneten Grenzen (1 µg/cm² = 10 mg/m²).'],
   ['1.19.0', '26.10.2026', 'Ergebnistabelle: Im Projekt kommen die Laborwerte jetzt aus ResultKit (dort importiert, geprüft und übernommen – „Laborergebnisse/_Ergebnisse.json“), mit allen geltenden Prüfberichten in einer Tabelle. Hinweis, wenn sich der Ordner seit der Übernahme geändert hat oder noch Proben fehlen; Knopf „🧪 ResultKit öffnen“. Eine XML direkt („Andere Datei …“) nur noch ohne Projektordner. Spektron-Leiste mit fünftem Schritt ResultKit, passt auch auf schmale Handys.'],
@@ -1222,17 +1222,24 @@ function skalenZusammen(datei, lokal, offen, erst){
   return { skalen: s, offen: o };
 }
 let skalenTimer = null, skalenWartend = [], skalenLaeuft = Promise.resolve();
+/** Nach dem Schreiben: Dateistand in die Arbeitskopie. Was während des Schreibens geändert wurde, bleibt lokal und offen –
+   erledigt sind nur hochgeladene Skalen, die seitdem unverändert sind. */
+function skalenNachHochladen(skalen, hochgeladen, lokalVorher){
+  const lokal = skLesen(SKALEN_LOKAL, {}), offen = skLesen(SKALEN_OFFEN, {}), rest = {};
+  for (const [k, v] of Object.entries(offen)) if (!(k in hochgeladen) || hochgeladen[k] !== v || JSON.stringify(lokal[k]) !== JSON.stringify(lokalVorher[k])) rest[k] = v;
+  skSchreiben(SKALEN_LOKAL, skalenZusammen(skalen, lokal, rest, false).skalen); skSchreiben(SKALEN_OFFEN, rest);
+}
 /** Datei schreiben, wenn Schreibrecht da ist (fragen = nach einem Klick nachfragen dürfen). true = geteilt. */
 function skalenHochladen(fragen){
   skalenLaeuft = skalenLaeuft.then(async () => {
     const a = await skalenArchiv('readwrite', fragen); if (!a) return false;
     try{
-      const d = await skalenDatei(a), z = skalenZusammen(d.skalen, skLesen(SKALEN_LOKAL, {}), skLesen(SKALEN_OFFEN, {}), localStorage.getItem(SKALEN_MERKER) !== '1');
+      const d = await skalenDatei(a), lokal = skLesen(SKALEN_LOKAL, {}), z = skalenZusammen(d.skalen, lokal, skLesen(SKALEN_OFFEN, {}), localStorage.getItem(SKALEN_MERKER) !== '1');
       if (!Object.keys(z.offen).length){ if (d.skalen) skSchreiben(SKALEN_LOKAL, z.skalen); return true; }
       const o = Object.assign({}, d.roh || {}, { format: 'spektron-skalen', version: 1, geaendert: new Date().toISOString(), skalen: z.skalen });
       const w = await (await a.getFileHandle(SKALEN_DATEI, { create: true })).createWritable();
       await w.write(JSON.stringify(o, null, 2)); await w.close();
-      skSchreiben(SKALEN_LOKAL, z.skalen); skSchreiben(SKALEN_OFFEN, {}); localStorage.setItem(SKALEN_MERKER, '1');
+      skalenNachHochladen(z.skalen, z.offen, lokal); localStorage.setItem(SKALEN_MERKER, '1');
       return true;
     }catch(e){ return false; }
   });
