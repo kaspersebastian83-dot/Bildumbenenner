@@ -497,11 +497,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.20.0';
+const APP_VERSION = '1.20.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:8325c4f1eb6f16f3585f5c67e45f09422c7fc4633e5be1ef3bd5a7d4a300fe9d';
+const APP_BUILD = 'sha256:89d26d36098b3848b050b9b3399148dea14fb3e4e867700c84c0e6a9385b767a';
 const APP_DATE = '2026-10-26';
 const CHANGELOG = [
+  ['1.20.1', '26.10.2026', 'Ergebnistabelle: Liefert das Labor denselben Parameter je Probe und je Fläche (Eurofins: Chlorid in µg/Probe und berechnet in mg/m²), steht in der Übersicht immer der Wert je Fläche – wie in ResultKit und PlanKit. Vorher konnte je nach Reihenfolge im Bericht der Wert je Probe in einer eigenen Tabelle landen.'],
   ['1.20.0', '26.10.2026', 'Ergebnistabelle: Chlorid wird bewertet – wie in ResultKit und PlanKit nach VdS 2357 (5–10 µg/cm² korrosionschemisch relevante Größenordnung): unterhalb (< 5), im Bereich (5 – < 10), oberhalb (≥ 10 µg/cm²), unabhängig von der Nutzung. Ältere Berichte in mg/m² mit umgerechneten Grenzen (1 µg/cm² = 10 mg/m²).'],
   ['1.19.0', '26.10.2026', 'Ergebnistabelle: Im Projekt kommen die Laborwerte jetzt aus ResultKit (dort importiert, geprüft und übernommen – „Laborergebnisse/_Ergebnisse.json“), mit allen geltenden Prüfberichten in einer Tabelle. Hinweis, wenn sich der Ordner seit der Übernahme geändert hat oder noch Proben fehlen; Knopf „🧪 ResultKit öffnen“. Eine XML direkt („Andere Datei …“) nur noch ohne Projektordner. Spektron-Leiste mit fünftem Schritt ResultKit, passt auch auf schmale Handys.'],
   ['1.18.0', '26.10.2026', 'Spektron-Leiste oben: rechts „💬 Rückmeldung“ (bei schmalem Fenster nur 💬, auf dem Handy im Projektmenü ▾). Öffnet das Rückmeldeformular in einem eigenen Fenster; Programm, Version und – bei geöffnetem Projekt – die Projektnummer sind schon eingetragen (nur die Nummer, kein Ort). Die Leiste ist in allen Apps gleich.'],
@@ -3838,10 +3839,14 @@ const labCell = (l, withUnit) => {
   return (l.result || '–') + unit + (l.loq ? ` (BG ${l.loq}${bgUnit})` : '');
 };
 
+/* Gleicher Parameter je Probe und je Fläche (Eurofins: „Chlorid (Cl)“ in µg/Probe und berechnet in mg/m²; Reihenfolge wechselt
+   je Probe): der Wert je Fläche gilt – wie ResultKit und PlanKit. Nur wenn es keinen gibt, der erste wie im Bericht. */
+const FLAECHE = /\/\s*(?:\d+\s*)?(?:c|d)?m\s*(?:2|²)\s*$/i;
+function lineFuer(pr, p){ const c = pr.lines.filter(l => l.param === p); return c.find(l => FLAECHE.test(l.unit)) || c[0]; }
 function labTables(rep, o){
   const scales = loadScales(), photos = photoNumbers(), warn = [];
   const p1 = o.p1, p2 = o.p2;
-  const line = (pr, p) => pr.lines.find(l => l.param === p);
+  const line = lineFuer;
   // one table per Probenart + unit of the rated value (wipe samples and material samples never share a scale)
   const groups = new Map();
   for (const pr of rep.proben){
@@ -4084,14 +4089,14 @@ async function openLabDialog(){
   const scaleInfo = () => {
     const r = read(), rep = LAB.rep;
     if (!rep || !r.p1){ $('lScaleInfo').textContent = ''; return; }
-    const units = [...new Set(rep.proben.map(pr => (pr.lines.find(l => l.param === r.p1) || {}).unit).filter(Boolean))];
+    const units = [...new Set(rep.proben.map(pr => (lineFuer(pr, r.p1) || {}).unit).filter(Boolean))];
     $('lScaleInfo').textContent = units.map(u => { const s = skalaFuer(r.p1, u).scale; return s ? `· ${shortParam(r.p1)} [${u}]: „${s.name || 'ohne Namen'}“` : `· ${shortParam(r.p1)} [${u}]: noch keine`; }).join(' ')
       + (SKALEN_STAND === 'datei' ? ' · eigene Skalen gelten fürs ganze Büro (Archivordner)' : ' · eigene Skalen nur in diesem Browser – Archivordner in der Projektzentrale wählen, damit sie fürs Büro gelten');
   };
   const renderScale = () => {
     const r = read(), rep = LAB.rep;
     if (!rep || !r.p1){ $('lScale').innerHTML = ''; $('lScaleInfo').textContent = ''; return; }
-    const units = [...new Set(rep.proben.map(pr => (pr.lines.find(l => l.param === r.p1) || {}).unit).filter(Boolean))];
+    const units = [...new Set(rep.proben.map(pr => (lineFuer(pr, r.p1) || {}).unit).filter(Boolean))];
     const sc = loadScales();
     scaleInfo();
     $('lScale').innerHTML = units.map(u => {
