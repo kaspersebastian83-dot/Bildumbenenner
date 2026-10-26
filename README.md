@@ -2,7 +2,7 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.18.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.19.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
@@ -64,7 +64,7 @@ Zum erneuten Öffnen über die URL benötigen die Apps wie bisher den passenden 
 
 ## Ergebnistabelle für das Gutachten
 
-„Ergebnistabelle …“ liest den **XML-Export des Prüfberichts** (Eurofins liefert ihn mit der PDF; bei Projekten aus dem Archivordner wird er automatisch im Unterordner `Laborergebnisse` gefunden). Die Proben werden über die Probe-Nr. den Fotos zugeordnet (`Probe 3` = `P3`), ein Wert (Standard: Σ16 EPA-PAK, dazu BaP) wird nach einer **eigenen Bewertungsskala** eingestuft. „Tabelle kopieren“ legt eine fertige Tabelle mit Fußnoten (BG, Prüfbericht, Skala) in die Zwischenablage – in Word mit Strg+V einfügen. Alternativ „Alle Einzelwerte“. Fehlende Werte, Fotos ohne Probe im Bericht und ein Bericht zu einem anderen Projekt werden als Prüfhinweis angezeigt. Grenzwerte sind nicht eingebaut – die Skala legt ihr selbst fest; für Σ16 EPA-PAK auf Oberflächen gilt bei eingetragener Nutzung die VdS-2357-Referenz. Eigene Skalen liegen im Archivordner in `_Spektron-Skalen.json` und gelten fürs ganze Büro.
+„Ergebnistabelle …“ nimmt im Projekt die in **ResultKit** geprüften und übernommenen Laborergebnisse (`Laborergebnisse/_Ergebnisse.json`, ab 1.19) – alle geltenden Prüfberichte in einer Tabelle; Prüfberichte werden nur in ResultKit importiert. Ohne Projektordner liest sie wie bisher den **XML-Export des Prüfberichts** („Andere Datei …“; Eurofins liefert ihn mit der PDF). Die Proben werden über die Probe-Nr. den Fotos zugeordnet (`Probe 3` = `P3`), ein Wert (Standard: Σ16 EPA-PAK, dazu BaP) wird nach einer **eigenen Bewertungsskala** eingestuft. „Tabelle kopieren“ legt eine fertige Tabelle mit Fußnoten (BG, Prüfbericht, Skala) in die Zwischenablage – in Word mit Strg+V einfügen. Alternativ „Alle Einzelwerte“. Fehlende Werte, Fotos ohne Probe im Bericht und ein Bericht zu einem anderen Projekt werden als Prüfhinweis angezeigt. Grenzwerte sind nicht eingebaut – die Skala legt ihr selbst fest; für Σ16 EPA-PAK auf Oberflächen gilt bei eingetragener Nutzung die VdS-2357-Referenz. Eigene Skalen liegen im Archivordner in `_Spektron-Skalen.json` und gelten fürs ganze Büro.
 
 ## Wo liegen die Daten?
 
