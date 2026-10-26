@@ -28,6 +28,7 @@ jobs:
       - run: node tools/build-identity.cjs --check
       - run: node tests/laborwerte.cjs
       - run: node tests/bohrkern-fotos.cjs
+      - run: node tests/hilfe-links.cjs
       - run: node tests/skalenregel.cjs
       - run: node tests/skalen-archiv.cjs
       - run: node tests/pdf-layout.cjs
