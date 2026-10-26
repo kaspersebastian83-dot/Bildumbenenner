@@ -177,7 +177,7 @@ function zipFiles(bytes) {
       assert.deepEqual([...text.matchAll(/^Bild (\d+)\r?$/gm)].map(m => m[1]), afterRename.map(x => x.nr));
       for (const x of afterRename) assert.deepEqual(zip.get(x.name), Buffer.from(disk[x.name]));
       await active.first().locator('.down').click();
-      assert.match(await page.locator('#stats').textContent(), /Dateinamen passen noch nicht zum Plan/);
+      assert.match(await page.locator('#stats').getAttribute('title'), /Dateinamen passen noch nicht zum Plan/);assert.match(await page.locator('#btnRename').textContent(), /Ausführen: \d+ umbenennen/);
       assert.deepEqual(await readFiles(), disk, 'Nach Umbenennen erneut sortieren ändert keine Dateien');
       await checkNumbers(); await pdf();
       const reordered = await snapshot();

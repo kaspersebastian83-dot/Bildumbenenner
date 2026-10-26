@@ -118,6 +118,19 @@ header{background:var(--panel);border-bottom:1px solid var(--line);display:flex;
 .opts input[type=text]{width:130px;font-family:var(--mono);font-size:12.5px}
 .opts input[type=number]{width:58px}
 .example{font-family:var(--mono);font-size:12px;color:var(--accent);background:var(--focus);border:1px solid var(--line);padding:3px 9px;border-radius:6px}
+/* „⋯ Mehr“: selten gebrauchte Sicherungs- und Programmfunktionen, aufklappbar unter dem Knopf */
+.more{position:relative;flex:0 0 auto}
+.more-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:30;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:12px 14px;display:flex;flex-direction:column;gap:12px;width:max-content;max-width:min(460px,calc(100vw - 24px))}
+.more-panel[hidden]{display:none}
+.more-sec{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-size:12.5px;color:var(--muted)}
+.more-sec .lbl{flex:1 1 100%}
+.more-sec button{font-size:12.5px}
+.more-dot{display:inline-block;margin-left:6px;min-width:15px;padding:0 4px;border-radius:8px;background:var(--err);color:#fff;font:700 10px/15px var(--sans);text-align:center}
+.more-dot[hidden]{display:none}
+/* Speicherstatus: leise, bei einem Fehler rot und vollständig */
+.savestate{font-size:11.5px;color:var(--muted);min-width:0;max-width:38ch;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.savestate[role=alert]{color:var(--err);font-weight:600;white-space:normal;max-width:70ch}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
 main{flex:1;display:flex;min-height:0}
 #listWrap{flex:1 1 55%;overflow:auto;padding:10px 12px 40px}
@@ -125,10 +138,10 @@ main{flex:1;display:flex;min-height:0}
 #listWrap{min-width:0}
 .preview-content{display:flex;flex-direction:column;flex:1;min-height:0}
 #btnPreview{display:none}
-.row{display:grid;grid-template-columns:34px 96px 1fr 30px;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 8px;margin-bottom:6px}
+.row{display:grid;grid-template-columns:30px 80px 1fr 28px;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 8px;margin-bottom:5px}
 .row.active{background:var(--focus);border-color:var(--accent)}
 .nr{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right}
-.thumb{width:96px;height:72px;border-radius:5px;background:var(--panel2);overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);cursor:pointer}
+.thumb{width:80px;height:60px;border-radius:5px;background:var(--panel2);overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);cursor:pointer}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block;flex:0 0 auto}
 .thumb{position:relative}
 .rotbtn{position:absolute;right:3px;bottom:3px;width:22px;height:22px;padding:0;border-radius:50%;border:0;font-size:13px;line-height:22px;text-align:center;background:rgba(0,0,0,.6);color:#fff;opacity:0;transition:opacity .12s}
@@ -136,9 +149,13 @@ main{flex:1;display:flex;min-height:0}
 .row.rotated .rotbtn{background:var(--accent)}
 .imgopts{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px}
 .imgopts select{padding:3px 6px}
-.mid{min-width:0;display:flex;flex-direction:column;gap:4px}
+.mid{min-width:0;display:flex;flex-direction:column;gap:3px}
+/* Zeile 1: Originalname · Datum links, geplanter neuer Name rechts */
+.line1{display:flex;align-items:baseline;gap:10px;min-width:0}
+.line1 .orig{flex:0 1 auto;min-width:0}
+.line1 .res{flex:1 1 0;min-width:0;text-align:right}
 .orig{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.desc{width:100%}
+.desc{width:100%;padding-top:4px;padding-bottom:4px}
 .meta2{display:flex;gap:6px}
 .meta2 input{font-size:12.5px;padding:3px 7px}
 .meta2 .sec{flex:1;min-width:0}
@@ -146,12 +163,12 @@ main{flex:1;display:flex;min-height:0}
 .meta2 .sec::placeholder{color:var(--muted)}
 .meta2 .sec.inherited::placeholder{color:var(--accent);opacity:.75}
 .row.discarded .meta2 input{color:var(--muted)}
-.section-status{font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+.section-status{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .res{font-family:var(--mono);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
 .res.change{color:var(--ok)}
 .res.conflict{color:var(--err);font-weight:600}
-.ord{display:flex;flex-direction:column;gap:3px}
-.ord button{padding:0;height:22px;font-size:10px;line-height:1}
+.ord{display:flex;flex-direction:column;gap:2px}
+.ord button{padding:0;height:20px;font-size:10px;line-height:1}
 .ord button.x{font-size:12px;color:var(--err)}
 .ord button.restore{font-size:13px;color:var(--ok)}
 .row.discarded{opacity:.55;background:var(--panel2);border-style:dashed}
@@ -193,7 +210,7 @@ footer{background:var(--panel);border-top:1px solid var(--line);padding:8px 16px
 #stats{color:var(--muted);white-space:nowrap;flex:0 0 auto}
 #stats b{color:var(--text)}
 #stats .bad{color:var(--err)}
-.keys{color:var(--muted);font-size:12px;flex:1 1 0;min-width:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.keys{color:var(--muted);font-size:12px;flex:0 0 auto;white-space:nowrap;cursor:help;border-bottom:1px dotted var(--line)}
 #btnRename,#btnZip,#btnPdf{flex:0 0 auto;white-space:nowrap}
 .pdfOpen{padding:2px 8px;font-size:12.5px}
 .dialog .form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -257,6 +274,10 @@ progress{width:100%}
   .appbar .projbadge{max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.4}
   .appbar .projbadge b{white-space:nowrap}
   .appbar .folder{flex:1 1 100%;white-space:normal;overflow-wrap:anywhere}
+  /* „⋯ Mehr“ schmal: über die ganze Breite unter der Kopfzeile statt am Knopf ausgerichtet */
+  .more{position:static}
+  .more-panel{left:12px;right:12px;top:auto;width:auto;max-width:none;margin-top:8px}
+  .savestate{flex:1 1 100%;max-width:none;order:5}
   .bar,.settingsbar,.opts{padding-left:12px;padding-right:12px}
   .bar>.spacer{display:none}
   .bar .opts{flex-wrap:wrap;min-width:0}
@@ -327,27 +348,37 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 <header>
   <div class="appbar">
     <div class="brand"><span class="hex">⬡</span> FotoKit <small>Bilddokumentation</small></div>
-    <button id="btnInfo" class="hbadge" title="Geladene Version und Build, Speicherorte, Änderungen, Problem melden">Version und Build</button>
     <button id="btnHelp" class="hbadge help" title="Kurzanleitung (F1)"><b>?</b> Kurzanleitung</button>
     <a id="lnkHandbuch" class="hbadge help hilfe-kopf" href="../aidkit/#app-fotokit" target="aidkit" rel="noopener" title="Handbuch: FotoKit Schritt für Schritt (öffnet AidKit in einem eigenen Fenster)">📘 Handbuch</a>
     <button id="btnUpd" class="upd" hidden title="Neu laden lädt die neue Version – ungespeicherte Änderungen werden vorher gesichert">Update verfügbar – neu laden</button>
     <span class="spacer"></span>
     <span class="projbadge" id="projBadge" hidden></span>
     <span class="folder" id="folderName"></span>
-  </div>
-  <div class="bar" style="font-size:11.5px;flex-wrap:wrap;color:#6b7785" aria-label="Programmstand">
-    <span id="buildStatus" role="status">Programmstand wird geprüft …</span>
-    <button id="btnCheckUpdate">Programmstand prüfen</button>
-    <button id="btnSessionRecovery" title="Eingaben, die dieser Browser zusätzlich gesichert hat (z. B. nach einem Absturz)">Gesicherte Eingaben …</button><span id="recoveryStatus" role="status">Eingaben werden zusätzlich in diesem Browser gesichert.</span>
+    <!-- Selten gebraucht: Sicherungen, Fassungen, Programmstand. Alles bleibt hier erreichbar; Hinweise, die eine Entscheidung
+         brauchen, erscheinen weiterhin von selbst (Update-Knopf, Meldungsleiste, roter Speicherstatus, Punkt am „Mehr“-Knopf). -->
+    <div class="more" id="moreWrap">
+      <button id="btnMore" class="hbadge help" aria-haspopup="true" aria-expanded="false" aria-controls="morePanel" title="Sicherungen, Projektfassungen, Programmstand">⋯ Mehr<span class="more-dot" id="moreDot" hidden aria-hidden="true">!</span></button>
+      <div id="morePanel" class="more-panel" role="group" aria-label="Sicherungen und Programmstand" hidden>
+        <div class="more-sec"><span class="lbl">Projektdatei</span>
+          <span id="pjRecovery"></span>
+          <button id="btnVersions" disabled>Gesicherte Fassungen …</button></div>
+        <div class="more-sec"><span class="lbl">Eingaben</span>
+          <button id="btnSessionRecovery" title="Eingaben, die dieser Browser zusätzlich gesichert hat (z. B. nach einem Absturz)">Gesicherte Eingaben …</button></div>
+        <div class="more-sec"><span class="lbl">Programm</span>
+          <span id="buildStatus" role="status">Programmstand wird geprüft …</span>
+          <button id="btnCheckUpdate">Programmstand prüfen</button>
+          <button id="btnInfo" title="Geladene Version und Build, Speicherorte, Änderungen, Problem melden">Version und Build</button></div>
+      </div>
+    </div>
   </div>
   <div class="bar">
     <div class="toolgroup" role="group" aria-label="Projekt und Fotos">
       <button id="btnOpen" class="primary">Projekt öffnen …</button>
       <button id="btnReload" disabled>Fotos neu einlesen</button>
-      <button id="btnMeta" disabled>Projektdaten …</button><span id="pjRecovery"></span>
-      <button id="btnVersions" disabled>Gesicherte Fassungen …</button>
+      <button id="btnMeta" disabled>Projektdaten …</button>
     </div>
     <span class="spacer"></span>
+    <span id="recoveryStatus" class="savestate" role="status">Eingaben werden zusätzlich in diesem Browser gesichert.</span>
     <div class="toolgroup" role="group" aria-label="Bildbearbeitung und Sortierung">
     <label class="opts"><span class="lbl">Sortierung</span>
       <select id="sort">
@@ -357,13 +388,11 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
         <option value="section">nach Abschnitt (Begehung)</option>
       </select>
     </label>
+    <button id="btnNaming" aria-expanded="false" aria-controls="namingOptions" aria-label="Dateibenennung und weitere Einstellungen" title="Dateibenennung und weitere Einstellungen (Präfix, Nummern, Vorschläge beim Tippen, Aussortierte)"><span class="disclosure-icon" aria-hidden="true">▸</span> Dateibenennung</button>
     </div>
   </div>
-  <div class="settingsbar">
-    <button id="btnNaming" aria-expanded="false" aria-controls="namingOptions"><span class="disclosure-icon" aria-hidden="true">▸</span> Dateibenennung und weitere Einstellungen</button>
-    <span class="example" id="example"></span>
-  </div>
   <div id="namingOptions" role="group" aria-label="Dateibenennung und weitere Einstellungen" hidden>
+    <div class="opts"><span class="example" id="example"></span></div>
     <div class="opts">
     <span class="lbl title">Benennung</span>
     <label>Präfix <input type="text" id="oPrefix" placeholder="z. B. P2026-114"></label>
@@ -423,7 +452,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 <footer id="foot" style="display:none">
   <span id="stats"></span>
-  <span class="keys" title="Tippen: Vorschlag erscheint markiert – Enter/Tab übernimmt, Esc verwirft · P7 + Enter: Beschreibung aus LabelKit · Enter / ↓: nächstes Bild · Shift+Enter / ↑: vorheriges Bild · Strg+D: Text vom vorherigen Bild übernehmen · Alt+X: aussortieren / wiederherstellen · Alt+R / Alt+Shift+R: drehen · Vorschaubild ziehen: verschieben · Esc: Vollbild schließen"><kbd>↵</kbd> nächstes · <kbd>⇧↵</kbd> vorheriges · <kbd>Strg D</kbd> übernehmen · <kbd>Alt X</kbd> aussortieren · <kbd>Alt R</kbd> drehen</span>
+  <span class="keys" tabindex="0" title="Tastenkürzel (alle in der Kurzanleitung, F1) – Tippen: Vorschlag erscheint markiert – Enter/Tab übernimmt, Esc verwirft · P7 + Enter: Beschreibung aus LabelKit · Enter / ↓: nächstes Bild · Shift+Enter / ↑: vorheriges Bild · Strg+D: Text vom vorherigen Bild übernehmen · Alt+X: aussortieren / wiederherstellen · Alt+R / Alt+Shift+R: drehen · Vorschaubild ziehen: verschieben · Esc: Vollbild schließen">⌨ Tastenkürzel</span>
   <button id="btnRename" disabled title="Originaldateien umbenennen und aussortierte Bilder gegebenenfalls verschieben – unabhängig vom PDF-/ZIP-Export">Umbenennen</button>
   <div class="toolgroup export-actions" role="group" aria-label="Bilddokumentation und Export">
     <button id="btnPdf" class="primary" disabled title="Bilddokumentation direkt als PDF erstellen (Deckblatt, 2 Bilder pro Seite, max. 14 MB je Datei)">Bilddokumentation erstellen …</button>
@@ -464,11 +493,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.16.2';
+const APP_VERSION = '1.17.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:1f8cfba3ef00ffb5320456448705bc4fd55b98573bb071e3142e9c78603c13bb';
-const APP_DATE = '2026-10-24';
+const APP_BUILD = 'sha256:ab433ebffd1ac429f6bb2f9044ba51faf671559e727bdea0dc0832ccdda6528f';
+const APP_DATE = '2026-10-26';
 const CHANGELOG = [
+  ['1.17.0', '26.10.2026', 'Aufgeräumt – mehr Platz für die Fotos: Oben zwei statt vier Zeilen. Selten Gebrauchtes (Projektfassungen, Gesicherte Fassungen, Gesicherte Eingaben, Programmstand prüfen, Version und Build) steht unter „⋯ Mehr“; muss dort etwas entschieden werden, zeigt der Knopf einen roten Punkt. „Projekt öffnen“, „Fotos neu einlesen“, „Projektdaten“, Sortierung und „Dateibenennung“ bleiben in einer Zeile, der Speicherstatus steht klein daneben (Fehler rot). Bildkarten etwa ein Drittel niedriger: Originalname und geplanter neuer Name in einer Zeile, ohne die Zeile „Abschnitt: nicht zugeordnet“ (das Feld zeigt den übernommenen Abschnitt). ▲ ✕ ▼ bleiben an jedem Bild. Unten eine Zeile; die Tastenkürzel stehen unter „⌨ Tastenkürzel“ und in der Kurzanleitung. Das Beispiel für Dateinamen steht jetzt in „Dateibenennung“.'],
   ['1.16.2', '26.10.2026', 'Neben „Kurzanleitung“: „📘 Handbuch“ öffnet FotoKit Schritt für Schritt im Handbuch (AidKit), immer im selben Fenster. In der Kurzanleitung Links zum Handbuch und zur Probenbezeichnung Bohrkerne.'],
   ['1.16.1', '26.10.2026', 'Vorschlag aus LabelKit in derselben Reihenfolge wie die Laborübergabe: Raum, Beaufschlagung, Oberflächenart (z. B. „Küche verrußt Untersicht“).'],
   ['1.16.0', '25.10.2026', 'Beschreibungen schneller: Beim Tippen schlägt FotoKit den Rest vor – aus den Beschreibungen dieses Projekts (die zuletzt verwendeten zuerst) und aus Räumen und Proben in LabelKit. Der Vorschlag ist markiert: Enter oder Tab übernimmt, Weitertippen ersetzt, Esc verwirft. Probennummer tippen („P7“) und Enter: Die Beschreibung kommt aus LabelKit (Raum, Oberflächenart, Beaufschlagung), „P7“ wandert ins Feld Probe-Nr. Abschaltbar unter „Dateibenennung und weitere Einstellungen“ → „Vorschläge beim Tippen“. LabelKit wird nur gelesen.'],
@@ -1389,8 +1419,10 @@ function showProject(dir, proj){
     b.title = `Projektordner „${proj.name}“ – Projektdaten werden mit „${PJ_FILE}“ abgeglichen`;
     f.textContent = `📁 ${proj.name} › ${dir.name}`;
     f.title = '';
+    f.hidden = true;   // Projekt steht schon im Projektkennzeichen daneben; den Ordnerpfad nur zeigen, wenn er etwas Neues sagt
   } else {
     const isFotos = dir.name.normalize('NFC').toLowerCase() === FOTOS_DIR.toLowerCase();
+    f.hidden = false;
     f.innerHTML = '📁 ' + esc(dir.name) + (isFotos
       ? '<span class="hint">– Projekt unbekannt</span> <button id="btnAssign" title="Den Projektordner wählen, in dem dieser „Fotos“-Ordner liegt – dann werden die Projektdaten aus der Projektzentrale übernommen">Projekt zuordnen …</button>' : '');
     f.title = '';
@@ -1642,11 +1674,10 @@ function buildRows(){
       r.innerHTML = `<div class="nr"><span class="grip" title="Ziehen zum Verschieben">⠿</span><span class="n"></span></div>
         <div class="thumb">…</div>
         <div class="mid">
-          <div class="orig"></div>
+          <div class="line1"><div class="orig"></div><div class="res"></div></div>
           <input class="desc" type="text" spellcheck="true" placeholder="Beschreibung eingeben …">
           <div class="meta2"><input class="sec" type="text" list="secList" placeholder="Abschnitt (z. B. Küche)" title="Abschnitt – gilt auch für die folgenden Bilder, bis ein neuer gesetzt wird"><input class="probe" type="text" placeholder="Probe-Nr." title="Probenahmestelle, z. B. P1 (mehrere mit Komma)"></div>
           <div class="section-status"></div>
-          <div class="res"></div>
         </div>
         <div class="ord"><button class="up" title="nach oben">▲</button><button class="x" title="Aussortieren (Alt+X)">✕</button><button class="down" title="nach unten">▼</button></div>`;
       it.el = r;
@@ -1891,7 +1922,7 @@ function recompute(){
       res.textContent = P.readOnly ? '✕ nur in dieser Sitzung aussortiert – Original bleibt unverändert' : moving ? `✕ wird nach ${DISCARD_DIR}/ verschoben` : '✕ aussortiert – bleibt unverändert im Ordner';
     } else {
       res.className = 'res' + (it.conflict ? ' conflict' : changed ? ' change' : '');
-      res.textContent = it.conflict ? '⚠ ' + it.final + ' (Name doppelt / existiert)' : changed ? 'Geplant: → ' + it.final : 'Dateiname bleibt: ' + it.name;
+      res.textContent = it.conflict ? '⚠ ' + it.final + ' (Name doppelt / existiert)' : changed ? '→ ' + it.final : '';
     }
     res.title = it.final;
   });
@@ -1900,7 +1931,7 @@ function recompute(){
   if (discarded) s += ` · <b>${discarded}</b> aussortiert`;
   if (conflicts) s += ` · <span class="bad">${conflicts} Konflikte</span>`;
   if (tooLong) s += ` · <span class="bad">${tooLong} Namen sehr lang</span>`;
-  if (changes) s += ' · Dateinamen passen noch nicht zum Plan – nur „Ausführen“ ändert Dateien';
+  $('stats').title = changes ? 'Dateinamen passen noch nicht zum Plan – nur „Ausführen“ ändert Dateien' : '';
   $('stats').innerHTML = P.readOnly ? `<b>${S.view.length - discarded}</b> Bilder · geschützter Modus – Originalfotos unverändert` : s;
   $('btnRename').disabled = P.readOnly || !(changes || moves) || conflicts > 0 || S.busy;
   if ($('bUndo')) $('bUndo').disabled = P.readOnly;
@@ -3219,6 +3250,7 @@ const RECOVERY_PREFIX = 'fotokit-recovery-v1:';
 const R = { session:null, id:null, ready:false, unsaved:false, error:false, baseline:null, shared:null };
 function recoveryStatus(text, error = false){
   $('recoveryStatus').textContent = text;
+  $('recoveryStatus').title = text;
   $('recoveryStatus').setAttribute('role', error ? 'alert' : 'status');
 }
 function recoveryDB(){
@@ -4094,7 +4126,7 @@ const HELP_HTML = `
 <h4>In 5 Schritten zur Bilddokumentation</h4>
 <ol>
   <li><b>Projekt öffnen:</b> in der Projektzentrale „Fotos &amp; Dokumentation“ – oder hier „Projekt öffnen …“ und den Projektordner (z. B. <code>26.0123 Köln</code>) wählen. Oben in der blauen Leiste stehen dann Projektnummer und Ort. Wurde nur der Ordner <code>Fotos</code> gewählt, oben „Projekt zuordnen …“ klicken. Neue Fotos in diesen Ordner kopieren und „Fotos neu einlesen“ wählen.</li>
-  <li><b>Dateibenennung:</b> „Dateibenennung und weitere Einstellungen“ klappt die bisherigen Optionen auf. Die Bildnummer zählt aktive Bilder in Listenreihenfolge ab 1; die Dateinummer folgt derselben Position mit der eingestellten Startnummer. Ohne Beschreibung bleibt der Dateiname erhalten. Sortieren ändert keine Dateien: Geplante Namen werden erst mit „Ausführen“ und „Jetzt ausführen“ übernommen.</li>
+  <li><b>Dateibenennung:</b> „Dateibenennung ▸“ klappt Benennung und weitere Einstellungen auf, mit Beispiel-Dateinamen. Die Bildnummer zählt aktive Bilder in Listenreihenfolge ab 1; die Dateinummer folgt derselben Position mit der eingestellten Startnummer. Ohne Beschreibung bleibt der Dateiname erhalten. Sortieren ändert keine Dateien: Geplante Namen werden erst mit „Ausführen“ und „Jetzt ausführen“ übernommen.</li>
   <li><b>Bilder beschreiben:</b> links ein Bild anklicken, rechts erscheint die Vorschau. Beschreibung eintippen, <kbd>Enter</kbd> springt zum nächsten Bild. Darunter optional <b>Abschnitt</b> (z. B. „Küche“ – gilt für die folgenden Bilder mit) und <b>Probe-Nr.</b> (z. B. „P1“).</li>
   <li><b>Aufräumen:</b> unbrauchbare Bilder mit ✕ aussortieren (sie wandern ans Ende, nichts wird gelöscht). Reihenfolge per Ziehen ändern oder mit Sortierung „nach Abschnitt (Begehung)“ nach Räumen ordnen, schiefe Bilder mit ↻ drehen.</li>
   <li><b>Projektdaten prüfen:</b> „Projektdaten …“ – Anlagen-Nr., Objekt, Schadenereignis, Daten, Sachverständiger. Was in der Projektzentrale schon eingetragen ist, steht hier bereits. Gelb markierte Felder sind Pflicht (sie stehen auf dem Deckblatt); die Zahl am Knopf zeigt, wie viele noch fehlen.</li>
@@ -4124,7 +4156,8 @@ const HELP_HTML = `
   <li><b><code>_Bildumbenenner.json</code> nicht löschen oder umbenennen.</b> Darin stehen alle Beschreibungen, Abschnitte und Proben – so kann jeder Kollege am Projekt weiterarbeiten.</li>
   <li><b>Möglichst nicht zu zweit im selben Projekt.</b> Passiert es doch, führt FotoKit die Änderungen zusammen; bei einem Konflikt bleibt die eigene Fassung und die App zeigt es an.</li>
   <li><b>iPhone-Fotos (HEIC)</b> kann der Browser nicht lesen. Am iPhone: Einstellungen → Kamera → Formate → „Maximale Kompatibilität“.</li>
-  <li><b>Wenn etwas nicht klappt:</b> „Problem melden“ in der Fehlermeldung (oder Klick auf die Versionsnummer oben links) kopiert einen Bericht – in eine E-Mail einfügen und kurz sagen, was passiert ist.</li>
+  <li><b>„⋯ Mehr“ oben rechts:</b> Gesicherte Fassungen und Projektfassungen der Projektdatei, im Browser gesicherte Eingaben, Programmstand prüfen, Version und Build. Muss dort etwas entschieden werden, zeigt der Knopf einen roten Punkt; Fehler beim Speichern stehen rot neben der Sortierung.</li>
+  <li><b>Wenn etwas nicht klappt:</b> „Problem melden“ in der Fehlermeldung (oder „⋯ Mehr“ → „Version und Build“) kopiert einen Bericht – in eine E-Mail einfügen und kurz sagen, was passiert ist.</li>
 </ul>`;
 function openHelp(){
   showDialog(`<h3>Kurzanleitung <small>${APP_NAME} ${APP_VERSION}</small></h3>
@@ -4161,6 +4194,22 @@ function hideBanner(){ $('banner').className = ''; $('banner').innerHTML = ''; }
 /* ---------- wiring ---------- */
 $('btnOpen').onclick = pickFolder;
 $('btnInfo').onclick = openInfo;
+/* „⋯ Mehr“ auf- und zuklappen; außerhalb klicken oder Esc schließt. Inhalte bleiben im Dokument (gleiche IDs wie vorher). */
+function setMore(open){
+  $('morePanel').hidden = !open; $('btnMore').setAttribute('aria-expanded', String(open));
+}
+$('btnMore').onclick = e => { e.stopPropagation(); setMore($('morePanel').hidden); };
+document.addEventListener('click', e => { if (!$('morePanel').hidden && !$('moreWrap').contains(e.target)) setMore(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('morePanel').hidden){ setMore(false); $('btnMore').focus(); } });
+/* Roter Punkt am „Mehr“-Knopf, wenn dort etwas zu entscheiden ist (abweichende/beschädigte Projektfassungen, Lesefehler). */
+function moreAttention(){
+  const pj = $('pjRecovery').textContent;
+  const need = /abweichend|beschädigt|fehlgeschlagen/i.test(pj);
+  $('moreDot').hidden = !need;
+  $('btnMore').title = need ? 'Bitte prüfen: ' + pj : 'Sicherungen, Projektfassungen, Programmstand';
+}
+new MutationObserver(moreAttention).observe($('pjRecovery'), { subtree: true, childList: true, characterData: true });
+moreAttention();
 $('btnHelp').onclick = openHelp;
 $('btnLab').onclick = openLabDialog;
 $('btnHelp2').onclick = openHelp;
@@ -4183,7 +4232,7 @@ $('btnCheckUpdate').onclick = checkUpdate;
 $('btnSessionRecovery').onclick = openRecovery;
 document.addEventListener('input', () => recoveryChanged());
 document.addEventListener('change', () => recoveryChanged());
-$('btnInfo').textContent = 'v' + APP_VERSION + ' · ' + APP_BUILD.slice(7, 19);
+$('btnInfo').textContent = 'Version ' + APP_VERSION + ' · Build ' + APP_BUILD.slice(7, 19);
 $('btnInfo').title = 'Geladen: ' + APP_VERSION + ' / ' + APP_BUILD;
 updateStatus('Programmstand wird gleich online geprüft …');
 document.title = `${APP_NAME} ${APP_VERSION}`;

@@ -34,10 +34,12 @@ let browser, server;
       assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
       assert.equal(await toggle.getAttribute('aria-controls'), 'namingOptions');
       assert.equal(await page.locator('#oPrefix').isVisible(), false);
-      assert.equal(await page.locator('#example').isVisible(), true);
+      // 1.17: Das Beispiel steht in den Einstellungen; in der Liste zeigt jedes Bild seinen geplanten Namen.
+      assert.equal(await page.locator('#example').isVisible(), false);
       // Native button activation and tab order, including browsers without picker support.
       await toggle.focus(); await page.keyboard.press('Enter');
       assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
+      assert.equal(await page.locator('#example').isVisible(), true);
       await page.keyboard.press('Tab'); assert.equal(await page.locator('#oPrefix').evaluate(e => e === document.activeElement), true);
       await toggle.focus(); await page.keyboard.press('Space');
       assert.equal(await page.locator('#oPrefix').isVisible(), false);

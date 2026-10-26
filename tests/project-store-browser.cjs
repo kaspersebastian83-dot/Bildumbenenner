@@ -57,19 +57,21 @@ for(const other of [0,...(peer?[1]:[])]){
  await edit(A,'objekt','NEU A');await edit(B,'sachverstaendiger','NEU B');
  await Promise.all([A.barrier.arrived.promise,B.barrier.arrived.promise]);
  A.barrier.release.resolve();
+ await A.p.locator('#moreDot').waitFor();   // 1.17: roter Punkt am „⋯ Mehr“-Knopf
+ (await A.p.locator('#morePanel').isHidden()&&await A.p.locator('#btnMore').click());
  await A.p.locator('[data-pj-recovery]').filter({hasText:/abweichend/}).waitFor();
  // The recovery count is refreshed by the app only after the verified save returns.
  if(central[0])await A.p.locator('#pjSave.ok').waitFor();
  assert.equal(JSON.parse(await fs.readFile(path.join(project,'_Projekt.json'),'utf8')).objekt,'NEU A');
  B.barrier.release.resolve();
- await B.p.locator('[data-pj-recovery]').filter({hasText:/abweichend/}).waitFor();
+ (await B.p.locator('#morePanel').isHidden()&&await B.p.locator('#btnMore').click());await B.p.locator('[data-pj-recovery]').filter({hasText:/abweichend/}).waitFor();
  if(central[other])await B.p.locator('#pjSave.ok').waitFor();
  const main=JSON.parse(await fs.readFile(path.join(project,'_Projekt.json'),'utf8'));assert.equal(main.objekt,'ALT');assert.equal(main.sachverstaendiger,'NEU B');assert.deepEqual(main.unknown,initial.unknown);
  await A.context.close();await B.context.close();
  // A new browser context has no memory of either writer. Discover and explicitly
  // inspect A's full candidate through the application's actual recovery UI.
  const reopened=await page(other);
- await reopened.p.locator('[data-pj-recovery]').click();
+ (await reopened.p.locator('#morePanel').isHidden()&&await reopened.p.locator('#btnMore').click());await reopened.p.locator('[data-pj-recovery]').click();
  await reopened.p.locator('[data-pj-recovery-dialog]').waitFor();
  const choices=reopened.p.locator('[data-pj-recovery-dialog] button').filter({hasText:/Fassung prüfen:/});
  await choices.first().waitFor();

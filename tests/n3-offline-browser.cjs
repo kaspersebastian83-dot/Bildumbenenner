@@ -9,11 +9,11 @@ const server=http.createServer((req,res)=>{
 });await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await pw[engine].launch(),context=await browser.newContext(),page=await context.newPage(),url='http://localhost:'+server.address().port+'/index.html';
 try{
  await page.goto(url);await page.evaluate(()=>navigator.serviceWorker.ready);await page.waitForFunction(()=>!!navigator.serviceWorker.controller);
- await page.locator('#btnCheckUpdate').click();await page.locator('#buildStatus').filter({hasText:/stimmt mit der Online-Antwort/}).waitFor();
+ (await page.locator('#morePanel').isHidden()&&await page.locator('#btnMore').click());await page.locator('#btnCheckUpdate').click();await page.locator('#buildStatus').filter({hasText:/stimmt mit der Online-Antwort/}).waitFor();
  const identity=await page.locator('#btnInfo').textContent();const start=requests.length;down=true;
  await page.reload();assert.equal(await page.locator('#btnInfo').textContent(),identity);
  if(fs.existsSync(path.join(root,'project-store.js')))assert.equal(await page.evaluate(()=>typeof window.ProjectStore), 'object');
- await page.locator('#btnCheckUpdate').click();await page.locator('#buildStatus').filter({hasText:/nicht bestätigt/}).waitFor();
+ (await page.locator('#morePanel').isHidden()&&await page.locator('#btnMore').click());await page.locator('#btnCheckUpdate').click();await page.locator('#buildStatus').filter({hasText:/nicht bestätigt/}).waitFor();
  assert.ok(requests.slice(start).every(r=>r.blocked),'all document/script/worker origin requests refused');
  assert.ok(requests.slice(start).some(r=>r.url.includes('fotokit-update')),'separate update network path exercised');
  const cold=await browser.newContext(),coldPage=await cold.newPage();let failed=false;
