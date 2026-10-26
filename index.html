@@ -65,6 +65,8 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .hbadge{font:500 11px/1 var(--mono);background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);border-radius:4px;padding:5px 9px;color:#fff}
 button.hbadge:hover{background:rgba(255,255,255,.26);color:#fff;border-color:rgba(255,255,255,.5)}
 .hbadge.help{font-family:var(--sans);font-size:12px;padding:4px 10px}
+.hilfe-kopf{text-decoration:none;display:inline-flex;align-items:center}
+.hilfe-verweis{margin:0 0 10px;padding:8px 10px;background:var(--panel2,#f4f9fe);border-left:3px solid var(--accent,#3f7cc0)}
 .hbadge.help b{display:inline-block;width:16px;height:16px;line-height:16px;border-radius:50%;background:#fff;color:var(--head);text-align:center;font-size:11px;margin-right:4px}
 .linkbtn{border:0;background:none;padding:0;color:var(--accent);text-decoration:underline;text-underline-offset:3px;font-size:13px}
 .linkbtn:hover{color:var(--accent-l)}
@@ -327,6 +329,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
     <div class="brand"><span class="hex">⬡</span> FotoKit <small>Bilddokumentation</small></div>
     <button id="btnInfo" class="hbadge" title="Geladene Version und Build, Speicherorte, Änderungen, Problem melden">Version und Build</button>
     <button id="btnHelp" class="hbadge help" title="Kurzanleitung (F1)"><b>?</b> Kurzanleitung</button>
+    <a id="lnkHandbuch" class="hbadge help hilfe-kopf" href="../aidkit/#app-fotokit" target="aidkit" rel="noopener" title="Handbuch: FotoKit Schritt für Schritt (öffnet AidKit in einem eigenen Fenster)">📘 Handbuch</a>
     <button id="btnUpd" class="upd" hidden title="Neu laden lädt die neue Version – ungespeicherte Änderungen werden vorher gesichert">Update verfügbar – neu laden</button>
     <span class="spacer"></span>
     <span class="projbadge" id="projBadge" hidden></span>
@@ -461,11 +464,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.16.1';
+const APP_VERSION = '1.16.2';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:9b3b37c10298329d4d16271e27761edfc5c0fafc215c94e81791002306fc6634';
+const APP_BUILD = 'sha256:1f8cfba3ef00ffb5320456448705bc4fd55b98573bb071e3142e9c78603c13bb';
 const APP_DATE = '2026-10-24';
 const CHANGELOG = [
+  ['1.16.2', '26.10.2026', 'Neben „Kurzanleitung“: „📘 Handbuch“ öffnet FotoKit Schritt für Schritt im Handbuch (AidKit), immer im selben Fenster. In der Kurzanleitung Links zum Handbuch und zur Probenbezeichnung Bohrkerne.'],
   ['1.16.1', '26.10.2026', 'Vorschlag aus LabelKit in derselben Reihenfolge wie die Laborübergabe: Raum, Beaufschlagung, Oberflächenart (z. B. „Küche verrußt Untersicht“).'],
   ['1.16.0', '25.10.2026', 'Beschreibungen schneller: Beim Tippen schlägt FotoKit den Rest vor – aus den Beschreibungen dieses Projekts (die zuletzt verwendeten zuerst) und aus Räumen und Proben in LabelKit. Der Vorschlag ist markiert: Enter oder Tab übernimmt, Weitertippen ersetzt, Esc verwirft. Probennummer tippen („P7“) und Enter: Die Beschreibung kommt aus LabelKit (Raum, Oberflächenart, Beaufschlagung), „P7“ wandert ins Feld Probe-Nr. Abschaltbar unter „Dateibenennung und weitere Einstellungen“ → „Vorschläge beim Tippen“. LabelKit wird nur gelesen.'],
   ['1.15.1', '24.10.2026', 'Hilfetexte aktualisiert: Skala gilt mit Archivordner fürs ganze Büro; Knopf in der Projektzentrale heißt „Fotos & Dokumentation“. Schritt für Schritt steht im Handbuch (AidKit).'],
@@ -4079,6 +4083,7 @@ async function openLabDialog(){
 
 /* ---------- Kurzanleitung (same text as the one-page guide; works offline) ---------- */
 const HELP_HTML = `
+<p class="hilfe-verweis">Schritt für Schritt mit Übungen: <a href="../aidkit/#app-fotokit" target="aidkit" rel="noopener">📘 Handbuch – FotoKit</a></p>
 <h4>Einmalig einrichten</h4>
 <ul>
   <li><b>Browser:</b> Google Chrome oder Microsoft Edge (Firefox kann keine Ordner bearbeiten).</li>
@@ -4098,7 +4103,7 @@ const HELP_HTML = `
       <li><b>Umbenennen</b> – benennt die Dateien im Ordner nach der Beschreibung (z. B. <code>03_P2_Küche_Decke.jpg</code>). Rückgängig ist danach möglich.</li>
       <li><b>Bilddokumentation erstellen …</b> – Bilddokumentation als PDF mit Deckblatt, 2 Bildern pro Seite und Probenahmestellen; wird im Ordner <code>Fotos</code> gespeichert als <code>Bilddokumentation_26.0123_Köln_2026-10-19.pdf</code> (ältere Dateien werden nie überschrieben), bei Bedarf in Teile ≤ 14 MB aufgeteilt.</li>
       <li><b>ZIP exportieren</b> – Bilder mit neuen Namen plus Anweisung, wenn eine KI die Dokumentation erstellen soll.</li>
-      <li><b>Ergebnistabelle …</b> – liest den XML-Export des Laborberichts (aus <code>Laborergebnisse</code>), ordnet die Proben über die Probe-Nr. den Fotos zu (bei Bohrkernen auch über die Kern-ID, z. B. <code>EG-WZ-B-7</code> – Zuordnung aus LabelKit), bewertet nach eurer Skala (eigene Skalen liegen im Archivordner in <code>_Spektron-Skalen.json</code> und gelten fürs ganze Büro) und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
+      <li><b>Ergebnistabelle …</b> – liest den XML-Export des Laborberichts (aus <code>Laborergebnisse</code>), ordnet die Proben über die Probe-Nr. den Fotos zu (bei Bohrkernen auch über die Kern-ID, z. B. <code>EG-WZ-B-7</code> – Zuordnung aus LabelKit; Regel: <a href="../aidkit/#bohrkern" target="aidkit" rel="noopener">📘 Probenbezeichnung Bohrkerne</a>), bewertet nach eurer Skala (eigene Skalen liegen im Archivordner in <code>_Spektron-Skalen.json</code> und gelten fürs ganze Büro) und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
     </ul></li>
 </ol>
 <h4>Tastenkürzel</h4>
