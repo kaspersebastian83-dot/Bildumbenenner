@@ -499,7 +499,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.20.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:e7926944b2b25d0d93e8ff67be1bfd1580d062aa0bebf7a2ebf8e114bfcbe399';
+const APP_BUILD = 'sha256:8325c4f1eb6f16f3585f5c67e45f09422c7fc4633e5be1ef3bd5a7d4a300fe9d';
 const APP_DATE = '2026-10-26';
 const CHANGELOG = [
   ['1.20.0', '26.10.2026', 'Ergebnistabelle: Chlorid wird bewertet – wie in ResultKit und PlanKit nach VdS 2357 (5–10 µg/cm² korrosionschemisch relevante Größenordnung): unterhalb (< 5), im Bereich (5 – < 10), oberhalb (≥ 10 µg/cm²), unabhängig von der Nutzung. Ältere Berichte in mg/m² mit umgerechneten Grenzen (1 µg/cm² = 10 mg/m²).'],
@@ -4096,7 +4096,7 @@ async function openLabDialog(){
     scaleInfo();
     $('lScale').innerHTML = units.map(u => {
       const eff = skalaFuer(r.p1, u);
-      if (eff.vds) return `<div class="scale vds" data-unit="${esc(u)}"><div class="m">Skala für <b>${esc(shortParam(r.p1))} in ${esc(u)}</b>: ${eff.angepasst ? `in PlanKit angepasst aus „${esc(eff.vds.name)}“` : `VdS-Referenz „${esc(eff.vds.name)}“`} – gilt, weil die Nutzung gewählt ist (${esc(SK.quelle)}).
+      if (eff.vds) return `<div class="scale vds" data-unit="${esc(u)}"><div class="m">Skala für <b>${esc(shortParam(r.p1))} in ${esc(u)}</b>: ${eff.angepasst ? `in PlanKit angepasst aus „${esc(eff.vds.name)}“` : `VdS-Referenz „${esc(eff.vds.name)}“`} – ${chloridSkala(r.p1, u) ? 'gilt für Chlorid unabhängig von der Nutzung' : `gilt, weil die Nutzung gewählt ist (${esc(SK.quelle)})`}.
         Ändern in <b>PlanKit → Ergebniskarte</b>; die Änderung gilt dann auch hier.</div>
         <table class="stab"><tr><th>Kategorie</th><th>Bereich</th></tr>${eff.scale.cats.map((c, i) => `<tr><td>${esc(c.name)}</td><td>${esc(i === 0 ? (eff.scale.cats[1] ? `< ${eff.scale.cats[1].from.toLocaleString('de-DE')} ${u}` : 'alle Werte') : `≥ ${c.from.toLocaleString('de-DE')} ${u}`)}</td></tr>`).join('')}</table></div>`;
       const s = sc[scaleKey(r.p1, u)] || { name: '', cats: [{ name: '', from: 0 }] };

@@ -23,6 +23,7 @@ assert.equal(skalaFuer('Benzo[a]pyren', 'µg/m²').scale, null, 'keine erfunden'
 SK.vds = { [`${PAK}|µg/m²`]: { name: 'VdS angepasst', cats: [{ name: 'a', from: 0, color: '#4caf50' }, { name: 'b', from: 20, color: '#e0453a' }] } };
 const ang = skalaFuer(PAK, 'µg/m²'); assert.equal(ang.angepasst, true); assert.equal(ang.scale.cats[1].from, 20, 'in PlanKit angepasste Referenz gilt');
 SK.nutzung = 'Gesundheit & Labor'; SK.usage = 'residential'; SK.vds = {}; assert.match(skalaFuer(PAK, 'µg/m²').scale.name, /Gesundheit & Labor/);
+assert.ok(html.includes("chloridSkala(r.p1, u) ? 'gilt für Chlorid unabhängig von der Nutzung'"), 'Hinweis bei Chlorid ohne Nutzung');
 assert.ok(/const scale = g\.unit \? skalaFuer\(p1, g\.unit\)\.scale : null;/.test(html), 'Ergebnistabelle nutzt die Regel');
 // Chlorid nach VdS 2357 (5–10 µg/cm², KORROSION-CHLORID v1): ohne Nutzung, Grenzen in die Berichtseinheit umgerechnet
 ctx.SK.usage = ''; ctx.SK.vds = {};
