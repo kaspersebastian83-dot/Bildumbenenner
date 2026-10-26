@@ -502,7 +502,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.21.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:3caf714721199b279613a55ff1a643d3394b9a3442fc34cb304b46073980e461';
+const APP_BUILD = 'sha256:64842c078100595425940ecbb22a4a1492a7a963b262f655fed46cb072ea64e2';
 const APP_DATE = '2026-10-26';
 const CHANGELOG = [
   ['1.21.0', '26.10.2026', 'Projektdaten: Das Schadendatum kann „nicht bekannt“ sein (Knopf neben dem Feld; gespeichert wie in der Projektzentrale als „unbekannt“, auf dem Deckblatt „nicht bekannt“). Das Schadenereignis ist keine Pflichtangabe mehr. Das helle Firmenzeichen auf dem Deckblatt steht jetzt waagrecht mittig. Umbenennen: Scheitert ein Schritt, nachdem Bilder schon ihre Nummern getauscht haben (z. B. erstes Bild ans Ende gezogen), werden alle Namen wieder richtig zurückgesetzt; lässt sich eine Datei nicht zurückbenennen, nennt die Meldung sie. Im Kopiermodus bleibt keine doppelte Kopie liegen, wenn das Original gesperrt ist. „Rückgängig“ überschreibt keine Beschreibung mehr, die nach dem Umbenennen geändert wurde. Bewertungsskala: Eine Kategorie ohne „ab“-Wert wird nicht gespeichert und bewertet keine Werte (vorher landete jeder Wert in ihr). Wiederherstellen einer Projektfassung prüft die Projektnummer jetzt auch bei 2–6-stelligen Nummern richtig. Gemeinsame Skalen: Eine Skala, die geändert wird, während eine andere gerade in die gemeinsame Datei geschrieben wird, geht nicht mehr verloren (wie PlanKit 1.38.0).'],
@@ -2129,7 +2129,9 @@ async function transfer(src, dst, from, to){
   assertOriginalsWritable();
   let rmErr = null;
   try{ await src.removeEntry(from); }catch(e){ rmErr = e; }
-  if (await exists(src, from)){
+  // Nur ein bestätigtes „nicht gefunden“ zählt als entfernt; scheitert die Prüfung selbst (Berechtigung, Laufwerk), gilt das Original als noch da.
+  const nochDa = await src.getFileHandle(from).then(() => true, e => !(e && e.name === 'NotFoundError'));
+  if (nochDa){
     // the original stays – remove the copy again, otherwise the photo exists twice
     assertOriginalsWritable();
     try{ await dst.removeEntry(to); }catch(_){}

@@ -64,5 +64,15 @@ const PAIRS = [{ from: '02_Kueche.jpg', to: '01_Kueche.jpg' }, { from: '03_Kuech
     await assert.rejects(() => w.renameFile(w.dir, 'IMG_1.jpg', '01_Flur.jpg'), /gesperrt/);
     assert.deepEqual(w.stand(), { 'IMG_1.jpg': 'X' });
   }
+  { // Kopiermodus: Entfernen scheitert und die Nachprüfung selbst schlägt fehl (z. B. Berechtigung entzogen) → kein Erfolg melden, Kopie weg
+    const w = welt({ 'IMG_2.jpg': 'Y' });
+    w.noMove.add('IMG_2.jpg'); w.locked.add('IMG_2.jpg');
+    const get = w.dir.getFileHandle.bind(w.dir); let entfernt = false;
+    const rm = w.dir.removeEntry.bind(w.dir);
+    w.dir.removeEntry = async n => { if (n === 'IMG_2.jpg'){ entfernt = true; throw Object.assign(new Error('Datei gesperrt'), { name: 'NoModificationAllowedError' }); } return rm(n); };
+    w.dir.getFileHandle = async (n, o) => { if (entfernt && n === 'IMG_2.jpg' && !(o && o.create)) throw Object.assign(new Error('keine Berechtigung'), { name: 'NotAllowedError' }); return get(n, o); };
+    await assert.rejects(() => w.renameFile(w.dir, 'IMG_2.jpg', '02_Flur.jpg'), /gesperrt/);
+    assert.deepEqual(w.stand(), { 'IMG_2.jpg': 'Y' }, 'keine doppelte Datei');
+  }
   console.log('OK Umbenennen: Rücksetzen bei getauschten Nummern, gesperrte Datei gemeldet, keine doppelte Kopie');
 })().catch(e => { console.error(e); process.exitCode = 1; });
