@@ -138,4 +138,12 @@ assert.equal(mixed.proben[1].lines[1].result, '2000', 'Originaldaten unveränder
   assert.throws(() => tableCtx.ergebnisAlsRep(JSON.stringify({ format: 'spektron-ergebnisse', version: 2 })), /FotoKit aktualisieren/);
   assert.throws(() => tableCtx.ergebnisAlsRep(JSON.stringify({ format: 'spektron-ergebnisse', version: 1, berichte: [] })), /noch keine Proben/);
 }
+// D: Eurofins liefert Chlorid je Probe und je Fläche, Reihenfolge wechselt – eine Tabelle, Wert je Fläche
+{
+  const CL = 'Chlorid (Cl)';
+  const rep = report([sample('P5', [value(CL, '32', 'mg/m²'), value(CL, '450', 'µg/Probe', '50')]), sample('P6', [value(CL, '2800', 'µg/Probe', '50'), value(CL, '199', 'mg/m²')])]);
+  const res = tableCtx.tables(rep, { p1: CL, p2: '', mode: 'uebersicht', cRating: false, cFoto: false, cFlaeche: false });
+  assert.equal(res.tables.length, 1, 'eine Tabelle, nicht je Einheit getrennt');
+  assert.deepEqual([...res.tables[0].rows.map(r => r.cells.find(c => /^\d/.test(c)))], ['32', '199']);
+}
 console.log('Laborwerte: Zahlenregeln, Regressionen A/B und Übergabe aus ResultKit (C) für Tabellen und Word-Zwischenablage bestanden');
