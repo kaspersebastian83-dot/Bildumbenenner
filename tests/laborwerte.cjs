@@ -131,7 +131,7 @@ assert.equal(mixed.proben[1].lines[1].result, '2000', 'Originaldaten unveränder
   assert.deepEqual(Array.from(rep.proben.map(p => p.label)), ['P1', 'P2'], 'nach Probennummer');
   assert.deepEqual(Array.from(rep.proben[0].lines.map(l => l.param)), [main, bap], 'gleiche Probe aus zwei Berichten zusammengeführt');
   assert.equal(rep.proben[1].flaeche, '400 cm²'); assert.equal(rep.proben[1].lines.length, 1, 'Probenfläche als Fläche, nicht als Wert');
-  assert.equal(rep.proben[0].datum, '08.10.2026'); assert.equal(rep.vorlaeufig, true); assert.equal(rep.resultkit.vollstaendig, false);
+  assert.equal(rep.proben[0].datum, '08.10.2026'); assert.equal(rep.vorlaeufig, true); assert.equal(rep.resultkit.vollstaendig, false); assert.equal(rep.resultkit.projekt, '99.9001');
   const res = tableCtx.tables(rep, { p1: main, p2: bap, mode: 'uebersicht', cRating: false, cFoto: false, cFlaeche: true });
   assert.ok(res.foot.includes('Prüfberichte Eurofins AR-1-02 vom 12.10.2026, AR-1-01 vom 10.10.2026 (vorläufig).'), res.foot.join(' | '));
   assert.throws(() => tableCtx.ergebnisAlsRep('{"format":"x"}'), /nicht aus ResultKit/);
