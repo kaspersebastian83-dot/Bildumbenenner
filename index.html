@@ -157,7 +157,7 @@ main{flex:1;display:flex;min-height:0}
 .line1 .res{flex:1 1 14em;min-width:0;text-align:right}
 .line1 .res:empty{display:none}
 /* Konflikt und Aussortiert immer vollständig in eigener Zeile – daran erkennt man die betroffene Zeile. */
-.line1 .res.conflict,.line1 .res.discard{flex-basis:100%;text-align:left;white-space:normal}
+.line1 .res.conflict,.line1 .res.discard{flex-basis:100%;text-align:left;white-space:normal;overflow-wrap:anywhere}
 .orig{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .desc{width:100%;padding-top:4px;padding-bottom:4px}
 .meta2{display:flex;gap:6px}
@@ -499,10 +499,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.17.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:c7937d7c2273c417f84ab33a4175fe3ac9c94424c7f334cf43bb6d36225f87fc';
+const APP_BUILD = 'sha256:46c82f0a183c477d874f61feec18707a7cd9950d01d4597e4e3e4ebb5f584e22';
 const APP_DATE = '2026-10-26';
 const CHANGELOG = [
-  ['1.17.1', '26.10.2026', 'Bildzeile: Der geplante neue Name bleibt sichtbar, auch bei langen Originalnamen und in schmalen Fenstern – reicht der Platz nicht, steht er in einer eigenen Zeile. „Name doppelt“ und „aussortiert“ stehen immer vollständig in eigener Zeile.'],
+  ['1.17.1', '26.10.2026', 'Bildzeile: Der geplante neue Name bleibt sichtbar, auch bei langen Originalnamen und in schmalen Fenstern – reicht der Platz nicht, steht er in einer eigenen Zeile. „Name doppelt“ und „aussortiert“ stehen immer vollständig in eigener Zeile, lange Namen brechen dabei um.'],
   ['1.17.0', '26.10.2026', 'Aufgeräumt – mehr Platz für die Fotos: Oben zwei statt vier Zeilen. Selten Gebrauchtes (Projektfassungen, Gesicherte Fassungen, Gesicherte Eingaben, Programmstand prüfen, Version und Build) steht unter „⋯ Mehr“; muss dort etwas entschieden werden, zeigt der Knopf einen roten Punkt. „Projekt öffnen“, „Fotos neu einlesen“, „Projektdaten“, Sortierung und „Dateibenennung“ bleiben in einer Zeile, der Speicherstatus steht klein daneben (Fehler rot). Bildkarten etwa ein Drittel niedriger: Originalname und geplanter neuer Name in einer Zeile, ohne die Zeile „Abschnitt: nicht zugeordnet“ (das Feld zeigt den übernommenen Abschnitt). ▲ ✕ ▼ bleiben an jedem Bild. Unten eine Zeile; die Tastenkürzel stehen unter „⌨ Tastenkürzel“ und in der Kurzanleitung. Das Beispiel für Dateinamen steht jetzt in „Dateibenennung“.'],
   ['1.16.2', '26.10.2026', 'Neben „Kurzanleitung“: „📘 Handbuch“ öffnet FotoKit Schritt für Schritt im Handbuch (AidKit), immer im selben Fenster. In der Kurzanleitung Links zum Handbuch und zur Probenbezeichnung Bohrkerne.'],
   ['1.16.1', '26.10.2026', 'Vorschlag aus LabelKit in derselben Reihenfolge wie die Laborübergabe: Raum, Beaufschlagung, Oberflächenart (z. B. „Küche verrußt Untersicht“).'],

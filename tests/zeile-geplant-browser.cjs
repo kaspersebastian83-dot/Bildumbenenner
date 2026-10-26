@@ -54,6 +54,13 @@ let browser, server;
       const b = await box(i);
       assert.match(b.text, /Name doppelt/); assert.equal(b.cut, false, `${width}px: Konflikt vollständig lesbar`); assert.ok(b.w >= 100);
     }
+    // Langer doppelter Name ohne Leerzeichen (werden zu „_“): muss umbrechen statt abgeschnitten zu werden
+    const lang = 'Wohnzimmer Brandraum Decke verrusst Untersicht Nordwand oberhalb Fenster links neben Heizkoerper';
+    await desc.nth(0).fill(lang); await desc.nth(1).fill(lang);
+    for (const i of [0, 1]) {
+      const b = await box(i);
+      assert.match(b.text, /Name doppelt/); assert.equal(b.cut, false, `${width}px: langer Konfliktname vollständig lesbar`); assert.ok(b.right <= width + 1);
+    }
     assert.equal(await page.locator('#list .row').nth(2).locator('.res').isVisible(), false, 'unveränderter Name: keine leere Zeile');
     assert.deepEqual(errors, []);
     console.log(`OK (${browserName}, ${width}px): geplanter Name und Konflikt in der Bildzeile sichtbar`);
