@@ -119,6 +119,15 @@ async function all(d){const r={};async function walk(p){for(const e of await fs.
    assert.ok(Object.entries(await all(d)).some(([n,b])=>n.includes('vorher_')&&b===Buffer.from([0xff,0xfe]).toString('base64')),'explicit recovery preserves corrupt bytes too');
  });
  await fixture(async d=>{
+   // Projektnummer wie im Ordnernamen (2–6 Ziffern nach dem Punkt): passende Sicherung zulassen, fremde ablehnen
+   for(const [folder,nr,ok] of [['26.01011 Fiktiv','26.01011',true],['26.01011_Fiktiv','26.0101',false],['26.010 Fiktiv','26.999',false],['26.010','26.010',true]]){
+     await fs.writeFile(path.join(d,'_Projekt.json'),JSON.stringify({...initial,projektnummer:nr,objekt:'ALT'}));
+     await app.save(new Directory(d),{objekt:'NEU '+folder});const v=await app.ProjectStore.versions(new Directory(d)),choice=v.items.find(x=>x.data.objekt==='ALT');
+     const run=()=>app.ProjectStore.restore(new Directory(d),folder,choice,v.current);
+     if(ok){await run();assert.equal(JSON.parse(await bytes(d)).objekt,'ALT',folder);}else await assert.rejects(run,/anderen Projektnummer/,folder);
+   }
+ });
+ await fixture(async d=>{
    await fs.unlink(path.join(d,'_Projekt.json'));await app.save(new Directory(d),{objekt:'ERST'});assert.equal(JSON.parse(await bytes(d)).objekt,'ERST');
  });
  await fixture(async d=>{

@@ -500,11 +500,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.20.1';
+const APP_VERSION = '1.21.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:89d26d36098b3848b050b9b3399148dea14fb3e4e867700c84c0e6a9385b767a';
+const APP_BUILD = 'sha256:1d984f4016f96f477035444d9c4792cfffd84e3322c1ebe2d87ca270f9380fca';
 const APP_DATE = '2026-10-26';
 const CHANGELOG = [
+  ['1.21.0', '26.10.2026', 'Projektdaten: Das Schadendatum kann „nicht bekannt“ sein (Knopf neben dem Feld; gespeichert wie in der Projektzentrale als „unbekannt“, auf dem Deckblatt „nicht bekannt“). Das Schadenereignis ist keine Pflichtangabe mehr. Das helle Firmenzeichen auf dem Deckblatt steht jetzt waagrecht mittig. Umbenennen: Scheitert ein Schritt, nachdem Bilder schon ihre Nummern getauscht haben (z. B. erstes Bild ans Ende gezogen), werden alle Namen wieder richtig zurückgesetzt; lässt sich eine Datei nicht zurückbenennen, nennt die Meldung sie. Im Kopiermodus bleibt keine doppelte Kopie liegen, wenn das Original gesperrt ist. „Rückgängig“ überschreibt keine Beschreibung mehr, die nach dem Umbenennen geändert wurde. Bewertungsskala: Eine Kategorie ohne „ab“-Wert wird nicht gespeichert und bewertet keine Werte (vorher landete jeder Wert in ihr). Wiederherstellen einer Projektfassung prüft die Projektnummer jetzt auch bei 2–6-stelligen Nummern richtig.'],
   ['1.20.1', '26.10.2026', 'Ergebnistabelle: Liefert das Labor denselben Parameter je Probe und je Fläche (Eurofins: Chlorid in µg/Probe und berechnet in mg/m²), steht in der Übersicht immer der Wert je Fläche – wie in ResultKit und PlanKit. Vorher konnte je nach Reihenfolge im Bericht der Wert je Probe in einer eigenen Tabelle landen.'],
   ['1.20.0', '26.10.2026', 'Ergebnistabelle: Chlorid wird bewertet – wie in ResultKit und PlanKit nach VdS 2357 (5–10 µg/cm² korrosionschemisch relevante Größenordnung): unterhalb (< 5), im Bereich (5 – < 10), oberhalb (≥ 10 µg/cm²), unabhängig von der Nutzung. Ältere Berichte in mg/m² mit umgerechneten Grenzen (1 µg/cm² = 10 mg/m²).'],
   ['1.19.0', '26.10.2026', 'Ergebnistabelle: Im Projekt kommen die Laborwerte jetzt aus ResultKit (dort importiert, geprüft und übernommen – „Laborergebnisse/_Ergebnisse.json“), mit allen geltenden Prüfberichten in einer Tabelle. Hinweis, wenn sich der Ordner seit der Übernahme geändert hat oder noch Proben fehlen; Knopf „🧪 ResultKit öffnen“. Eine XML direkt („Andere Datei …“) nur noch ohne Projektordner. Spektron-Leiste mit fünftem Schritt ResultKit, passt auch auf schmale Handys.'],
@@ -2119,8 +2120,14 @@ async function transfer(src, dst, from, to){
   }
   await dst.getFileHandle(to);                                          // throws if the copy is not there
   assertOriginalsWritable();
-  await src.removeEntry(from);
-  if (await exists(src, from)) throw new Error(`„${from}“ konnte nicht entfernt werden – ist die Datei in einem anderen Programm geöffnet?`);
+  let rmErr = null;
+  try{ await src.removeEntry(from); }catch(e){ rmErr = e; }
+  if (await exists(src, from)){
+    // the original stays – remove the copy again, otherwise the photo exists twice
+    assertOriginalsWritable();
+    try{ await dst.removeEntry(to); }catch(_){}
+    throw rmErr || new Error(`„${from}“ konnte nicht entfernt werden – ist die Datei in einem anderen Programm geöffnet?`);
+  }
 }
 const renameFile = (dir, from, to) => transfer(dir, dir, from, to);
 async function runPairs(pairs, onStep){
@@ -2129,20 +2136,27 @@ async function runPairs(pairs, onStep){
   const P = pairs.map((p, i) => ({ ...p, tmp: `${TMP_PREFIX}${stamp}_${i}${extOf(p.from)}` }));
   // pre-flight: let the browser vet every name BEFORE any file is touched
   for (const p of P){ await assertNameOk(dir, p.tmp); await assertNameOk(dir, p.to); }
-  const phase1 = [];
+  const phase1 = [], stuck = [];
+  const rolledBack = e => {      // a failed rollback must not stay silent: the file keeps a temporary (hidden) name
+    if (!stuck.length) return e;
+    return new Error(`${e && e.message} – ${stuck.length} Datei(en) konnten nicht zurückbenannt werden, z. B. „${stuck[0]}“; bitte den Ordner prüfen`);
+  };
   try{
     for (const p of P){ await renameFile(dir, p.from, p.tmp); phase1.push(p); onStep(); }
   }catch(e){
-    for (const p of phase1.reverse()){ try{ await renameFile(dir, p.tmp, p.from); }catch(_){} }
-    throw e;
+    for (const p of phase1.reverse()){ try{ await renameFile(dir, p.tmp, p.from); }catch(_){ stuck.push(p.tmp); } }
+    throw rolledBack(e);
   }
   const phase2 = [];
   try{
     for (const p of P){ await renameFile(dir, p.tmp, p.to); phase2.push(p); onStep(); }
   }catch(e){
-    for (const p of phase2){ try{ await renameFile(dir, p.to, p.from); }catch(_){} }
-    for (const p of P) if (!phase2.includes(p)){ try{ await renameFile(dir, p.tmp, p.from); }catch(_){} }
-    throw e;
+    // Two steps, as on the way there: a target name may be another file's original
+    // name (swapped numbers), so every target goes back to its free temporary name first.
+    const back = [];
+    for (const p of phase2.slice().reverse()){ try{ await renameFile(dir, p.to, p.tmp); back.push(p); }catch(_){ stuck.push(p.to); } }
+    for (const p of P) if (!phase2.includes(p) || back.includes(p)){ try{ await renameFile(dir, p.tmp, p.from); }catch(_){ stuck.push(p.tmp); } }
+    throw rolledBack(e);
   }
 }
 
@@ -2295,8 +2309,10 @@ async function undo(){
     closeDialog();
     const back = run.pairs.map(p => ({ from: p.to, to: p.from }));
     flushDrafts(); saveExtra();
+    const now = projGet('drafts', {});      // descriptions as they are now (renamed file names)
     const drafts = remapKeys('drafts', back);
-    run.rows.forEach(r => { if (r.desc) drafts[r.from] = r.desc; });
+    // a description changed after the run stays as it is now
+    run.rows.forEach(r => { if (r.desc && (now[r.to] || '').trim() === r.desc) drafts[r.from] = r.desc; });
     projSet('drafts', drafts);
     remapKeys('extra', back);
     remapKeys('hash', back);
@@ -3818,7 +3834,7 @@ async function loadSkalenregel(){
 function rate(scale, v){
   if (!scale || !scale.cats || !scale.cats.length || !isFinite(v)) return '';
   let c = scale.cats[0].name;
-  for (const k of scale.cats) if (isFinite(k.from) && v >= k.from) c = k.name;
+  for (const k of scale.cats) if (typeof k.from === 'number' && Number.isFinite(k.from) && v >= k.from) c = k.name;
   return c;
 }
 function photoNumbers(){        // Probe-Nr. → picture numbers as in the PDF / Bildverzeichnis
@@ -4126,7 +4142,7 @@ async function openLabDialog(){
     }).join('');
     const save = el => {
       const u = el.dataset.unit, cats = [...el.querySelectorAll('.stab tr')].slice(1).map((tr, i) => ({ name: tr.querySelector('.cN').value.trim(), from: i === 0 ? 0 : parseFloat(tr.querySelector('.cF').value) }))
-        .filter((c, i) => c.name || i === 0);
+        .filter((c, i) => (c.name || i === 0) && (i === 0 || Number.isFinite(c.from)));   // without an „ab“ value a category is not saved yet
       const all = loadScales();
       all[scaleKey(read().p1, u)] = { name: el.querySelector('.sN').value.trim(), cats: cats.filter(c => c.name).sort((a, b) => (a.from || 0) - (b.from || 0)), geaendert: new Date().toISOString() };
       if (!all[scaleKey(read().p1, u)].cats.length) delete all[scaleKey(read().p1, u)];
