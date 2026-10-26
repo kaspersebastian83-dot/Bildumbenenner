@@ -33,7 +33,7 @@ const tableCtx = {
   esc: s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 };
 vm.runInNewContext(html.slice(html.indexOf('const LAB_DIR ='), html.indexOf('async function findLabFiles()')) +
-  '\nthis.tables = labTables; this.clipHtml = r => labHtml(r, true); this.preview = r => labHtml(r, false); this.clipText = labText;', tableCtx);
+  '\nthis.ergebnisAlsRep = ergebnisAlsRep; this.tables = labTables; this.clipHtml = r => labHtml(r, true); this.preview = r => labHtml(r, false); this.clipText = labText;', tableCtx);
 const main = 'Summe 16 EPA-PAK', bap = 'Benzo[a]pyren';
 const value = (param, result, unit, loq = '') => ({ param, result, unit, loq });
 const sample = (label, lines) => ({ label, desc: label + ' Teststelle', art: 'Material', lines });
@@ -117,4 +117,25 @@ for (const mode of ['uebersicht', 'einzel']) {
   }
 }
 assert.equal(mixed.proben[1].lines[1].result, '2000', 'Originaldaten unverändert');
-console.log('Laborwerte: Zahlenregeln sowie Regressionen A/B für Tabellen und Word-Zwischenablage bestanden');
+
+// C: Laborergebnisse aus ResultKit (_Ergebnisse.json) – gleiche Form wie aus der XML; mehrere Berichte in einer Tabelle (erfundene Daten).
+{
+  const datei = JSON.stringify({ format: 'spektron-ergebnisse', version: 1, projekt: '99.9001', uebernommen: '2026-10-26T10:00:00.000Z', vollstaendig: false, stand: 'x', offen: ['P3'],
+    berichte: [
+      { id: 'b1', bericht: 'AR-1-02', datum: '2026-10-12', labor: 'Eurofins', auftragsreferenz: '99.9001 Musterort', sources: { xml: 'AR-1-02.xml' },
+        proben: [{ label: 'P2', ref: 'Probe 2', desc: 'Testbereich 2', art: 'Wischprobe', datum: '2026-10-08', werte: [{ p: main, r: '8,5', u: 'µg/m²', loq: '0,5' }, { p: 'Größe der Probenfläche', r: '400', u: 'cm²' }] },
+                 { label: 'P1', ref: 'Probe 1', desc: 'Testbereich 1', art: 'Wischprobe', datum: '2026-10-08', werte: [{ p: main, r: '14', u: 'µg/m²', loq: '0,5' }] }] },
+      { id: 'b2', bericht: 'AR-1-01', datum: '2026-10-10', vorlaeufig: true, labor: 'Eurofins', auftragsreferenz: '99.9001 Musterort', sources: { xml: 'AR-1-01.xml' },
+        proben: [{ label: 'P1', ref: 'Probe 1', desc: 'Testbereich 1', art: 'Wischprobe', datum: '2026-10-08', werte: [{ p: bap, r: '< 0,5', u: 'µg/m²', loq: '0,5' }] }] }] });
+  const rep = tableCtx.ergebnisAlsRep(datei, 'Laborergebnisse/_Ergebnisse.json');
+  assert.deepEqual(Array.from(rep.proben.map(p => p.label)), ['P1', 'P2'], 'nach Probennummer');
+  assert.deepEqual(Array.from(rep.proben[0].lines.map(l => l.param)), [main, bap], 'gleiche Probe aus zwei Berichten zusammengeführt');
+  assert.equal(rep.proben[1].flaeche, '400 cm²'); assert.equal(rep.proben[1].lines.length, 1, 'Probenfläche als Fläche, nicht als Wert');
+  assert.equal(rep.proben[0].datum, '08.10.2026'); assert.equal(rep.vorlaeufig, true); assert.equal(rep.resultkit.vollstaendig, false);
+  const res = tableCtx.tables(rep, { p1: main, p2: bap, mode: 'uebersicht', cRating: false, cFoto: false, cFlaeche: true });
+  assert.ok(res.foot.includes('Prüfberichte Eurofins AR-1-02 vom 12.10.2026, AR-1-01 vom 10.10.2026 (vorläufig).'), res.foot.join(' | '));
+  assert.throws(() => tableCtx.ergebnisAlsRep('{"format":"x"}'), /nicht aus ResultKit/);
+  assert.throws(() => tableCtx.ergebnisAlsRep(JSON.stringify({ format: 'spektron-ergebnisse', version: 2 })), /FotoKit aktualisieren/);
+  assert.throws(() => tableCtx.ergebnisAlsRep(JSON.stringify({ format: 'spektron-ergebnisse', version: 1, berichte: [] })), /noch keine Proben/);
+}
+console.log('Laborwerte: Zahlenregeln, Regressionen A/B und Übergabe aus ResultKit (C) für Tabellen und Word-Zwischenablage bestanden');

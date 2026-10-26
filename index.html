@@ -461,7 +461,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
   <div class="toolgroup export-actions" role="group" aria-label="Bilddokumentation und Export">
     <button id="btnPdf" class="primary" disabled title="Bilddokumentation direkt als PDF erstellen (Deckblatt, 2 Bilder pro Seite, max. 14 MB je Datei)">Bilddokumentation erstellen …</button>
     <button id="btnZip" disabled title="Verwendete Bilder mit neuen Namen + Anweisung/Projektdaten als ZIP speichern">ZIP exportieren …</button>
-    <button id="btnLab" disabled title="Ergebnistabelle aus dem XML-Export des Laborberichts – zum Einfügen ins Gutachten">Ergebnistabelle …</button>
+    <button id="btnLab" disabled title="Ergebnistabelle aus den in ResultKit übernommenen Laborergebnissen – zum Einfügen ins Gutachten">Ergebnistabelle …</button>
   </div>
 </footer>
 
@@ -497,11 +497,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.18.0';
+const APP_VERSION = '1.19.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:35580599b1bfe119de30e6dda39acd02a9495bddcaed88ec2f78b9e8a1447669';
+const APP_BUILD = 'sha256:0d549f5d1b4f95eca3df688723b707d813230eaae32e723a739eaae3524c209a';
 const APP_DATE = '2026-10-26';
 const CHANGELOG = [
+  ['1.19.0', '26.10.2026', 'Ergebnistabelle: Im Projekt kommen die Laborwerte jetzt aus ResultKit (dort importiert, geprüft und übernommen – „Laborergebnisse/_Ergebnisse.json“), mit allen geltenden Prüfberichten in einer Tabelle. Hinweis, wenn sich der Ordner seit der Übernahme geändert hat oder noch Proben fehlen; Knopf „🧪 ResultKit öffnen“. Eine XML direkt („Andere Datei …“) nur noch ohne Projektordner. Spektron-Leiste mit fünftem Schritt ResultKit, passt auch auf schmale Handys.'],
   ['1.18.0', '26.10.2026', 'Spektron-Leiste oben: rechts „💬 Rückmeldung“ (bei schmalem Fenster nur 💬, auf dem Handy im Projektmenü ▾). Öffnet das Rückmeldeformular in einem eigenen Fenster; Programm, Version und – bei geöffnetem Projekt – die Projektnummer sind schon eingetragen (nur die Nummer, kein Ort). Die Leiste ist in allen Apps gleich.'],
   ['1.17.1', '26.10.2026', 'Bildzeile: Der geplante neue Name bleibt sichtbar, auch bei langen Originalnamen und in schmalen Fenstern – reicht der Platz nicht, steht er in einer eigenen Zeile. „Name doppelt“ und „aussortiert“ stehen immer vollständig in eigener Zeile, lange Namen brechen dabei um.'],
   ['1.17.0', '26.10.2026', 'Aufgeräumt – mehr Platz für die Fotos: Oben zwei statt vier Zeilen. Selten Gebrauchtes (Projektfassungen, Gesicherte Fassungen, Gesicherte Eingaben, Programmstand prüfen, Version und Build) steht unter „⋯ Mehr“; muss dort etwas entschieden werden, zeigt der Knopf einen roten Punkt. „Projekt öffnen“, „Fotos neu einlesen“, „Projektdaten“, Sortierung und „Dateibenennung“ bleiben in einer Zeile, der Speicherstatus steht klein daneben (Fehler rot). Bildkarten etwa ein Drittel niedriger: Originalname und geplanter neuer Name in einer Zeile, ohne die Zeile „Abschnitt: nicht zugeordnet“ (das Feld zeigt den übernommenen Abschnitt). ▲ ✕ ▼ bleiben an jedem Bild. Unten eine Zeile; die Tastenkürzel stehen unter „⌨ Tastenkürzel“ und in der Kurzanleitung. Das Beispiel für Dateinamen steht jetzt in „Dateibenennung“.'],
@@ -3750,7 +3751,7 @@ function parseLabXml(text, fileName){
   if (!rep.proben.length) throw new Error('Im Prüfbericht wurden keine Proben gefunden.');
   return rep;
 }
-const LAB = { rep: null, files: [], manuell: false, geladen: '' };   // manuell: per „Andere Datei“ gewählt; geladen: Name + Stand der Ordnerdatei
+const LAB = { rep: null, files: [], manuell: false, geladen: '', ergebnis: null, stand: '', veraltet: false };   // manuell: per „Andere Datei“ gewählt (nur ohne Projekt); geladen: Stand der ResultKit-Datei
 const scaleKey = (param, unit) => `${param}|${unit}`;
 const loadScales = () => store.get('bu-scales', {});
 /* Skalenregel wie PlanKit (ab 1.27): Ist eine Nutzung gewählt und gibt es für Parameter und Einheit eine VdS-Referenz, gilt sie
@@ -3894,7 +3895,8 @@ function labTables(rep, o){
   if (o.mode !== 'einzel') foot.push('BG = Bestimmungsgrenze des jeweiligen Laborwerts, soweit im Prüfbericht angegeben. „<“ / „unter BG“ = unterhalb der Bestimmungsgrenze.');
   if (o.mode !== 'einzel' && o.cRating && tables.some(t => t.scale)) foot.push('Werte unterhalb der BG, n.n. (nicht nachgewiesen) und n.b. (nicht bestimmt) erhalten keine Bewertung (–).');
   else foot.push('BG = Bestimmungsgrenze.');
-  foot.push(`Prüfbericht ${rep.labor ? rep.labor + ' ' : ''}${rep.bericht}${rep.datum ? ' vom ' + rep.datum : ''}${rep.vorlaeufig ? ' (vorläufig)' : ''}.`);
+  if (rep.berichte && rep.berichte.length > 1) foot.push(`Prüfberichte ${rep.labor ? rep.labor + ' ' : ''}${rep.berichte.map(b => b.bericht + (b.datum ? ' vom ' + b.datum : '') + (b.vorlaeufig ? ' (vorläufig)' : '')).join(', ')}.`);
+  else foot.push(`Prüfbericht ${rep.labor ? rep.labor + ' ' : ''}${rep.bericht}${rep.datum ? ' vom ' + rep.datum : ''}${rep.vorlaeufig ? ' (vorläufig)' : ''}.`);
   const usedScales = [...new Set(tables.filter(t => t.scale && o.cRating).map(t => t.scale.name).filter(Boolean))];
   if (usedScales.length) foot.push(`Bewertung nach Skala „${usedScales.join('“, „')}“.`);
   if (o.cFoto) foot.push('Bildnummern gemäß Bilddokumentation.');
@@ -3938,17 +3940,64 @@ function labText(res){
     '\r\n\r\n' + res.foot.join('\r\n');
 }
 
+/* Laborergebnisse aus ResultKit (ab 1.19): Im Projekt kommen die Werte aus „Laborergebnisse/_Ergebnisse.json“ – dort sind die
+   Prüfberichte geprüft und zusammengeführt (endgültig vor vorläufig, ersetzte Berichte entfallen). FotoKit liest die Datei nur.
+   Format spektron-ergebnisse v1 (ResultKit src/ergebnisse.ts). Ergebnis hat dieselbe Form wie parseLabXml, damit labTables gleich bleibt. */
+const ERGEBNIS_DATEI = '_Ergebnisse.json';
+function ergebnisAlsRep(text, quelle){
+  let e; try{ e = JSON.parse(text); }catch(x){ throw new Error(`„${ERGEBNIS_DATEI}“ ist keine gültige JSON-Datei.`); }
+  if (!e || e.format !== 'spektron-ergebnisse') throw new Error(`„${ERGEBNIS_DATEI}“ stammt nicht aus ResultKit.`);
+  if (e.version !== 1) throw new Error(`„${ERGEBNIS_DATEI}“ hat ein neueres Format – bitte FotoKit aktualisieren.`);
+  const str = v => typeof v === 'string' ? v : '';
+  const isoDE = v => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str(v)); return m ? `${m[3]}.${m[2]}.${m[1]}` : str(v); };
+  const berichte = (Array.isArray(e.berichte) ? e.berichte : []).filter(b => b && Array.isArray(b.proben));
+  const nachLabel = new Map();
+  for (const b of berichte) for (const p of b.proben){
+    if (!p || typeof p !== 'object') continue;
+    const lines = (Array.isArray(p.werte) ? p.werte : []).filter(w => w && typeof w === 'object')
+      .map((w, i) => ({ param: str(w.p), group: '', result: str(w.r), unit: str(w.u), loq: str(w.loq), order: i }));
+    const area = lines.find(l => /größe der probenfläche|probenfläche/i.test(l.param));
+    const label = normProbe(str(p.label) || str(p.ref));
+    let pr = nachLabel.get(label);
+    if (!pr){ pr = { ref: str(p.ref), label, desc: str(p.desc), art: str(p.art), labNr: str(p.labNr), datum: isoDE(p.datum), order: 0, flaeche: '', lines: [] }; nachLabel.set(label, pr); }
+    if (area && !pr.flaeche) pr.flaeche = `${area.result} ${area.unit}`.trim();
+    for (const l of lines) if (l !== area && !pr.lines.some(x => x.param === l.param && x.unit === l.unit)) pr.lines.push({ ...l, order: pr.lines.length });
+  }
+  const zahl = l => { const m = /^P(\d+)/.exec(l); return m ? +m[1] : 1e9; };
+  const proben = [...nachLabel.values()].sort((a, b) => zahl(a.label) - zahl(b.label) || a.label.localeCompare(b.label));
+  proben.forEach((p, i) => { p.order = i + 1; });
+  if (!proben.length) throw new Error('In ResultKit wurden noch keine Proben mit Messwerten übernommen.');
+  const liste = berichte.map(b => ({ bericht: str(b.bericht), datum: isoDE(b.datum), vorlaeufig: b.vorlaeufig === true, labor: str(b.labor), auftragsref: str(b.auftragsreferenz) }));
+  const eins = liste.length === 1 ? liste[0] : null;
+  return {
+    datei: quelle || ERGEBNIS_DATEI, bericht: liste.map(b => b.bericht).filter(Boolean).join(', '), labor: [...new Set(liste.map(b => b.labor).filter(Boolean))].join(', '),
+    datum: eins ? eins.datum : '', auftragsref: [...new Set(liste.map(b => b.auftragsref).filter(Boolean))].join(', '), vorlaeufig: liste.some(b => b.vorlaeufig),
+    berichte: liste, resultkit: { uebernommen: str(e.uebernommen), vollstaendig: e.vollstaendig === true, offen: Array.isArray(e.offen) ? e.offen.map(str) : [], stand: str(e.stand) },
+    proben
+  };
+}
+/** Dateistand wie in ResultKit: weicht er ab, wurde „Laborergebnisse“ oder der Laborauftrag nach der Übernahme geändert. */
+const standKennung = dateien => [...dateien].sort((a, b) => a.name.localeCompare(b.name)).map(d => `${d.name}|${d.size}|${d.t}`).join('\n');
+
 async function findLabFiles(){
-  LAB.files = [];
+  LAB.files = []; LAB.ergebnis = null; LAB.veraltet = false;
   if (!S.proj) return;
   const d = await findSubdir(S.proj.dir, LAB_DIR).catch(() => null);
   if (!d) return;
+  const stand = [];
   for await (const h of d.values()){
-    if (h.kind !== 'file' || !/\.xml$/i.test(h.name)) continue;
+    if (h.kind !== 'file') continue;
+    if (h.name === ERGEBNIS_DATEI){ const f = await h.getFile(); LAB.ergebnis = { handle: h, mod: f.lastModified }; continue; }
+    if (!/\.(xml|pdf)$/i.test(h.name)) continue;
     const f = await h.getFile();
-    LAB.files.push({ handle: h, name: h.name, mod: f.lastModified });
+    stand.push({ name: h.name, size: f.size, t: f.lastModified });
+    if (/\.xml$/i.test(h.name)) LAB.files.push({ handle: h, name: h.name, mod: f.lastModified });
   }
   LAB.files.sort((a, b) => b.mod - a.mod);
+  // Neueste LabelKit-Datei gehört zum Stand der Übernahme (wie in ResultKit)
+  const la = await findSubdir(S.proj.dir, 'Laboraufträge').catch(() => null);
+  if (la){ let neu = null; for await (const h of la.values()) if (h.kind === 'file' && /_Daten\.json$/i.test(h.name)){ const f = await h.getFile(); if (!neu || f.lastModified > neu.t) neu = { name: 'Laboraufträge/' + h.name, size: f.size, t: f.lastModified }; } if (neu) stand.push(neu); }
+  LAB.stand = standKennung(stand);
 }
 async function loadLabFile(file){
   const rep = parseLabXml(await file.text(), file.name);
@@ -3961,15 +4010,19 @@ async function openLabDialog(){
   recompute();
   await findLabFiles();
   await loadBohrkernZuordnung();
-  // Immer die neueste XML in „Laborergebnisse“ – kommt ein endgültiger Bericht nach dem vorläufigen dazu, gilt er ohne neues Öffnen.
-  // Eine von Hand gewählte Datei bleibt, bis das Projekt neu geöffnet wird.
+  // Im Projekt: immer der in ResultKit übernommene Stand („Laborergebnisse/_Ergebnisse.json“) – nach erneuter Übernahme ohne neues Öffnen.
+  // Ohne Projekt (beliebiger Fotoordner) bleibt die von Hand gewählte XML, bis ein anderer Ordner geöffnet wird.
   SKALEN_STAND = await skalenAbgleich();
   await loadSkalenregel();
-  if (!LAB.manuell && LAB.files.length){
-    const f = LAB.files[0], stand = f.name + '|' + f.mod;
-    if (!LAB.rep || LAB.geladen !== stand){
-      try{ await loadLabFile(await f.handle.getFile()); LAB.geladen = stand; LAB.err = ''; }catch(e){ LAB.rep = null; LAB.err = e.message; LAB.geladen = ''; }
-    }
+  if (S.proj){
+    LAB.manuell = false;
+    if (LAB.ergebnis){
+      const stand = 'resultkit|' + LAB.ergebnis.mod;
+      if (!LAB.rep || LAB.geladen !== stand){
+        try{ LAB.rep = ergebnisAlsRep(await (await LAB.ergebnis.handle.getFile()).text(), `${LAB_DIR}/${ERGEBNIS_DATEI}`); LAB.geladen = stand; LAB.err = ''; }catch(e){ LAB.rep = null; LAB.err = e.message; LAB.geladen = ''; }
+      }
+      LAB.veraltet = !!(LAB.rep && LAB.rep.resultkit && LAB.rep.resultkit.stand !== LAB.stand);
+    } else { LAB.rep = null; LAB.geladen = ''; LAB.err = ''; }
   }
   const o = Object.assign({ mode: 'uebersicht', title: 'Ergebnisse der Wischproben', startNr: 1, cFlaeche: true, cRating: true, cFoto: true, p1: '', p2: '' }, store.get('bu-labtab', {}));
   showDialog(`<h3>Ergebnistabelle aus dem Laborbericht</h3>
@@ -3988,7 +4041,7 @@ async function openLabDialog(){
       <div id="lWarn"></div>
       <div class="labprev" id="lPrev"></div>
     </div>
-    <div class="btns"><button id="lFile">Andere Datei …</button><input type="file" id="lFileIn" accept=".xml,application/xml,text/xml" hidden>
+    <div class="btns">${S.proj ? '<button id="lResultKit" title="Laborergebnisse des Projekts in ResultKit importieren, prüfen und übernehmen (eigenes Fenster)">🧪 ResultKit öffnen</button>' : '<button id="lFile">Andere Datei …</button><input type="file" id="lFileIn" accept=".xml,application/xml,text/xml" hidden>'}
       <span class="spacer"></span><span class="m" id="lDone"></span><button id="lClose">Schließen</button><button class="primary" id="lCopy">Tabelle kopieren</button></div>`);
   $('dialog').classList.add('wide');
   $('lMode').value = o.mode; $('lNr').value = o.startNr; $('lTitle').value = o.title;
@@ -4069,14 +4122,20 @@ async function openLabDialog(){
     document.querySelectorAll('#dialog .ov').forEach(e => { e.style.display = r.mode === 'einzel' ? 'none' : ''; });
     $('lCopy').disabled = !rep;
     if (!rep){
-      $('lSrc').innerHTML = (LAB.err ? `<span class="warn">${esc(LAB.err)}</span><br>` : '') +
-        (S.proj ? `Im Ordner „${LAB_DIR}“ des Projekts liegt kein XML-Export. ` : '') + 'Bitte den <b>XML-Export</b> des Prüfberichts wählen („Andere Datei …“). Das Labor liefert ihn zusammen mit der PDF.';
+      $('lSrc').innerHTML = (LAB.err ? `<span class="warn">${esc(LAB.err)}</span><br>` : '') + (S.proj
+        ? (LAB.files.length ? `In „${LAB_DIR}“ liegen Prüfberichte, die noch nicht in ResultKit übernommen sind. ` : 'Noch keine Laborergebnisse aus ResultKit. ') + 'Prüfberichte in <b>ResultKit</b> importieren, prüfen und „Ergebnisse übernehmen“ – danach erscheint die Tabelle hier.'
+        : 'Bitte den <b>XML-Export</b> des Prüfberichts wählen („Andere Datei …“). Das Labor liefert ihn zusammen mit der PDF.');
       $('lPrev').innerHTML = ''; $('lWarn').innerHTML = ''; return;
     }
     const projMismatch = S.proj && rep.auftragsref && parseProjName(rep.auftragsref) && parseProjName(rep.auftragsref).nr !== S.proj.nr;
-    $('lSrc').innerHTML = `<b>${esc(rep.datei)}</b> · Prüfbericht ${esc(rep.bericht)}${rep.datum ? ' vom ' + esc(rep.datum) : ''} · ${esc(rep.labor)} · ${rep.proben.length} Proben · Auftragsreferenz „${esc(rep.auftragsref || '–')}“` +
-      (LAB.manuell ? ' · von Hand gewählt' : LAB.geladen ? ` · neueste Datei in „${LAB_DIR}“` : '') +
-      (rep.vorlaeufig ? '<br><span class="warn">⚠ Vorläufiger Prüfbericht – die Werte können sich mit dem endgültigen Bericht noch ändern. Liegt er in „' + LAB_DIR + '“, wird er beim nächsten Öffnen automatisch genommen.</span>' : '') +
+    const rk = rep.resultkit;
+    $('lSrc').innerHTML = (rk ? `<b>Laborergebnisse aus ResultKit</b>${rk.uebernommen ? ' (übernommen am ' + esc(new Date(rk.uebernommen).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })) + ')' : ''} · ${rep.berichte.length === 1 ? 'Prüfbericht' : 'Prüfberichte'} ${esc(rep.bericht)}`
+        : `<b>${esc(rep.datei)}</b> · Prüfbericht ${esc(rep.bericht)}`) +
+      `${rep.datum ? ' vom ' + esc(rep.datum) : ''} · ${esc(rep.labor)} · ${rep.proben.length} Proben · Auftragsreferenz „${esc(rep.auftragsref || '–')}“` +
+      (LAB.manuell ? ' · von Hand gewählt' : '') +
+      (rk && LAB.veraltet ? '<br><span class="warn">⚠ Seit der Übernahme in ResultKit hat sich „' + LAB_DIR + '“ oder der Laborauftrag geändert – bitte in ResultKit prüfen und erneut übernehmen. Bis dahin gilt der übernommene Stand.</span>' : '') +
+      (rk && !rk.vollstaendig ? `<br><span class="warn">Zwischenstand: noch nicht alle beauftragten Proben haben ein Ergebnis${rk.offen.length ? ' (offen: ' + esc(rk.offen.join(', ')) + ')' : ''}.</span>` : '') +
+      (rep.vorlaeufig ? '<br><span class="warn">⚠ ' + (rk ? 'Enthält vorläufige Werte – sie können sich mit dem endgültigen Bericht noch ändern. Kommt er, in ResultKit importieren und erneut übernehmen.' : 'Vorläufiger Prüfbericht – die Werte können sich mit dem endgültigen Bericht noch ändern.') + '</span>' : '') +
       (BK.map.size ? `<br>Bohrkern-IDs auf Fotos → Probe-Nr. laut LabelKit (${esc(BK.datei)})` : '') +
       (projMismatch ? `<br><span class="warn">Achtung: Der Prüfbericht gehört laut Auftragsreferenz zu ${esc(rep.auftragsref)}, geöffnet ist ${esc(S.proj.name)}.</span>` : '');
     if (withScale) renderScale();
@@ -4088,7 +4147,8 @@ async function openLabDialog(){
   ['lMode', 'lP1', 'lP2', 'lFl', 'lRa', 'lFo'].forEach(id => $(id).addEventListener('change', () => update(true)));
   ['lNr', 'lTitle'].forEach(id => $(id).addEventListener('input', () => update(false)));
   $('lClose').onclick = closeDialog;
-  $('lFile').onclick = async () => {
+  if ($('lResultKit')) $('lResultKit').onclick = () => { const w = window.open('../resultkit/#projekt=' + encodeURIComponent(S.proj.name), 'resultkit'); if (w) w.focus(); };
+  if ($('lFile')) $('lFile').onclick = async () => {
     if (window.showOpenFilePicker){
       try{
         const [h] = await window.showOpenFilePicker({ id: 'laborbericht', types: [{ description: 'XML-Export Prüfbericht', accept: { 'application/xml': ['.xml'] } }] });
@@ -4097,7 +4157,7 @@ async function openLabDialog(){
       fillParams(); update(true);
     } else $('lFileIn').click();
   };
-  $('lFileIn').onchange = async () => {
+  if ($('lFileIn')) $('lFileIn').onchange = async () => {
     const f = $('lFileIn').files[0]; if (!f) return;
     try{ await loadLabFile(f); LAB.err = ''; LAB.manuell = true; LAB.geladen = ''; }catch(e){ LAB.rep = null; LAB.err = e.message; }
     fillParams(); update(true);
@@ -4141,7 +4201,7 @@ const HELP_HTML = `
       <li><b>Umbenennen</b> – benennt die Dateien im Ordner nach der Beschreibung (z. B. <code>03_P2_Küche_Decke.jpg</code>). Rückgängig ist danach möglich.</li>
       <li><b>Bilddokumentation erstellen …</b> – Bilddokumentation als PDF mit Deckblatt, 2 Bildern pro Seite und Probenahmestellen; wird im Ordner <code>Fotos</code> gespeichert als <code>Bilddokumentation_26.0123_Köln_2026-10-19.pdf</code> (ältere Dateien werden nie überschrieben), bei Bedarf in Teile ≤ 14 MB aufgeteilt.</li>
       <li><b>ZIP exportieren</b> – Bilder mit neuen Namen plus Anweisung, wenn eine KI die Dokumentation erstellen soll.</li>
-      <li><b>Ergebnistabelle …</b> – liest den XML-Export des Laborberichts (aus <code>Laborergebnisse</code>), ordnet die Proben über die Probe-Nr. den Fotos zu (bei Bohrkernen auch über die Kern-ID, z. B. <code>EG-WZ-B-7</code> – Zuordnung aus LabelKit; Regel: <a href="../aidkit/#bohrkern" target="aidkit" rel="noopener">📘 Probenbezeichnung Bohrkerne</a>), bewertet nach eurer Skala (eigene Skalen liegen im Archivordner in <code>_Spektron-Skalen.json</code> und gelten fürs ganze Büro) und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
+      <li><b>Ergebnistabelle …</b> – nimmt die in <b>ResultKit</b> geprüften und übernommenen Laborergebnisse (<code>Laborergebnisse/_Ergebnisse.json</code>; Prüfberichte werden nur dort importiert – ohne Projektordner geht weiterhin „Andere Datei …“ mit dem XML-Export), ordnet die Proben über die Probe-Nr. den Fotos zu (bei Bohrkernen auch über die Kern-ID, z. B. <code>EG-WZ-B-7</code> – Zuordnung aus LabelKit; Regel: <a href="../aidkit/#bohrkern" target="aidkit" rel="noopener">📘 Probenbezeichnung Bohrkerne</a>), bewertet nach eurer Skala (eigene Skalen liegen im Archivordner in <code>_Spektron-Skalen.json</code> und gelten fürs ganze Büro) und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
     </ul></li>
 </ol>
 <h4>Tastenkürzel</h4>
@@ -4309,13 +4369,13 @@ updateExample();
 </script>
 <!-- MOSAIK-LEISTE:BEGIN -->
 <script>
-/* ===== MOSAIK-LEISTE v1 – in allen Apps der Familie identisch halten (LabelKit, FotoKit, PlanKit, BelegKit) =====
+/* ===== MOSAIK-LEISTE v1 – in allen Apps der Familie identisch halten (LabelKit, FotoKit, ResultKit, PlanKit, BelegKit) =====
    Links steht der Name der App-Suite „Spektron“ (Arbeitsname war „Mosaik“; interne Kennungen bleiben).
-   Schmale Leiste oben: Projekt (mit Wechsel zu den zuletzt benutzten), die vier Arbeitsschritte mit Haken und nächstem Schritt,
+   Schmale Leiste oben: Projekt (mit Wechsel zu den zuletzt benutzten), die fünf Arbeitsschritte mit Haken und nächstem Schritt,
    „Weiter“-Knopf. Ohne geöffnetes Projekt: „Mit <letztes Projekt> weitermachen“.
    Teilt sich mit den anderen Apps nur den Browser-Speicher: IndexedDB „mosaik-suite“ / „kv“, Schlüssel „archiv“ (Ordner-Handle)
    und „zuletzt“ (Liste der zuletzt geöffneten Projektnamen). Liest den Ordner nur, schreibt nie hinein und fragt nie selbst
-   nach Ordnerrechten – ohne Recht (oder ohne Ordnerzugriff, z. B. Safari) fehlen nur die Haken. Aufruf: MosaikLeiste.start('label'|'fotos'|'plan'|'beleg'[, {kompakt: true}]),
+   nach Ordnerrechten – ohne Recht (oder ohne Ordnerzugriff, z. B. Safari) fehlen nur die Haken. Aufruf: MosaikLeiste.start('label'|'fotos'|'ergebnis'|'plan'|'beleg'[, {kompakt: true}]),
    danach MosaikLeiste.aktualisieren() nach dem Öffnen oder Wechseln eines Projekts.
    Optional opt.projektName: Funktion, die die bestätigte Projektzuordnung statt der angeforderten URL liefert (FotoKit).
    Optional opt.version: Version der App (Text oder Funktion) für „💬 Rückmeldung“ rechts in der Leiste und im Projektmenü – öffnet
@@ -4326,10 +4386,11 @@ updateExample();
   var APPS = [
     ['label', 'LabelKit',  'labelkit',       '../labelkit/',       '#5469b8'],
     ['fotos', 'FotoKit',   'bildumbenenner', '../Bildumbenenner/', '#2f87a6'],
+    ['ergebnis', 'ResultKit', 'resultkit',   '../resultkit/',      '#7a5ca8'],
     ['plan',  'PlanKit',   'plankit',        '../Probenplan/',     '#4179b2'],
     ['beleg', 'BelegKit',  'aufwandkit',     '../aufwandkit/',     '#2f7d6d']
   ];
-  var ZENTRALE = '../Projektzentrale/', MAX = 6, RUECKMELDUNG = '../rueckmeldung/', RM_APP = { label: 'labelkit', fotos: 'fotokit', plan: 'plankit', beleg: 'belegkit' };
+  var ZENTRALE = '../Projektzentrale/', MAX = 6, RUECKMELDUNG = '../rueckmeldung/', RM_APP = { label: 'labelkit', fotos: 'fotokit', ergebnis: 'resultkit', plan: 'plankit', beleg: 'belegkit' };
   var ich = '', kompakt = false, projektName = null, version = null, name = '', stand = null, zuletzt = [], bar = null, pop = null, timer = 0, lauf = 0;
   var nfc = function(s){ try{ return String(s).normalize('NFC'); }catch(e){ return String(s); } };
   /* Kurzfassung von SPEKTRON-ORDNERNAME v1 (Projektzentrale): Kürzel am Ende des Ordnernamens anhand der Mitarbeiterliste */
@@ -4433,7 +4494,7 @@ updateExample();
       try{ for await (var e of arch.values()) if (e.kind === 'directory' && nfc(e.name) === nfc(name)){ proj = e; break; } }catch(e2){}
     }
     if (!proj) return null;
-    var s = { label: false, fotos: false, plan: false, beleg: false, objekt: '', anzeige: '', person: '' }, zust = null;
+    var s = { label: false, fotos: false, ergebnis: false, plan: false, beleg: false, objekt: '', anzeige: '', person: '' }, zust = null;
     var activeData = window.SpektronProjectData && window.SpektronProjectData(name);
     if (activeData){ var activeObjekt = typeof activeData.data.objekt === 'string' ? activeData.data.objekt : activeData.data.daten && activeData.data.daten.objekt; if (typeof activeObjekt === 'string') s.objekt = activeObjekt.trim(); zust = activeData.data.zustaendig; }
     else try{
@@ -4446,6 +4507,7 @@ updateExample();
       var la = await unterordner(proj, 'Laboraufträge');
       if (la) for await (var f of la.values()) if (f.kind === 'file' && /_Daten\.json$/i.test(f.name)){ s.label = true; break; }
     }catch(e5){}
+    try{ var le = await unterordner(proj, 'Laborergebnisse'); if (le) s.ergebnis = await le.getFileHandle('_Ergebnisse.json').then(function(){ return true; }, function(){ return false; }); }catch(e8){}   // ResultKit: geprüfte Ergebnisse übernommen
     try{
       var pl = await unterordner(proj, 'Pläne');
       if (pl) for await (var g of pl.values()) if (g.kind === 'file' && /\.probenplan$/i.test(g.name) && !/ \((vorher|Wiederherstellung|Speicherkandidat|Kopie)\b[^)]*\)\.probenplan$/i.test(g.name)){ s.plan = true; break; }
@@ -4503,7 +4565,8 @@ updateExample();
       '#mosaikLeistePop a.aktuell{font-weight:650;background:#f2f6f9}#mosaikLeistePop hr{border:0;border-top:1px solid #e2e9ee;margin:5px 4px}' +
       '#mosaikLeiste.ml-kompakt{height:24px;font-size:12px;padding:0 8px}#mosaikLeiste.ml-kompakt .ml-home,#mosaikLeiste.ml-kompakt .ml-proj,#mosaikLeiste.ml-kompakt .ml-step,#mosaikLeiste.ml-kompakt .ml-weiter,#mosaikLeiste.ml-kompakt .ml-rm{height:20px;padding:0 7px}#mosaikLeiste.ml-kompakt .ml-step i{width:14px;height:14px;font-size:9px}#mosaikLeistePop{top:30px}' +
       '@media (max-width:860px){#mosaikLeiste .ml-marke,#mosaikLeiste .ml-obj,#mosaikLeiste .ml-step span,#mosaikLeiste .ml-rm span{display:none}#mosaikLeiste .ml-step.hier span{display:inline}}' +
-      '@media (max-width:560px){#mosaikLeiste .ml-home span,#mosaikLeiste .ml-weiter span{display:none}#mosaikLeiste .ml-rm{display:none}#mosaikLeiste .ml-step.hier span{display:none}}' +
+      '@media (max-width:560px){#mosaikLeiste .ml-home span,#mosaikLeiste .ml-weiter span{display:none}#mosaikLeiste .ml-rm{display:none}#mosaikLeiste .ml-step.hier span{display:none}' +
+      '#mosaikLeiste{gap:4px;padding:0 6px}#mosaikLeiste .ml-steps{gap:0}#mosaikLeiste .ml-step{padding:0 5px}#mosaikLeiste .ml-proj{flex:0 1 auto;min-width:0;padding:0 6px}#mosaikLeiste .ml-proj b{overflow:hidden;text-overflow:ellipsis;min-width:0}}' +   // fünf Schritte passen auch auf 360 px
       '@media print{#mosaikLeiste,#mosaikLeistePop{display:none!important}}';
     document.head.appendChild(st);
   }

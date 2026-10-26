@@ -151,9 +151,13 @@ function zipFiles(bytes) {
       // Real XML input: laboratory references keep the filtered PDF's list numbers.
       await pdf(true);
       const labExpected = (await snapshot()).filter(x => !x.gone && x.desc);
+      // Im Projekt kommen die Werte aus ResultKit („Laborergebnisse/_Ergebnisse.json“); erfundener Bericht.
+      const ergebnisse = JSON.stringify({ format: 'spektron-ergebnisse', version: 1, projekt: '26.0995', uebernommen: '2026-10-26T10:00:00.000Z', vollstaendig: true, stand: '', offen: [],
+        berichte: [{ id: 'b1', bericht: 'TEST-995', labor: 'Testlabor', auftragsreferenz: '26.0995', sources: { xml: 'Fiktiver-Bericht.xml' }, proben: [{ label: 'P1', ref: 'P1', desc: '', werte: [{ p: 'PAK', r: '2', u: 'mg/kg', loq: '0.1' }] }] }] });
+      await page.evaluate(async text => { const p = await (await navigator.storage.getDirectory()).getDirectoryHandle('26.0995 Nummerierung'); const d = await p.getDirectoryHandle('Laborergebnisse', { create: true });
+        const w = await (await d.getFileHandle('_Ergebnisse.json', { create: true })).createWritable(); await w.write(text); await w.close(); }, ergebnisse);
       await page.locator('#btnLab').click();
-      const xml = `<AnalyticalReport AnalyticalReportCode="TEST-995"><SamplePartner><Description>P1</Description><AnalyticalReportLine><ParameterName>PAK</ParameterName><Result>2</Result><Unit>mg/kg</Unit><LOQ>0.1</LOQ></AnalyticalReportLine></SamplePartner></AnalyticalReport>`;
-      await page.locator('#lFileIn').setInputFiles({ name: 'Fiktiver-Bericht.xml', mimeType: 'application/xml', buffer: Buffer.from(xml) });
+      assert.equal(await page.locator('#lFile').count(), 0, 'im Projekt keine XML direkt');
       await page.locator('#lPrev tbody tr').waitFor();
       assert.equal((await page.locator('#lPrev tbody tr td').last().textContent()).replace(/\s/g, ' '), `Bild ${labExpected.find(x => x.probe === 'P1').nr}`);
       await page.locator('#lClose').click();
