@@ -94,6 +94,8 @@ jobs:
         run: node tests/ci-wiederholen.cjs tests/zeile-geplant-browser.cjs ${{ matrix.browser }}
       - name: Consistent numbering and actual PDF, CSV and ZIP output with 5, 50 and 150 images
         run: node tests/ci-wiederholen.cjs tests/bildnummerierung-browser.cjs ${{ matrix.browser }}
+      - name: Fotos übernehmen and current project in the real browser
+        run: node tests/ci-wiederholen.cjs tests/fotos-uebernehmen-browser.cjs ${{ matrix.browser }}
       - name: Active project context stays consistent across URL, FotoKit and suite navigation
         run: node tests/ci-wiederholen.cjs tests/projektkontext-browser.cjs ${{ matrix.browser }}
       - name: Independent sessions retain complete confirmed photo metadata and explicit recovery
