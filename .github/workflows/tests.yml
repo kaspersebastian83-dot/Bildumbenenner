@@ -44,7 +44,7 @@ jobs:
     name: Browser tests (${{ matrix.browser }})
     # Playwright 1.56.1 supports this image; ubuntu-latest may advance beyond it.
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25   # Browser-Installation braucht bei langsamen Paketspiegeln bis zu ~11 min
     strategy:
       fail-fast: false
       matrix:
@@ -59,7 +59,10 @@ jobs:
         with:
           node-version: 24
       - name: Install Playwright (pinned, not part of the repository)
+        timeout-minutes: 12
         run: |
+          # Mehrere Ubuntu-Spiegel (wie in ResultKit): ein langsamer Spiegel hält die Installation sonst minutenlang auf
+          printf '%s\n' 'https://archive.ubuntu.com/ubuntu' 'https://security.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt
           npm install --no-save --no-package-lock --prefix "$RUNNER_TEMP/pw" playwright@1.56.1
           echo "NODE_PATH=$RUNNER_TEMP/pw/node_modules" >> "$GITHUB_ENV"
           "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps ${{ matrix.browser }}
