@@ -222,6 +222,7 @@ footer{background:var(--panel);border-top:1px solid var(--line);padding:8px 16px
 .pdfOpen{padding:2px 8px;font-size:12.5px}
 .dialog .form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .dialog .form label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.dialog table.imp{border-collapse:collapse;width:100%;margin:10px 0;font-size:13px}.dialog table.imp th,.dialog table.imp td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line)}.dialog table.imp th{color:var(--muted);font-weight:600}
 .dialog .form input{color:var(--text)}
 .dialog .chk{display:flex;align-items:center;gap:6px;font-size:13px}
 .dialog.wide{width:min(900px,96vw)}
@@ -382,6 +383,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
     <div class="toolgroup" role="group" aria-label="Projekt und Fotos">
       <button id="btnOpen" class="primary">Projekt öffnen …</button>
       <button id="btnReload" disabled>Fotos neu einlesen</button>
+      <button id="btnImport" class="primary" hidden>📥 Fotos übernehmen</button>
       <button id="btnMeta" disabled>Projektdaten …</button>
     </div>
     <span class="spacer"></span>
@@ -500,11 +502,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.21.0';
+const APP_VERSION = '1.22.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:64842c078100595425940ecbb22a4a1492a7a963b262f655fed46cb072ea64e2';
-const APP_DATE = '2026-10-26';
+const APP_BUILD = 'sha256:d6f8f7b62d5b378c536ff2250e84ddbcdb2dd8c1ecd7a4aa73475d34db387fb5';
+const APP_DATE = '2026-10-27';
 const CHANGELOG = [
+  ['1.22.0', '27.10.2026', 'Fotos übernehmen: Liegen in „Fotos“ Unterordner der Kollegen mit Fotos (z. B. „Begehung Ben“), zeigt FotoKit oben „📥 Fotos übernehmen“. Die angehakten Unterordner werden nach „Fotos“ verschoben (nicht kopiert), die Dateinamen bleiben; nur bei gleichem Namen kommt das Kürzel aus dem Ordnernamen dazu (IMG_1234_Ben.jpg). Der Ordnername wird auf Wunsch Abschnitt der Fotos, die Herkunft jeder Datei steht in _Bildumbenenner.json. Leere Unterordner bleiben stehen, „_aussortiert“ bleibt außen vor. Immer das aktuelle Projekt: Ohne Projektangabe geöffnet, nimmt FotoKit die Fotos des Projekts, an dem gerade in Spektron gearbeitet wird; „Fotos neu einlesen“ wechselt zu diesem Projekt, wenn in einer anderen App inzwischen ein anderes geöffnet wurde (mit Hinweis beim Zurückkommen). „Projekt öffnen …“ beginnt im Archivordner statt im zuletzt gewählten Ordner.'],
   ['1.21.0', '26.10.2026', 'Projektdaten: Das Schadendatum kann „nicht bekannt“ sein (Knopf neben dem Feld; gespeichert wie in der Projektzentrale als „unbekannt“, auf dem Deckblatt „nicht bekannt“). Das Schadenereignis ist keine Pflichtangabe mehr. Das helle Firmenzeichen auf dem Deckblatt steht jetzt waagrecht mittig. Umbenennen: Scheitert ein Schritt, nachdem Bilder schon ihre Nummern getauscht haben (z. B. erstes Bild ans Ende gezogen), werden alle Namen wieder richtig zurückgesetzt; lässt sich eine Datei nicht zurückbenennen, nennt die Meldung sie. Im Kopiermodus bleibt keine doppelte Kopie liegen, wenn das Original gesperrt ist. „Rückgängig“ überschreibt keine Beschreibung mehr, die nach dem Umbenennen geändert wurde. Bewertungsskala: Eine Kategorie ohne „ab“-Wert wird nicht gespeichert und bewertet keine Werte (vorher landete jeder Wert in ihr). Wiederherstellen einer Projektfassung prüft die Projektnummer jetzt auch bei 2–6-stelligen Nummern richtig. Gemeinsame Skalen: Eine Skala, die geändert wird, während eine andere gerade in die gemeinsame Datei geschrieben wird, geht nicht mehr verloren (wie PlanKit 1.38.0).'],
   ['1.20.1', '26.10.2026', 'Ergebnistabelle: Liefert das Labor denselben Parameter je Probe und je Fläche (Eurofins: Chlorid in µg/Probe und berechnet in mg/m²), steht in der Übersicht immer der Wert je Fläche – wie in ResultKit und PlanKit. Vorher konnte je nach Reihenfolge im Bericht der Wert je Probe in einer eigenen Tabelle landen.'],
   ['1.20.0', '26.10.2026', 'Ergebnistabelle: Chlorid wird bewertet – wie in ResultKit und PlanKit nach VdS 2357 (5–10 µg/cm² korrosionschemisch relevante Größenordnung): unterhalb (< 5), im Bereich (5 – < 10), oberhalb (≥ 10 µg/cm²), unabhängig von der Nutzung. Ältere Berichte in mg/m² mit umgerechneten Grenzen (1 µg/cm² = 10 mg/m²).'],
@@ -1482,7 +1485,7 @@ async function openProject(projDir){
   return openDir(fotos, { dir: projDir, name: projDir.name, nr: p ? p.nr : '', ort: p ? p.ort : '' });
 }
 /* called with ?projekt=<Ordnername> from Projektzentrale */
-async function openFromZentrale(name){
+async function openFromZentrale(name, quelle = 'aus der Projektzentrale'){
   let archiv = null;
   try{ archiv = await SUITE.get('archiv'); }catch(e){}
   if (!archiv){ banner('err', `Projekt „${esc(name)}“: Der Archivordner ist in diesem Browser nicht bekannt. Bitte in der Projektzentrale einmal den Archivordner wählen – oder hier „Projekt öffnen …“.`); return; }
@@ -1494,11 +1497,133 @@ async function openFromZentrale(name){
   };
   const st = await archiv.queryPermission({ mode: 'readwrite' }).catch(() => 'prompt');
   if (st === 'granted'){ await go(); return; }
-  banner('info', `Projekt <b>${esc(name)}</b> aus der Projektzentrale <button class="primary" id="btnZentrale">Zugriff erlauben und öffnen</button>`);
+  banner('info', `Projekt <b>${esc(name)}</b> ${esc(quelle)} <button class="primary" id="btnZentrale">Zugriff erlauben und öffnen</button>`);
   $('btnZentrale').onclick = async () => {
     const r = await archiv.requestPermission({ mode: 'readwrite' }).catch(() => 'denied');
     if (r === 'granted') await go(); else banner('err', 'Ohne Zugriff auf den Archivordner kann das Projekt nicht geöffnet werden.');
   };
+}
+
+/* ---------- aktuelles Spektron-Projekt ----------
+   Das Projekt, an dem gerade gearbeitet wird, steht in allen Apps vorn in der gemeinsamen Liste „zuletzt“ (Spektron-Leiste).
+   FotoKit nimmt dessen Ordner „Fotos“: beim Start ohne Projektangabe, bei „Fotos neu einlesen“ und als Hinweis, wenn in
+   einer anderen App inzwischen ein anderes Projekt geöffnet wurde – nie stillschweigend einen alten Ordner. */
+async function aktuellesProjekt(){
+  try{ const z = await SUITE.get('zuletzt'); return Array.isArray(z) && typeof z[0] === 'string' && parseProjName(z[0]) ? z[0] : ''; }catch(e){ return ''; }
+}
+const gleichesProjekt = (a, b) => String(a || '').normalize('NFC') === String(b || '').normalize('NFC');
+let projektHinweisFuer = '';
+async function projektWechselPruefen(){
+  if (!S.proj || S.busy || S.changing) return;
+  const akt = await aktuellesProjekt();
+  if (!akt || gleichesProjekt(akt, S.proj.name) || gleichesProjekt(akt, projektHinweisFuer)) return;
+  projektHinweisFuer = akt;
+  banner('info', `In Spektron arbeitest du gerade an <b>${esc(akt)}</b> – hier ist noch <b>${esc(S.proj.name)}</b> geöffnet. <button class="primary" id="bZuAktuell">Fotos von ${esc(akt)} öffnen</button>`);
+  $('bZuAktuell').onclick = () => { hideBanner(); openFromZentrale(akt, '(gerade in Spektron geöffnet)'); };
+}
+// Vor der Spektron-Leiste registriert: sie setzt beim Fokus das hier offene Projekt wieder nach vorn – gelesen wird vorher.
+window.addEventListener('focus', () => { projektWechselPruefen(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) projektWechselPruefen(); });
+
+/* ---------- Fotos übernehmen (Unterordner der Mitarbeiter) ----------
+   Liegen in „Fotos“ Unterordner mit Bildern (z. B. „Begehung Ben“), bietet FotoKit an, sie in „Fotos“ zu übernehmen:
+   Die Dateien werden verschoben (nicht kopiert), Namen bleiben; nur bei gleichem Namen kommt das Kürzel (bzw. der
+   Ordnername) dazu. Der Ordnername wird auf Wunsch Abschnitt der Fotos. Jede Übernahme steht mit Herkunft je Datei in
+   „_Bildumbenenner.json“ („fotoUebernahmen“). Unterordner werden nicht gelöscht; „_…“-Ordner von FotoKit bleiben außen vor. */
+const FOTO_UEBERNAHME_MAX = 3000;
+function ordnerKuerzel(name){
+  const n = name.normalize('NFC').trim(), kz = (MA_PERSONEN || []).map(p => p.ordnerKuerzel.trim()).filter(Boolean).sort((a, b) => b.length - a.length);
+  for (const k of kz){ const l = k.toLowerCase(), t = n.toLowerCase(); if (t === l || t.endsWith(' ' + l) || t.endsWith('_' + l) || t.endsWith('-' + l)) return k; }
+  const m = /(?:^|[\s_-])((?:Dr\.?\s?)?[A-ZÄÖÜ][A-Za-zÄÖÜäöüß]{1,3})$/.exec(n);
+  return m ? m[1] : '';
+}
+async function fotoUnterordner(){
+  const out = [];
+  if (!S.dir) return out;
+  for await (const d of S.dir.values()){
+    if (d.kind !== 'directory' || d.name.startsWith('_') || d.name.startsWith('.')) continue;
+    const files = [];
+    try{
+      for await (const h of d.values()){
+        if (h.kind !== 'file' || h.name.startsWith(TMP_PREFIX) || h.name.startsWith('~umb_')) continue;
+        if (!IMG_EXT.includes(extOf(h.name).slice(1).toLowerCase())) continue;
+        const f = await h.getFile(); files.push({ name: h.name, size: f.size, lm: f.lastModified });
+        if (files.length > FOTO_UEBERNAHME_MAX) break;
+      }
+    }catch(e){ continue; }
+    files.sort((x, y) => x.name.localeCompare(y.name, 'de', { numeric: true }));
+    if (files.length) out.push({ name: d.name, handle: d, files, kuerzel: ordnerKuerzel(d.name) });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name, 'de', { numeric: true }));
+}
+async function fotoUebernahmeKnopf(){
+  const b = $('btnImport'); if (!b) return;
+  let n = 0, f = 0;
+  try{ if (S.dir && !P.readOnly){ const o = await fotoUnterordner(); n = o.length; f = o.reduce((a, x) => a + x.files.length, 0); } }catch(e){}
+  b.hidden = !n; b.textContent = `📥 Fotos übernehmen (${f})`;
+  b.title = n ? `${n} Unterordner in „${FOTOS_DIR}“ mit zusammen ${f} Fotos – in „${FOTOS_DIR}“ übernehmen` : '';
+  if (n && !S.items.length) banner('info', `In „${esc(FOTOS_DIR)}“ liegen die Fotos noch in ${n} Unterordner${n === 1 ? '' : 'n'} (${f} Fotos). <button class="primary" id="bImportBanner">Fotos übernehmen …</button>`), $('bImportBanner').onclick = fotoUebernahmeDialog;
+}
+const zeitraum = fs => { const t = fs.map(f => f.lm).filter(Boolean).sort((a, b) => a - b); if (!t.length) return ''; const a = fmtDate(new Date(t[0])), z = fmtDate(new Date(t[t.length - 1])); return a === z ? a : `${a} – ${z}`; };
+async function fotoUebernahmeDialog(){
+  if (!S.dir || S.busy || S.changing) return;
+  if (P.readOnly){ banner('err', esc(PROTECTED_PROJECT)); return; }
+  const ordner = await fotoUnterordner();
+  if (!ordner.length){ banner('info', `In „${esc(FOTOS_DIR)}“ liegen keine Unterordner mit Fotos.`); fotoUebernahmeKnopf(); return; }
+  showDialog(`<h3>Fotos übernehmen</h3>
+    <div class="body">
+      <p>Diese Unterordner in „${esc(FOTOS_DIR)}“ enthalten Fotos. Angehakte werden nach „${esc(FOTOS_DIR)}“ <b>verschoben</b> (nicht kopiert) – die Dateinamen bleiben.
+      Gibt es einen Namen schon, kommt das Kürzel dazu (z. B. <code>IMG_1234_Ben.jpg</code>). Die leeren Unterordner bleiben stehen.</p>
+      <table class="imp"><thead><tr><th></th><th>Unterordner</th><th>Kürzel</th><th>Fotos</th><th>Zeitraum (Dateidatum)</th></tr></thead><tbody>
+      ${ordner.map((o, i) => `<tr><td><input type="checkbox" class="impChk" data-i="${i}" checked aria-label="${esc(o.name)} übernehmen"></td><td>${esc(o.name)}</td><td>${esc(o.kuerzel || '–')}</td><td>${o.files.length}${o.files.length > FOTO_UEBERNAHME_MAX ? '+' : ''}</td><td>${esc(zeitraum(o.files))}</td></tr>`).join('')}
+      </tbody></table>
+      <label class="chk"><input type="checkbox" id="impSec" checked> Ordnername als Abschnitt der Fotos eintragen (lässt sich danach je Foto ändern)</label>
+      <div class="m" id="impInfo"></div>
+    </div>
+    <div class="btns"><span class="spacer"></span><button id="impCancel">Abbrechen</button><button class="primary" id="impOk">Übernehmen</button></div>`);
+  const zaehlen = () => { const w = [...document.querySelectorAll('.impChk')].filter(c => c.checked).map(c => ordner[+c.dataset.i]); const n = w.reduce((a, o) => a + o.files.length, 0); $('impOk').disabled = !n; $('impOk').textContent = n ? `${n} Fotos übernehmen` : 'Übernehmen'; return w; };
+  document.querySelectorAll('.impChk').forEach(c => c.onchange = zaehlen); zaehlen();
+  $('impCancel').onclick = closeDialog;
+  $('impOk').onclick = async () => { const w = zaehlen(), sec = $('impSec').checked; closeDialog(); await fotoUebernehmen(w, sec); };
+}
+async function fotoUebernehmen(ordner, alsAbschnitt){
+  if (!ordner.length) return;
+  let ok = 0; const fehler = [], log = [];
+  await withSavedProject('Das Übernehmen der Fotos', async () => {
+    S.busy = true;
+    try{
+      const belegt = new Set();
+      for await (const h of S.dir.values()) belegt.add(h.name.normalize('NFC').toLowerCase());
+      const zeit = new Date().toISOString();
+      const extra = P.data.extra || (P.data.extra = {});
+      let i = 0; const gesamt = ordner.reduce((a, o) => a + o.files.length, 0);
+      for (const o of ordner){
+        const dateien = [], zusatz = (o.kuerzel || o.name).replace(/[\\/:*?"<>|.]+/g, ' ').trim().replace(/\s+/g, '_');
+        for (const f of o.files){
+          banner('info', `Fotos werden übernommen … ${++i} von ${gesamt}`);
+          const ext = extOf(f.name), stamm = f.name.slice(0, f.name.length - ext.length);
+          let ziel = f.name;
+          for (let k = 1; belegt.has(ziel.normalize('NFC').toLowerCase()); k++) ziel = `${stamm}_${zusatz}${k > 1 ? '_' + k : ''}${ext}`;   // „…_Ben.jpg“, dann „…_Ben_2.jpg“ usw.
+          try{
+            await moveBetween(o.handle, S.dir, f.name, ziel);
+            belegt.add(ziel.normalize('NFC').toLowerCase()); ok++;
+            dateien.push(ziel === f.name ? { datei: ziel } : { datei: ziel, vorher: f.name });
+            if (alsAbschnitt && !(extra[ziel] && extra[ziel].sec)) extra[ziel] = { sec: o.name, probe: (extra[ziel] && extra[ziel].probe) || '' };
+          }catch(e){ fehler.push(`${o.name}/${f.name}: ${e.message}`); }
+        }
+        if (dateien.length) log.push({ zeit, ordner: o.name, ...(o.kuerzel ? { kuerzel: o.kuerzel } : {}), dateien });
+      }
+      if (log.length){
+        const ext = P.data.extensions || (P.data.extensions = {});
+        ext.fotoUebernahmen = [...(Array.isArray(ext.fotoUebernahmen) ? ext.fotoUebernahmen : []), ...log];
+        scheduleProjSave();
+      }
+    }finally{ S.busy = false; }
+    await loadItems();
+  });
+  await fotoUebernahmeKnopf();
+  if (fehler.length) banner('err', `${ok} Fotos übernommen, ${fehler.length} nicht: ${fehler.slice(0, 3).map(esc).join(' · ')}${fehler.length > 3 ? ' …' : ''} – diese liegen weiter im Unterordner.`);
+  else banner('ok', `${ok} Fotos aus ${log.length} Unterordner${log.length === 1 ? '' : 'n'} übernommen. Die Herkunft jeder Datei steht in „_Bildumbenenner.json“.`);
 }
 
 /* ---------- open folder ---------- */
@@ -1507,7 +1632,9 @@ if (!supported){ $('support').style.display = 'block'; $('btnOpen').disabled = t
 
 async function pickFolder(){
   try{
-    const dir = await window.showDirectoryPicker({ mode:'readwrite', id:'bildumbenenner' });
+    // im Archivordner beginnen (Projektliste) statt im zuletzt gewählten Ordner – der war oft der „Fotos“-Ordner eines alten Projekts
+    let startIn; try{ const a = await SUITE.get('archiv'); if (a && (await a.queryPermission({ mode: 'read' })) === 'granted') startIn = a; }catch(e){}
+    const dir = await window.showDirectoryPicker({ mode:'readwrite', id:'bildumbenenner', ...(startIn ? { startIn } : {}) });
     await openDir(dir);
   }catch(e){ if (e.name !== 'AbortError') banner('err', 'Ordner konnte nicht geöffnet werden: ' + esc(e.message)); }
 }
@@ -1561,7 +1688,9 @@ async function openDir(dir, proj = null){
       $('btnVersions').disabled = false;
       $('btnLab').disabled = false; LAB.rep = null; LAB.err = ''; LAB.manuell = false; LAB.geladen = '';
       loadBohrkernZuordnung();   // LabelKit-Proben für Vorschläge und Bohrkern-Zuordnung – im Hintergrund, blockiert das Öffnen nie
+      projektHinweisFuer = '';
       if (note) banner(P.readOnly ? 'err' : 'info', note);
+      fotoUebernahmeKnopf();   // Unterordner der Mitarbeiter mit Fotos? – im Hintergrund
     }catch(e){
       clearTimeout(P.timer); clearTimeout(PJ.timer);
       const replaced = S.items !== previous.state.items;
@@ -4249,7 +4378,8 @@ const HELP_HTML = `
 </ul>
 <h4>In 5 Schritten zur Bilddokumentation</h4>
 <ol>
-  <li><b>Projekt öffnen:</b> in der Projektzentrale „Fotos &amp; Dokumentation“ – oder hier „Projekt öffnen …“ und den Projektordner (z. B. <code>26.0123 Köln</code>) wählen. Oben in der blauen Leiste stehen dann Projektnummer und Ort. Wurde nur der Ordner <code>Fotos</code> gewählt, oben „Projekt zuordnen …“ klicken. Neue Fotos in diesen Ordner kopieren und „Fotos neu einlesen“ wählen.</li>
+  <li><b>Projekt öffnen:</b> in der Projektzentrale „Fotos &amp; Dokumentation“ – oder hier „Projekt öffnen …“ und den Projektordner (z. B. <code>26.0123 Köln</code>) wählen. Oben in der blauen Leiste stehen dann Projektnummer und Ort. Wurde nur der Ordner <code>Fotos</code> gewählt, oben „Projekt zuordnen …“ klicken. Neue Fotos in diesen Ordner kopieren und „Fotos neu einlesen“ wählen – das liest immer die Fotos des Projekts, an dem gerade in Spektron gearbeitet wird. Ohne Projektangabe geöffnet, nimmt FotoKit dieses Projekt gleich selbst.</li>
+  <li><b>Fotos übernehmen:</b> Haben Kollegen ihre Fotos in Unterordnern von <code>Fotos</code> abgelegt (z. B. <code>Begehung Ben</code>), erscheint oben „📥 Fotos übernehmen“. Angehakte Unterordner werden nach <code>Fotos</code> verschoben (nicht kopiert), die Dateinamen bleiben – nur bei gleichem Namen kommt das Kürzel dazu. Der Ordnername wird auf Wunsch Abschnitt; die Herkunft jeder Datei steht in <code>_Bildumbenenner.json</code>. Die leeren Unterordner bleiben stehen.</li>
   <li><b>Dateibenennung:</b> „Dateibenennung ▸“ klappt Benennung und weitere Einstellungen auf, mit Beispiel-Dateinamen. Die Bildnummer zählt aktive Bilder in Listenreihenfolge ab 1; die Dateinummer folgt derselben Position mit der eingestellten Startnummer. Ohne Beschreibung bleibt der Dateiname erhalten. Sortieren ändert keine Dateien: Geplante Namen werden erst mit „Ausführen“ und „Jetzt ausführen“ übernommen.</li>
   <li><b>Bilder beschreiben:</b> links ein Bild anklicken, rechts erscheint die Vorschau. Beschreibung eintippen, <kbd>Enter</kbd> springt zum nächsten Bild. Darunter optional <b>Abschnitt</b> (z. B. „Küche“ – gilt für die folgenden Bilder mit) und <b>Probe-Nr.</b> (z. B. „P1“).</li>
   <li><b>Aufräumen:</b> unbrauchbare Bilder mit ✕ aussortieren (sie wandern ans Ende, nichts wird gelöscht). Reihenfolge per Ziehen ändern oder mit Sortierung „nach Abschnitt (Begehung)“ nach Räumen ordnen, schiefe Bilder mit ↻ drehen.</li>
@@ -4365,7 +4495,13 @@ $('btnPdf').onclick = openPdfDialog;
 $('btnVersions').onclick = openPhotoVersions;
 $('btnMeta').onclick = () => openMetaDialog(false);
 $('btnOpen2').onclick = pickFolder;
+$('btnImport').onclick = fotoUebernahmeDialog;
 $('btnReload').onclick = async () => {
+  // Fotos des Projekts, an dem gerade gearbeitet wird (in einer anderen App gewechselt?) – sonst diesen Ordner neu lesen
+  // beim Zurückkommen erkannt (die Leiste dieses Fensters stellt danach ihr eigenes Projekt wieder nach vorn)
+  // (ohne weiteres Warten: das Speichern der laufenden Eingaben beginnt sofort)
+  const akt = S.proj && projektHinweisFuer && !gleichesProjekt(projektHinweisFuer, S.proj.name) ? projektHinweisFuer : '';
+  if (akt){ hideBanner(); return openFromZentrale(akt, '(gerade in Spektron geöffnet)'); }
   return withSavedProject('Das erneute Einlesen', async () => {
     S.lastRun = null; hideBanner();
     const note = await loadProject(S.dir);      // picks up changes a coworker saved meanwhile
@@ -4373,7 +4509,7 @@ $('btnReload').onclick = async () => {
     await loadItems();
     await recoveryOpened(); // N3 recovery hook
     if (note) banner(P.readOnly ? 'err' : 'info', note);
-  });
+  }).then(r => { fotoUebernahmeKnopf(); return r; });
 };
 $('sort').onchange = () => {
   if ($('sort').value === 'section'){
@@ -4422,6 +4558,7 @@ updateExample();
 {
   const projekt = PROJEKT_URL.projekt;
   if (projekt && supported) openFromZentrale(projekt);
+  else if (supported) aktuellesProjekt().then(akt => { if (akt && !S.dir) openFromZentrale(akt, '(gerade in Spektron geöffnet)'); });
 }
 })();
 </script>
