@@ -30,7 +30,10 @@ One shared logo image/soft mask per PDF; header width 36 pt, watermark width
 258 pt, opacity 0.035. The watermark is painted behind all body content and photos.
 Combined compressed image/alpha streams occupy 40020 bytes per file, independent
 of page count. Branding and readable text add bounded overhead; PDFs are not
-claimed to have identical total sizes to main. Image JPEG bytes are identical.
+claimed to have identical total sizes to main.
+Since 1.23.0 each photo is encoded for its frame on the page (frame size x
+chosen dpi: 150/220/300, JPEG 70/75/80 %), independent of the ZIP settings,
+never upscaled; JPEG bytes therefore differ from main (smaller).
 
 Verification
 node tests/pdf-layout.cjs

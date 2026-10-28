@@ -2,11 +2,18 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.22.1** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.23.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
 Die Webadresse, die Projektdatei `_Bildumbenenner.json` und die gespeicherten Einstellungen behalten den alten Namen – so funktionieren bestehende Projekte, Lesezeichen und installierte Apps weiter. Die aktuelle Version steht oben links in der blauen Kopfzeile (Klick darauf: Änderungen, Problem melden). Daneben öffnet „? Kurzanleitung“ (oder F1) die Kurzanleitung – auch zum Ausdrucken.
+
+## Neu in 1.23.0 · 28.10.2026 – deutlich kleinere PDFs
+
+- Jedes Bild wird nur noch so groß gerechnet, wie es im PDF tatsächlich erscheint (Rahmengröße × gewählte Auflösung), statt pauschal auf 2000 px. Kleine Bilder werden nie hochgerechnet.
+- Neue Auswahl **„Bildqualität“** im PDF-Dialog: **E-Mail** (150 dpi, JPEG 70 %), **Standard** (220 dpi, JPEG 75 %, voreingestellt), **Detail** (300 dpi, JPEG 80 %, Reserve zum Hineinzoomen).
+- Messung mit 20 Fotos in Kameragröße (2 pro Seite): bisher 7,6 MB → E-Mail 0,9 MB · Standard 1,8 MB · Detail 3,8 MB.
+- „Bilder verkleinern“ (lange Kante, JPEG-Qualität) steht nur noch im ZIP-Dialog und gilt nur für das ZIP. Originale im Ordner bleiben wie immer unverändert.
 
 ## Neu in 1.16.0 · 25.10.2026 – Beschreibungen schneller
 
