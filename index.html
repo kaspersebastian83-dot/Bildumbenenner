@@ -503,11 +503,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.24.1';
+const APP_VERSION = '1.24.2';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:ea768dc158b60ac07f24210be26872d05edb0df2572a8994460bf9a725a0b08e';
+const APP_BUILD = 'sha256:6c6ec8da82686d42853006b77ac1bf28a624a5111ee6c7a090a5cc92526c1e51';
 const APP_DATE = '2026-10-28';
 const CHANGELOG = [
+  ['1.24.2', '28.10.2026', 'Leiste oben: die Haken für Proben, Fotos, Ergebnisse, Plan und Abrechnung finden die App-Daten auch im künftigen Ordner „_Spektron“ (spektron-ordner.js). Keine sichtbare Änderung.'],
   ['1.24.1', '28.10.2026', 'Gemeinsames Modul spektron-ordner.js: Unterordner werden zuerst direkt mit ihrem Namen gesucht (wie überall sonst in den Apps), erst dann ohne Groß-/Kleinschreibung. Keine sichtbare Änderung.'],
   ['1.24.0', '28.10.2026', 'Vorbereitung „Spektron-Ordner“: Die App-Daten eines Projekts ziehen später in den Unterordner „_Spektron“ (Fotos, Bilddokumentation und „_aussortiert“ bleiben im Ordner „Fotos“). FotoKit findet seine Projektdatei, die gemeinsamen Projektdaten, Prüfsummen-Protokolle und die Daten von LabelKit, ResultKit und PlanKit jetzt an beiden Orten. Bis zum Umzug ändert sich nichts.'],
   ['1.23.0', '28.10.2026', 'Kleinere PDFs: Jedes Bild wird nur so groß gerechnet, wie es auf der Seite erscheint, statt pauschal 2000 px. Neue Auswahl „Bildqualität“ im PDF-Dialog: E-Mail (150 dpi), Standard (220 dpi, voreingestellt), Detail (300 dpi, Reserve zum Hineinzoomen). Bei 2 Bildern pro Seite wird das PDF damit typischerweise rund drei Viertel kleiner, ohne sichtbaren Schärfeverlust. Die ZIP-Einstellungen gelten nur noch für das ZIP; Originale bleiben unverändert.'],
@@ -4758,26 +4759,28 @@ updateExample();
       try{ for await (var e of arch.values()) if (e.kind === 'directory' && nfc(e.name) === nfc(name)){ proj = e; break; } }catch(e2){}
     }
     if (!proj) return null;
+    /* Spektron-Ordner (spektron-ordner.js, falls geladen): App-Daten künftig in „_Spektron/…“; sonst wie bisher. */
+    async function bereich(b, alt){ var SO = window.SpektronOrdner; if (SO) try{ return (await SO.ort(proj, b)).dir; }catch(eb){} return alt ? unterordner(proj, alt) : proj; }
     var s = { label: false, fotos: false, ergebnis: false, plan: false, beleg: false, objekt: '', anzeige: '', person: '' }, zust = null;
     var activeData = window.SpektronProjectData && window.SpektronProjectData(name);
     if (activeData){ var activeObjekt = typeof activeData.data.objekt === 'string' ? activeData.data.objekt : activeData.data.daten && activeData.data.daten.objekt; if (typeof activeObjekt === 'string') s.objekt = activeObjekt.trim(); zust = activeData.data.zustaendig; }
     else try{
-      var pj = await proj.getFileHandle('_Projekt.json').then(function(f){ return f.getFile(); }).then(function(f){ return f.text(); }).catch(function(){ return ''; });
+      var pj = await ((await bereich('projekt', '')) || proj).getFileHandle('_Projekt.json').then(function(f){ return f.getFile(); }).then(function(f){ return f.text(); }).catch(function(){ return ''; });
       if (pj){ var j = JSON.parse(pj), o = j && (typeof j.objekt === 'string' ? j.objekt : j.daten && j.daten.objekt); if (typeof o === 'string') s.objekt = o.trim(); zust = j && j.zustaendig; }   // Projektzentrale schreibt die Felder direkt in _Projekt.json (ältere Testdateien: unter „daten“)
     }catch(e3){}
     await personUndAnzeige(arch, s, zust);
-    try{ var fo = await unterordner(proj, 'Fotos'); if (fo) s.fotos = await fo.getFileHandle('_Bildumbenenner.json').then(function(){ return true; }, function(){ return false; }); }catch(e4){}
+    try{ var fo = await bereich('fotokit', 'Fotos'); if (fo) s.fotos = await fo.getFileHandle('_Bildumbenenner.json').then(function(){ return true; }, function(){ return false; }); }catch(e4){}
     try{
-      var la = await unterordner(proj, 'Laboraufträge');
+      var la = await bereich('labelkit', 'Laboraufträge');
       if (la) for await (var f of la.values()) if (f.kind === 'file' && /_Daten\.json$/i.test(f.name)){ s.label = true; break; }
     }catch(e5){}
-    try{ var le = await unterordner(proj, 'Laborergebnisse'); if (le) s.ergebnis = await le.getFileHandle('_Ergebnisse.json').then(function(){ return true; }, function(){ return false; }); }catch(e8){}   // ResultKit: geprüfte Ergebnisse übernommen
+    try{ var le = await bereich('resultkit', 'Laborergebnisse'); if (le) s.ergebnis = await le.getFileHandle('_Ergebnisse.json').then(function(){ return true; }, function(){ return false; }); }catch(e8){}   // ResultKit: geprüfte Ergebnisse übernommen
     try{
-      var pl = await unterordner(proj, 'Pläne');
+      var pl = await bereich('plankit', 'Pläne');
       if (pl) for await (var g of pl.values()) if (g.kind === 'file' && /\.probenplan$/i.test(g.name) && !/ \((vorher|Wiederherstellung|Speicherkandidat|Kopie)\b[^)]*\)\.probenplan$/i.test(g.name)){ s.plan = true; break; }
     }catch(e6){}
     try{
-      var ab = await unterordner(proj, 'Abrechnung');
+      var ab = await bereich('belegkit', 'Abrechnung');
       if (ab) for await (var k of ab.values()) if (k.kind === 'file' && /_Aufwand_.*\.json$/i.test(k.name)){ s.beleg = true; break; }
     }catch(e7){}
     return s;
