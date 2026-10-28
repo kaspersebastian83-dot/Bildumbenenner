@@ -505,7 +505,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.24.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:fb808364bd22fbc773303c6679d1875986eca2b500a6ff2484e8db87284ff9f1';
+const APP_BUILD = 'sha256:397806c65f98063951cc9b52d1f54ce61c8733befaddc1659f25bbae733704cc';
 const APP_DATE = '2026-10-28';
 const CHANGELOG = [
   ['1.24.0', '28.10.2026', 'Vorbereitung „Spektron-Ordner“: Die App-Daten eines Projekts ziehen später in den Unterordner „_Spektron“ (Fotos, Bilddokumentation und „_aussortiert“ bleiben im Ordner „Fotos“). FotoKit findet seine Projektdatei, die gemeinsamen Projektdaten, Prüfsummen-Protokolle und die Daten von LabelKit, ResultKit und PlanKit jetzt an beiden Orten. Bis zum Umzug ändert sich nichts.'],
@@ -887,7 +887,7 @@ async function refreshPJ(){
   await PJ.writing;
   if (S.changing || Object.keys(PJ.pending).length) return;
   let fresh;
-  try{ fresh = await readPJ(proj.dir); }catch(e){ return; }
+  try{ fresh = await readPJ(proj.pjDir || proj.dir); }catch(e){ return; }
   if (S.changing || S.proj !== proj || Object.keys(PJ.pending).length) return;
   const changed = PJ_MAP.some(([, pk]) => (fresh[pk] || '').trim() !== (PJ.sent[pk] || ''));
   PJ.data = fresh;
@@ -1295,7 +1295,15 @@ async function readPJ(projDir){
    Wo liegen die App-Daten? Künftig in „<Projekt>/_Spektron/…“. Solange ein Projekt keinen „_Spektron“-Ordner hat und
    UMSTELLUNG aus ist, liefert SpektronOrdner.ort() den bisherigen Ort – also genau das bisherige Verhalten:
    _Projekt.json im Projektordner, _Bildumbenenner.json und _FotoKit_Fassungen im Fotos-Ordner. */
-const SO = window.SpektronOrdner;
+/* Falls spektron-ordner.js nicht geladen wurde (z. B. veralteter Offline-Zwischenspeicher): überall der bisherige Ort. */
+const SO_ALT = { projekt: [], fotokit: ['Fotos'], fotokitPruefsummen: ['Fotos'], labelkit: ['Laboraufträge'], labelkitAblage: ['Feldprotokolle'],
+  resultkit: ['Laborergebnisse'], plankit: ['Pläne'], belegkit: ['Abrechnung'], buero: ['_Buero'], anlagenProtokoll: ['Mitteilungen'] };
+const SO = window.SpektronOrdner || { ORDNER: '_Spektron', AB: '26.0560', projektKey: () => null, istSpektronProjekt: async () => false, umzugListe: async () => [],
+  async ort(projDir, bereich, o){ let d = projDir; const pfad = SO_ALT[bereich] || [];
+    for (const teil of pfad){ let h = null; for await (const x of d.values()) if (x.kind === 'directory' && x.name.normalize('NFC').toLowerCase() === teil.toLowerCase()){ h = x; break; }
+      if (!h && !(o && o.anlegen)) return { dir: null, wo: 'alt', pfad: pfad.join('/'), konflikt: false, umgezogen: false, bereich };
+      d = h ? await d.getDirectoryHandle(h.name) : await d.getDirectoryHandle(teil, { create: true }); }
+    return { dir: d, wo: 'alt', pfad: pfad.join('/'), konflikt: false, umgezogen: false, bereich }; } };
 /** Ordner eines Bereichs im Projekt; am neuen Ort wird er bei Bedarf angelegt (dann gibt es „_Spektron“ ja schon). */
 async function spektronOrt(projDir, bereich){
   const r = await SO.ort(projDir, bereich);
@@ -4237,7 +4245,7 @@ async function findLabFiles(){
   }
   LAB.files.sort((a, b) => b.mod - a.mod);
   // Neueste LabelKit-Datei gehört zum Stand der Übernahme (wie in ResultKit)
-  const lk = await SO.ort(S.proj.dir, 'labelkit').catch(() => ({ dir: null })), la = lk.dir, laPfad = lk.wo === 'neu' ? lk.pfad : 'Laboraufträge';   // Pfad wie in ResultKit
+  const la = (await SO.ort(S.proj.dir, 'labelkit').catch(() => ({ dir: null }))).dir, laPfad = 'Laboraufträge';   // feste Kennung wie in ResultKit – bleibt nach dem Umzug gleich
   if (la){ let neu = null; for await (const h of la.values()) if (h.kind === 'file' && /_Daten\.json$/i.test(h.name)){ const f = await h.getFile(); if (!neu || f.lastModified > neu.t) neu = { name: laPfad + '/' + h.name, size: f.size, t: f.lastModified }; } if (neu) stand.push(neu); }
   LAB.stand = standKennung(stand);
 }
