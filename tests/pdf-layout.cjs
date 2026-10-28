@@ -46,7 +46,7 @@ function assertLongText(text){
 }
 async function run(){
  const jpeg=Buffer.from([255,216,255,217]);let calls=[];
- const build=harness(async(f,r,e,q)=>{calls.push([f.i,r,e,q]);return{data:jpeg,w:f.i%2?600:1200,h:f.i%2?1200:600};});let cases=0;
+ const build=harness(async(f,r,e,q,fit)=>{calls.push([f.i,r,e,q,fit]);return{data:jpeg,w:f.i%2?600:1200,h:f.i%2?1200:600};});let cases=0;
  const test=async(title,fn)=>{await fn();cases++;console.log('OK PDF: '+title);};
  for(const n of[1,5,50,150])await test(n+' photos; two orientations, shared logo, page numbers, original JPEG bytes',async()=>{const m=meta(),its=items(n),before=JSON.stringify(its),r=await build(m,its,()=>{});assert.equal(r.parts.length,1);const p=check(await r.parts[0].blob.arrayBuffer(),its.map(i=>i.docNr));assert.equal(p.photos.length,n);for(const b of p.photos)assert.deepEqual(b,jpeg);assert.equal(JSON.stringify(its),before);assert.ok(p.b.length<60000+n*8000,'Bounded logo and layout overhead');});
  await test('Selected document numbers and one photo per page',async()=>{const m=meta();m.pdf.perPage=1;const a=items(3);a.forEach((i,k)=>i.docNr=[1,3,7][k]);const r=await build(m,a,()=>{});const p=check(await r.parts[0].blob.arrayBuffer(),[1,3,7]);assert.ok(p.pages.every(p=>(p.ops.match(/\/Im\d+ Do/g)||[]).length<=1));});
@@ -60,7 +60,15 @@ async function run(){
  }
 });
  await test('Very long cover facts continue line by line on following pages (nothing below the page)',async()=>{const m=meta();m.ereignis=('Schadenereignis '.repeat(900))+'ENDEEREIGNIS';m.sv=('Sachverständiger '.repeat(700))+'ENDESV';const r=await build(m,items(2),()=>{}),p=check(await r.parts[0].blob.arrayBuffer(),[1,2]),t=p.pages.flatMap(p=>p.text).join(' ');assert.ok(t.includes('ENDEEREIGNIS')&&t.includes('ENDESV'),'Ende beider Angaben im PDF');const n=t.split('Schadenereignis').length-1;assert.ok(n>=900,'keine Zeile verloren: '+n);});
- await test('Existing image preparation options unchanged',async()=>{calls=[];const m=meta();m.img={shrink:true,edge:2000,q:80};await build(m,items(1),()=>{});assert.deepEqual(calls,[[0,0,2000,.8]]);calls=[];m.img.shrink=false;await build(m,items(1),()=>{});assert.deepEqual(calls,[[0,0,null,.92]]);});
+ await test('PDF photos sized to their frame at the chosen dpi; ZIP options ignored',async()=>{
+  const fitOf=async(dpi,perPage=2)=>{calls=[];const m=meta();m.img={shrink:true,edge:2000,q:80};m.pdf.dpi=dpi;m.pdf.perPage=perPage;await build(m,items(2),()=>{});return calls;};
+  const std=await fitOf(undefined),c150=await fitOf(150),c300=await fitOf(300),one=await fitOf(220,1);
+  // Standard 220 dpi, JPEG 75 %, no fixed edge; frame width = text column (481.9 pt)
+  for(const c of std){assert.equal(c[2],null);assert.equal(c[3],.75);assert.equal(c[4].w,Math.round((595.28-2*56.69)/72*220));assert.ok(c[4].h>500&&c[4].h<c[4].w,'two per page: frame wider than tall');}
+  assert.deepEqual(c150.map(c=>c[3]),[.7,.7]);assert.deepEqual(c300.map(c=>c[3]),[.8,.8]);
+  assert.ok(c150[0][4].w<std[0][4].w&&std[0][4].w<c300[0][4].w,'dpi scales the pixel box');
+  assert.ok(one[0][4].h>std[0][4].h*1.5,'one per page: taller frame');
+ });
  await test('Unreadable image produces visible placeholder and preserves list number',async()=>{const a=items(1);a[0].final='X'.repeat(5000)+'ENDEDATENAME';const r=await harness(async()=>null)(meta(),a,()=>{});assert.equal(r.failed.length,1);const p=check(await r.parts[0].blob.arrayBuffer(),[]);assert.ok(p.pages.flatMap(p=>p.text).join(' ').includes('Bilddatei'));assert.ok(p.pages.flatMap(p=>p.text).includes('Bild 1'));assert.ok(p.pages.flatMap(p=>p.text).join(' ').includes('ENDEDATENAME'),'Full filename retained in flowing details');});
  await test('Real byte limit splits parts; no photo lost',async()=>{const m=meta();m.pdf.maxMB=1;const a=items(8),r=await harness(async()=>({data:Buffer.alloc(240000),w:800,h:600}))(m,a,()=>{});assert.ok(r.parts.length>1);let total=0;for(const p of r.parts){assert.ok(p.blob.size<=1e6);total+=parse(await p.blob.arrayBuffer()).photos.length;}assert.equal(total,8);});
  console.log(cases+' PDF Node regressions passed');

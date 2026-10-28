@@ -502,11 +502,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.22.1';
+const APP_VERSION = '1.23.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:ebc797a302bd069ea7968cd02f3574ee52b4caff83265e71b30237587068c197';
+const APP_BUILD = 'sha256:173a8f2ae04c45a10e2ee588201e487b8b4f3285f9277478dc5c0addd9c2e140';
 const APP_DATE = '2026-10-27';
 const CHANGELOG = [
+  ['1.23.0', '28.10.2026', 'Kleinere PDFs: Jedes Bild wird nur so groß gerechnet, wie es auf der Seite erscheint, statt pauschal 2000 px. Neue Auswahl „Bildqualität“ im PDF-Dialog: E-Mail (150 dpi), Standard (220 dpi, voreingestellt), Detail (300 dpi, Reserve zum Hineinzoomen). Bei 2 Bildern pro Seite wird das PDF damit typischerweise rund drei Viertel kleiner, ohne sichtbaren Schärfeverlust. Die ZIP-Einstellungen gelten nur noch für das ZIP; Originale bleiben unverändert.'],
   ['1.22.1', '27.10.2026', 'Ergebnistabelle: Der Hinweis „Zwischenstand“ sagt jetzt „noch nicht alle beauftragten Proben haben ein endgültiges Ergebnis“. Seit ResultKit 1.3.1 ist ein Projekt auch dann ein Zwischenstand, wenn alle Proben Werte haben, aber einer davon noch vorläufig ist.'],
   ['1.22.0', '27.10.2026', 'Fotos übernehmen: Liegen in „Fotos“ Unterordner der Kollegen mit Fotos (z. B. „Begehung Ben“), zeigt FotoKit oben „📥 Fotos übernehmen“. Die angehakten Unterordner werden nach „Fotos“ verschoben (nicht kopiert), die Dateinamen bleiben; nur bei gleichem Namen kommt das Kürzel aus dem Ordnernamen dazu (IMG_1234_Ben.jpg). Der Ordnername wird auf Wunsch Abschnitt der Fotos, die Herkunft jeder Datei steht in _Bildumbenenner.json. Leere Unterordner bleiben stehen, „_aussortiert“ bleibt außen vor. Immer das aktuelle Projekt: Ohne Projektangabe geöffnet, nimmt FotoKit die Fotos des Projekts, an dem gerade in Spektron gearbeitet wird; „Fotos neu einlesen“ wechselt zu diesem Projekt, wenn in einer anderen App inzwischen ein anderes geöffnet wurde (mit Hinweis beim Zurückkommen). „Projekt öffnen …“ beginnt im Archivordner statt im zuletzt gewählten Ordner.'],
   ['1.21.0', '26.10.2026', 'Projektdaten: Das Schadendatum kann „nicht bekannt“ sein (Knopf neben dem Feld; gespeichert wie in der Projektzentrale als „unbekannt“, auf dem Deckblatt „nicht bekannt“). Das Schadenereignis ist keine Pflichtangabe mehr. Das helle Firmenzeichen auf dem Deckblatt steht jetzt waagrecht mittig. Umbenennen: Scheitert ein Schritt, nachdem Bilder schon ihre Nummern getauscht haben (z. B. erstes Bild ans Ende gezogen), werden alle Namen wieder richtig zurückgesetzt; lässt sich eine Datei nicht zurückbenennen, nennt die Meldung sie. Im Kopiermodus bleibt keine doppelte Kopie liegen, wenn das Original gesperrt ist. „Rückgängig“ überschreibt keine Beschreibung mehr, die nach dem Umbenennen geändert wurde. Bewertungsskala: Eine Kategorie ohne „ab“-Wert wird nicht gespeichert und bewertet keine Werte (vorher landete jeder Wert in ihr). Wiederherstellen einer Projektfassung prüft die Projektnummer jetzt auch bei 2–6-stelligen Nummern richtig. Gemeinsame Skalen: Eine Skala, die geändert wird, während eine andere gerade in die gemeinsame Datei geschrieben wird, geht nicht mehr verloren (wie PlanKit 1.38.0).'],
@@ -2765,12 +2766,14 @@ function openMetaDialog(mode){
         <textarea id="m_template" rows="14" spellcheck="false"></textarea>
         <div class="btns left"><button id="m_tplReset">Auf Standard zurücksetzen</button></div>
       </details>`}
-      ${forExp ? `<label class="chk"><input type="checkbox" id="zOnly"> nur Bilder mit Beschreibung</label>
-      <div class="imgopts"><label class="chk"><input type="checkbox" id="zShrink"> Bilder verkleinern auf</label>
+      ${forExp ? `<label class="chk"><input type="checkbox" id="zOnly"> nur Bilder mit Beschreibung</label>` : ''}
+      ${forZip ? `<div class="imgopts"><label class="chk"><input type="checkbox" id="zShrink"> Bilder verkleinern auf</label>
         ${sel('zEdge', [1600, 2000, 2500, 3000])} px (lange Kante), JPEG-Qualität ${sel('zQ', [70, 80, 90])} %
         <small>– Originale im Ordner bleiben unverändert</small></div>` : ''}
       ${forZip ? `<label class="chk" title="Datei Pruefsummen_Originale_….sha256 mit SHA-256 aller Bilder im Projektordner"><input type="checkbox" id="zRecord"> Prüfprotokoll (SHA-256) der Originale im Projektordner ablegen</label>` : ''}
-      ${forPdf ? `<div class="imgopts">Bilder pro Seite ${sel('pPer', [2, 1])}
+      ${forPdf ? `<div class="imgopts" title="Jedes Bild wird nur so groß gerechnet, wie es auf der Seite erscheint. E-Mail: kleinste Datei · Standard: scharf im Druck · Detail: Reserve zum Hineinzoomen">Bildqualität <select id="pDpi">${Object.entries(PDF_QUALITY).map(([d, x]) => `<option value="${d}">${x.label} (${d} dpi)</option>`).join('')}</select>
+        <small>– Bilder werden passend zu ihrer Größe auf der Seite verkleinert, Originale im Ordner bleiben unverändert</small></div>
+      <div class="imgopts">Bilder pro Seite ${sel('pPer', [2, 1])}
         · max. Dateigröße <input type="number" id="pMax" min="1" max="200" step="0.5" style="width:64px"> MB
         · <label class="chk"><input type="checkbox" id="pSecPage"> neuer Abschnitt beginnt auf neuer Seite</label></div>` : ''}
       <div class="m" id="zInfo"></div>
@@ -2788,16 +2791,16 @@ function openMetaDialog(mode){
   if (forExp){
     $('zOnly').checked = withDesc > 0 && m.onlyDesc !== false;
     $('zOnly').disabled = withDesc === 0 || withDesc === active.length;
-    $('zShrink').checked = io0.shrink; $('zEdge').value = String(io0.edge); $('zQ').value = String(io0.q);
   }
+  if (forZip){ $('zShrink').checked = io0.shrink; $('zEdge').value = String(io0.edge); $('zQ').value = String(io0.q); }
   if (forZip) $('zRecord').checked = io0.record !== false;
-  if (forPdf){ $('pPer').value = String(po0.perPage); $('pMax').value = String(po0.maxMB); $('pSecPage').checked = !!po0.secPage; }
+  if (forPdf){ $('pPer').value = String(po0.perPage); $('pMax').value = String(po0.maxMB); $('pSecPage').checked = !!po0.secPage; $('pDpi').value = String(pdfQuality(po0.dpi).dpi); }
   const read = () => {
     const r = { template: forPdf ? m.template : ($('m_template').value.trim() ? $('m_template').value : DEFAULT_TEMPLATE),
                 notes: forPdf ? m.notes : $('m_notes').value,
                 onlyDesc: forExp ? $('zOnly').checked : m.onlyDesc,
-                img: forExp ? { shrink: $('zShrink').checked, edge: +$('zEdge').value, q: +$('zQ').value, record: forZip ? $('zRecord').checked : io0.record } : io0,
-                pdf: forPdf ? { perPage: +$('pPer').value, maxMB: Math.min(200, Math.max(1, +$('pMax').value || 14)), secPage: $('pSecPage').checked } : po0 };
+                img: forZip ? { shrink: $('zShrink').checked, edge: +$('zEdge').value, q: +$('zQ').value, record: forZip ? $('zRecord').checked : io0.record } : io0,
+                pdf: forPdf ? { perPage: +$('pPer').value, maxMB: Math.min(200, Math.max(1, +$('pMax').value || 14)), secPage: $('pSecPage').checked, dpi: +$('pDpi').value } : po0 };
     for (const [key] of META_FIELDS) r[key] = $('m_' + key + '_nb')?.getAttribute('aria-pressed') === 'true' ? UNBEKANNT : $('m_' + key).value.trim();
     return r;
   };
@@ -2812,9 +2815,10 @@ function openMetaDialog(mode){
     if (forExp){
       const bytes = items.reduce((a, it) => a + it.size, 0);
       const qf = { 70: 0.75, 80: 1, 90: 1.6 }[r.img.q] || 1;
-      const est = items.reduce((a, it) => a + (canRotate(it) ? (r.img.shrink ? Math.min(it.size, 850000 * Math.pow(r.img.edge / 2000, 2) * qf) : it.size) : (forPdf ? 0 : it.size)), 0);
+      const est = forPdf ? pdfEstimateBytes(items, r.pdf)
+        : items.reduce((a, it) => a + (canRotate(it) ? (r.img.shrink ? Math.min(it.size, 850000 * Math.pow(r.img.edge / 2000, 2) * qf) : it.size) : it.size), 0);
       const nRot = items.filter(it => rotOf(it)).length;
-      $('zEdge').disabled = $('zQ').disabled = !r.img.shrink;
+      if (forZip) $('zEdge').disabled = $('zQ').disabled = !r.img.shrink;
       const notIn = (active.length - items.length ? ` · ${active.length - items.length} ohne Beschreibung nicht enthalten; Bildnummern wie in der Liste (mit Lücken)` : '') + (S.view.length - active.length ? ' · Aussortierte nicht enthalten' : '');
       if (forZip){
         html += `Inhalt: <b>${items.length}</b> Bilder (${r.img.shrink ? `Original ${fmtSize(bytes)} → ca. <b>${fmtSize(est)}</b> geschätzt` : fmtSize(bytes)}) + <b>${TXT_NAME}</b>` +
@@ -2886,12 +2890,14 @@ const loadImgOpt = () => Object.assign({}, IMG_DEFAULTS, store.get('bu-zipimg', 
 async function decodeOriented(f){
   try{ return await createImageBitmap(f, { imageOrientation: 'from-image' }); }catch(e){ return null; }
 }
-async function encodeJpeg(bmp, rot, maxEdge, q){
-  const long = Math.max(bmp.width, bmp.height), sc = maxEdge && long > maxEdge ? maxEdge / long : 1;
+async function encodeJpeg(bmp, rot, maxEdge, q, fit){
+  const swap = rot % 180 !== 0, long = Math.max(bmp.width, bmp.height);
+  let sc = maxEdge && long > maxEdge ? maxEdge / long : 1;
+  // PDF: no more pixels than the frame on the page can show at the chosen dpi
+  if (fit) sc = Math.min(sc, fit.w / (swap ? bmp.height : bmp.width), fit.h / (swap ? bmp.width : bmp.height));
   const w = Math.max(1, Math.round(bmp.width * sc)), h = Math.max(1, Math.round(bmp.height * sc));
   let src = bmp;
   if (sc < 1){ try{ src = await createImageBitmap(bmp, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' }); }catch(e){ src = bmp; } }
-  const swap = rot % 180 !== 0;
   const c = document.createElement('canvas'); c.width = swap ? h : w; c.height = swap ? w : h;
   const g = c.getContext('2d');
   g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.imageSmoothingQuality = 'high';
@@ -2902,9 +2908,9 @@ async function encodeJpeg(bmp, rot, maxEdge, q){
   c.width = c.height = 0;
   return out;
 }
-async function renderJpeg(f, rot, maxEdge, q){
+async function renderJpeg(f, rot, maxEdge, q, fit){
   const bmp = await decodeOriented(f);
-  return bmp ? encodeJpeg(bmp, rot, maxEdge, q) : null;
+  return bmp ? encodeJpeg(bmp, rot, maxEdge, q, fit) : null;
 }
 /* ZIP: keep the original bytes unless rotation or downscaling is actually needed */
 async function exportImage(it, f, opt, buf){
@@ -3148,24 +3154,27 @@ function writePdf(pages, images, info){
   return new Blob(chunks, { type: 'application/pdf' });
 }
 
-const PDF_DEFAULTS = { perPage: 2, maxMB: 14, secPage: false };
+const PDF_DEFAULTS = { perPage: 2, maxMB: 14, secPage: false, dpi: 220 };
+/* Bildqualität im PDF: Bilder werden auf die Größe ihres Rahmens auf der Seite bei dieser Auflösung gerechnet.
+   Unabhängig von den ZIP-Einstellungen. bpp = grobe Bytes je Pixel für die Größenschätzung. */
+const PDF_QUALITY = { 150: { label: 'E-Mail', q: 0.70, bpp: 0.21 }, 220: { label: 'Standard', q: 0.75, bpp: 0.24 }, 300: { label: 'Detail', q: 0.80, bpp: 0.28 } };
+const pdfQuality = dpi => PDF_QUALITY[dpi] ? { dpi: +dpi, ...PDF_QUALITY[dpi] } : { dpi: 220, ...PDF_QUALITY[220] };
+/* Schätzung für den Dialog: typischer Rahmen (2 bzw. 1 Bild pro Seite), im Mittel ~55 % davon vom Foto belegt. */
+function pdfEstimateBytes(items, opt){
+  const Q = pdfQuality(opt.dpi), px = v => v / 72 * Q.dpi;
+  const box = px(PDF_CW) * px(opt.perPage === 1 ? 560 : 250) * 0.55;
+  return items.reduce((a, it) => a + (canRotate(it) ? Math.min(it.size, box * Q.bpp) : 0), 0);
+}
 const loadPdfOpt = () => Object.assign({}, PDF_DEFAULTS, store.get('bu-pdf', {}));
 const pdfBaseName = docBaseName;
 const pdfPartName = (base, i, n) => n > 1 ? `${base}_Teil_${i}_von_${n}.pdf` : `${base}.pdf`;
 
 /* Builds all PDF parts. Returns { parts: [{ name, blob, pages, from, to }], failed: [items] }. */
 async function buildAnnex(meta, items, progress){
-  const img = meta.img, opt = meta.pdf, limit = Math.round(opt.maxMB * 1e6);
+  const opt = meta.pdf, limit = Math.round(opt.maxMB * 1e6), Q = pdfQuality(opt.dpi);
   const now = new Date();
-  // 1) prepare images
+  // 1) paginate image pages (photos are prepared in step 4b, once their frame size is known)
   const enc = new Map(), failed = [];
-  for (let i = 0; i < items.length; i++){
-    const it = items[i];
-    progress(`Bereite Bild ${i + 1} von ${items.length} auf: ${it.final}`, i, items.length);
-    const r = await renderJpeg(await it.handle.getFile(), canRotate(it) ? rotOf(it) : 0, img.shrink ? img.edge : null, img.shrink ? img.q / 100 : 0.92);
-    if (r) enc.set(i, r); else failed.push(it);
-  }
-  // 2) paginate image pages
   const hasSec = items.some(it => it.secEff);
   const imgPages = []; let cur = null, lastSec = null;
   items.forEach((it, i) => {
@@ -3244,8 +3253,10 @@ async function buildAnnex(meta, items, progress){
     return out;
   };
 
-  const imagePage = (slots,cont) => {
-    const out=[],gap=26,slotH=(PDF_TOP-PDF_BOTTOM-gap*(slots.length-1))/slots.length;
+  const gap=26;
+  // Text block and frame height of one image page; null = too little room, every photo gets its own page.
+  const slotLayout = (slots,cont) => {
+    const slotH=(PDF_TOP-PDF_BOTTOM-gap*(slots.length-1))/slots.length;
     const prepared=slots.map((sl,k)=>{
       const it=sl.it,probes=it.probe.split(/[,;\/]+/).map(x=>x.trim()).filter(Boolean),heading=sl.heading||(k===0?cont:null);
       let hl=wrapWords(words(heading,'B'),11,PDF_CW-12);
@@ -3258,16 +3269,29 @@ async function buildAnnex(meta, items, progress){
     });
     const headH=Math.max(0,...prepared.map(p=>p.hl.length?15*p.hl.length+12:0));
     const capH=Math.max(30,...prepared.map(p=>p.caps.length*12.5+p.probe.length*11+p.details.length*10+24+(p.details.length?5:0)+(p.probe.length?3:0)));
-    if(slots.length>1&&slotH-headH-capH<180){
-      return slots.flatMap((sl,k)=>imagePage([sl],k===0?cont:sl.it.secEff?`${sl.it.secEff} (Fortsetzung)`:null));
-    }
+    if(slots.length>1&&slotH-headH-capH<180)return null;
+    return{slotH,prepared,headH,capH,maxFrameH:Math.max(180,slotH-headH-capH)};
+  };
+  const splitCont = (sl,k,cont) => k===0?cont:sl.it.secEff?`${sl.it.secEff} (Fortsetzung)`:null;
+  // Frame each photo will be drawn into (pt) – same rules as imagePage below.
+  const frameBoxes = (slots,cont,out) => {
+    const L=slotLayout(slots,cont);
+    if(!L)slots.forEach((sl,k)=>frameBoxes([sl],splitCont(sl,k,cont),out));
+    else slots.forEach(sl=>out.set(sl.i,{w:PDF_CW,h:L.maxFrameH}));
+    return out;
+  };
+
+  const imagePage = (slots,cont) => {
+    const L=slotLayout(slots,cont);
+    if(!L)return slots.flatMap((sl,k)=>imagePage([sl],splitCont(sl,k,cont)));
+    const out=[],{slotH,prepared,headH,capH,maxFrameH}=L;
     const pg=new PdfPage();out.push(pg);
     prepared.forEach(({sl,it,hl,caps,probe,details},k)=>{
       const top=PDF_TOP-k*(slotH+gap),bottom=top-slotH;let y=top;
       if(hl.length){pg.rect(PDF_M,y-4-hl.length*15+3,3,hl.length*15-3,null,PDF_CD.accent);}
       for(const l of hl){y-=12;pg.wrapped(PDF_M+11,y,l,11,PDF_CD.ink);y-=3;}
       y=top-headH;
-      const im=enc.get(sl.i),maxFrameH=Math.max(180,slotH-headH-capH);
+      const im=enc.get(sl.i);
       const frameH=slots.length===1?Math.min(maxFrameH,im?PDF_CW*im.h/im.w:150):maxFrameH;
       const imageBottom=y-frameH;
       let capX=PDF_M;
@@ -3347,9 +3371,9 @@ async function buildAnnex(meta, items, progress){
     pg.textRight(PDF_W-PDF_M,43,`Seite ${k+1} von ${pages.length}`,'B',8,PDF_CD.ink);
   });
 
+  const contOf=p=>hasSec&&!p[0].heading&&p[0].it.secEff?`${p[0].it.secEff} (Fortsetzung)`:null;
   const renderPart = (pi,plan) => {
     const N=plan.length;
-    const contOf=p=>hasSec&&!p[0].heading&&p[0].it.secEff?`${p[0].it.secEff} (Fortsetzung)`:null;
     const pages=[...coverPages(pi,plan),...plan[pi].flatMap(p=>imagePage(p,contOf(p))),...(pi===N-1?probePages():[])];
     decorate(pages,pi,N);
     const[a,b]=partRange(plan[pi]);
@@ -3358,7 +3382,17 @@ async function buildAnnex(meta, items, progress){
     return{blob,pages:pages.length,from:a,to:b,name:pdfPartName(pdfBaseName(meta),pi+1,N)};
   };
 
-  // 4) split into parts by size – estimate first, then verify against the real file size
+  // 4b) prepare photos: each one only as large as its frame at Q.dpi (contain scaling, never upscaled)
+  const boxes = new Map();
+  for (const p of imgPages) frameBoxes(p, contOf(p), boxes);
+  for (let i = 0; i < items.length; i++){
+    const it = items[i], b = boxes.get(i), px = v => Math.round(v / 72 * Q.dpi);
+    progress(`Bereite Bild ${i + 1} von ${items.length} auf: ${it.final}`, i, items.length);
+    const r = await renderJpeg(await it.handle.getFile(), canRotate(it) ? rotOf(it) : 0, null, Q.q, b ? { w: px(b.w), h: px(b.h) } : null);
+    if (r) enc.set(i, r); else failed.push(it);
+  }
+
+  // 5) split into parts by size – estimate first, then verify against the real file size
   progress('Plane Aufteilung …', items.length, items.length);
   const pageBytes = p => p.reduce((a, s) => a + (enc.get(s.i) ? enc.get(s.i).data.length : 0), 0) + 3000;
   const plan = []; let est = Infinity;
@@ -3372,7 +3406,7 @@ async function buildAnnex(meta, items, progress){
     for (let pi = 0; pi < plan.length; pi++){
       const r = renderPart(pi, plan);
       if (r.blob.size > limit){
-        if (plan[pi].length <= 1) throw new Error(`Eine einzelne Seite (${range(...partRange(plan[pi]))}) ist größer als ${String(opt.maxMB).replace('.', ',')} MB – bitte Bilder stärker verkleinern.`);
+        if (plan[pi].length <= 1) throw new Error(`Eine einzelne Seite (${range(...partRange(plan[pi]))}) ist größer als ${String(opt.maxMB).replace('.', ',')} MB – bitte Bildqualität „E-Mail“ wählen oder Bilder stärker verkleinern.`);
         const last = plan[pi].pop();
         if (pi === plan.length - 1) plan.push([last]); else plan[pi + 1].unshift(last);
         moved = true; break;
@@ -4388,7 +4422,7 @@ const HELP_HTML = `
   <li><b>Ausgeben:</b>
     <ul>
       <li><b>Umbenennen</b> – benennt die Dateien im Ordner nach der Beschreibung (z. B. <code>03_P2_Küche_Decke.jpg</code>). Rückgängig ist danach möglich.</li>
-      <li><b>Bilddokumentation erstellen …</b> – Bilddokumentation als PDF mit Deckblatt, 2 Bildern pro Seite und Probenahmestellen; wird im Ordner <code>Fotos</code> gespeichert als <code>Bilddokumentation_26.0123_Köln_2026-10-19.pdf</code> (ältere Dateien werden nie überschrieben), bei Bedarf in Teile ≤ 14 MB aufgeteilt.</li>
+      <li><b>Bilddokumentation erstellen …</b> – Bilddokumentation als PDF mit Deckblatt, 2 Bildern pro Seite und Probenahmestellen; wird im Ordner <code>Fotos</code> gespeichert als <code>Bilddokumentation_26.0123_Köln_2026-10-19.pdf</code> (ältere Dateien werden nie überschrieben), bei Bedarf in Teile ≤ 14 MB aufgeteilt. <b>Bildqualität</b>: Standard reicht für Druck und Bildschirm; „E-Mail“ für kleinste Dateien, „Detail“ zum starken Hineinzoomen.</li>
       <li><b>ZIP exportieren</b> – Bilder mit neuen Namen plus Anweisung, wenn eine KI die Dokumentation erstellen soll.</li>
       <li><b>Ergebnistabelle …</b> – nimmt die in <b>ResultKit</b> geprüften und übernommenen Laborergebnisse (<code>Laborergebnisse/_Ergebnisse.json</code>; Prüfberichte werden nur dort importiert – ohne Projektordner geht weiterhin „Andere Datei …“ mit dem XML-Export), ordnet die Proben über die Probe-Nr. den Fotos zu (bei Bohrkernen auch über die Kern-ID, z. B. <code>EG-WZ-B-7</code> – Zuordnung aus LabelKit; Regel: <a href="../aidkit/#bohrkern" target="aidkit" rel="noopener">📘 Probenbezeichnung Bohrkerne</a>), bewertet nach eurer Skala (eigene Skalen liegen im Archivordner in <code>_Spektron-Skalen.json</code> und gelten fürs ganze Büro) und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
     </ul></li>

@@ -212,7 +212,7 @@ let browser, server;
         assert.equal(Object.keys(files).some(n => /umb-tmp_|~umb_/.test(n)), false);
         await page.getByRole('button', { name: 'Bilddokumentation erstellen …', exact: true }).click();
         assert.equal(await page.locator('#pPer').inputValue(), '1'); assert.equal(await page.locator('#pMax').inputValue(), '10'); assert.equal(await page.locator('#pSecPage').isChecked(), true);
-        assert.equal(await page.locator('#zShrink').isChecked(), false);
+        assert.equal(await page.locator('#pDpi').inputValue(), '220', 'PDF-Bildqualität: Standard');
         assert.equal(Object.keys(await snapshot('A')).some(n => n.endsWith('.pdf')), false, 'Kein automatischer Export');
         await page.locator('#zOk').click(); await page.locator('.pdfOpen').waitFor();
         await page.getByRole('button', { name: 'ZIP exportieren …', exact: true }).click();
