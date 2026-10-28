@@ -352,7 +352,9 @@ let browser, server;
     await page.locator('#list .desc').first().fill('Erstes Bild');
     await page.locator('#btnRename').click(); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor();
     const after = await snapshot();
-    assert.ok(after[projects.A + '/Fotos/_Bildumbenenner.json']);
+    // Projekt ab 26.0560 ohne bisherige Projektdatei: seit der Umstellung liegt sie gleich in „_Spektron/FotoKit“ (spektron-ordner.js); Fotos bleiben in „Fotos“
+    assert.ok(after[projects.A + '/_Spektron/FotoKit/_Bildumbenenner.json']);
+    assert.equal(after[projects.A + '/Fotos/_Bildumbenenner.json'], undefined);
     assert.ok(after[projects.A + '/Fotos/01_Erstes_Bild.jpg']);
   });
 

@@ -43,7 +43,7 @@ let browser, server;
     const a = await projekt('26.0996 Import', [['', ['IMG_0001.jpg']], ['Begehung Ben', ['IMG_0001.jpg', 'IMG_0002.jpg']], ['Ric', ['A.jpg']], ['_aussortiert', ['X.jpg']]]);
     await put(await a.d.getDirectoryHandle('Notizen', { create: true }), 'liesmich.txt', 'kein Foto');
     await projekt('26.0997 Anders', [['', ['ANDERS_1.jpg', 'ANDERS_2.jpg']]]);
-    window.testFotos = a.d;
+    window.testFotos = a.d; window.testProjekt = a.p;
     window.showDirectoryPicker = async () => a.p;
   });
   const idle = () => page.waitForFunction(() => !document.body.inert && !document.querySelector('#overlay').classList.contains('show'));
@@ -78,7 +78,8 @@ let browser, server;
   // Herkunft je Datei in _Bildumbenenner.json
   let gespeichert;
   for (let i = 0; i < 40; i++){
-    gespeichert = await page.evaluate(async () => { try{ return JSON.parse(await (await (await window.testFotos.getFileHandle('_Bildumbenenner.json')).getFile()).text()); }catch(e){ return null; } });
+    // Projekt ab 26.0560 ohne bisherige Projektdatei: seit der Umstellung liegt sie in „_Spektron/FotoKit“ (spektron-ordner.js)
+    gespeichert = await page.evaluate(async () => { try{ const d = await (await window.testProjekt.getDirectoryHandle('_Spektron')).getDirectoryHandle('FotoKit'); return JSON.parse(await (await (await d.getFileHandle('_Bildumbenenner.json')).getFile()).text()); }catch(e){ return null; } });
     if (gespeichert?.fotoUebernahmen?.length === 2) break; await page.waitForTimeout(150);
   }
   assert.deepEqual(gespeichert.fotoUebernahmen.map(u => ({ ordner: u.ordner, kuerzel: u.kuerzel, dateien: u.dateien })), [
