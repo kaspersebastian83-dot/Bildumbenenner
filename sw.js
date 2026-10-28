@@ -7,7 +7,7 @@
    This worker therefore only ever touches caches with its own prefix and only answers requests inside its own scope. */
 const SCOPE = self.registration.scope;
 const PREFIX = 'bildumbenenner:' + SCOPE + ':';
-const CACHE = PREFIX + 'v5-so';
+const CACHE = PREFIX + 'v6-so';
 const ASSETS = ['./', './index.html', './spektron-ordner.js', './project-store.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png']
   .map(f => new URL(f, SCOPE).href);
 const INDEX = new URL('index.html', SCOPE).href;

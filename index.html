@@ -503,11 +503,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.24.0';
+const APP_VERSION = '1.24.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:397806c65f98063951cc9b52d1f54ce61c8733befaddc1659f25bbae733704cc';
+const APP_BUILD = 'sha256:ea768dc158b60ac07f24210be26872d05edb0df2572a8994460bf9a725a0b08e';
 const APP_DATE = '2026-10-28';
 const CHANGELOG = [
+  ['1.24.1', '28.10.2026', 'Gemeinsames Modul spektron-ordner.js: Unterordner werden zuerst direkt mit ihrem Namen gesucht (wie überall sonst in den Apps), erst dann ohne Groß-/Kleinschreibung. Keine sichtbare Änderung.'],
   ['1.24.0', '28.10.2026', 'Vorbereitung „Spektron-Ordner“: Die App-Daten eines Projekts ziehen später in den Unterordner „_Spektron“ (Fotos, Bilddokumentation und „_aussortiert“ bleiben im Ordner „Fotos“). FotoKit findet seine Projektdatei, die gemeinsamen Projektdaten, Prüfsummen-Protokolle und die Daten von LabelKit, ResultKit und PlanKit jetzt an beiden Orten. Bis zum Umzug ändert sich nichts.'],
   ['1.23.0', '28.10.2026', 'Kleinere PDFs: Jedes Bild wird nur so groß gerechnet, wie es auf der Seite erscheint, statt pauschal 2000 px. Neue Auswahl „Bildqualität“ im PDF-Dialog: E-Mail (150 dpi), Standard (220 dpi, voreingestellt), Detail (300 dpi, Reserve zum Hineinzoomen). Bei 2 Bildern pro Seite wird das PDF damit typischerweise rund drei Viertel kleiner, ohne sichtbaren Schärfeverlust. Die ZIP-Einstellungen gelten nur noch für das ZIP; Originale bleiben unverändert.'],
   ['1.22.1', '27.10.2026', 'Ergebnistabelle: Der Hinweis „Zwischenstand“ sagt jetzt „noch nicht alle beauftragten Proben haben ein endgültiges Ergebnis“. Seit ResultKit 1.3.1 ist ein Projekt auch dann ein Zwischenstand, wenn alle Proben Werte haben, aber einer davon noch vorläufig ist.'],
