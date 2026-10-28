@@ -474,6 +474,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 <div id="lightbox"><img id="lbImg" alt=""></div>
 <div id="overlay"><div class="dialog" id="dialog"></div></div>
 
+<script src="spektron-ordner.js"></script>
 <script src="project-store.js"></script>
 <script>
 (() => {
@@ -502,11 +503,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.23.0';
+const APP_VERSION = '1.24.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:173a8f2ae04c45a10e2ee588201e487b8b4f3285f9277478dc5c0addd9c2e140';
-const APP_DATE = '2026-10-27';
+const APP_BUILD = 'sha256:fb808364bd22fbc773303c6679d1875986eca2b500a6ff2484e8db87284ff9f1';
+const APP_DATE = '2026-10-28';
 const CHANGELOG = [
+  ['1.24.0', '28.10.2026', 'Vorbereitung „Spektron-Ordner“: Die App-Daten eines Projekts ziehen später in den Unterordner „_Spektron“ (Fotos, Bilddokumentation und „_aussortiert“ bleiben im Ordner „Fotos“). FotoKit findet seine Projektdatei, die gemeinsamen Projektdaten, Prüfsummen-Protokolle und die Daten von LabelKit, ResultKit und PlanKit jetzt an beiden Orten. Bis zum Umzug ändert sich nichts.'],
   ['1.23.0', '28.10.2026', 'Kleinere PDFs: Jedes Bild wird nur so groß gerechnet, wie es auf der Seite erscheint, statt pauschal 2000 px. Neue Auswahl „Bildqualität“ im PDF-Dialog: E-Mail (150 dpi), Standard (220 dpi, voreingestellt), Detail (300 dpi, Reserve zum Hineinzoomen). Bei 2 Bildern pro Seite wird das PDF damit typischerweise rund drei Viertel kleiner, ohne sichtbaren Schärfeverlust. Die ZIP-Einstellungen gelten nur noch für das ZIP; Originale bleiben unverändert.'],
   ['1.22.1', '27.10.2026', 'Ergebnistabelle: Der Hinweis „Zwischenstand“ sagt jetzt „noch nicht alle beauftragten Proben haben ein endgültiges Ergebnis“. Seit ResultKit 1.3.1 ist ein Projekt auch dann ein Zwischenstand, wenn alle Proben Werte haben, aber einer davon noch vorläufig ist.'],
   ['1.22.0', '27.10.2026', 'Fotos übernehmen: Liegen in „Fotos“ Unterordner der Kollegen mit Fotos (z. B. „Begehung Ben“), zeigt FotoKit oben „📥 Fotos übernehmen“. Die angehakten Unterordner werden nach „Fotos“ verschoben (nicht kopiert), die Dateinamen bleiben; nur bei gleichem Namen kommt das Kürzel aus dem Ordnernamen dazu (IMG_1234_Ben.jpg). Der Ordnername wird auf Wunsch Abschnitt der Fotos, die Herkunft jeder Datei steht in _Bildumbenenner.json. Leere Unterordner bleiben stehen, „_aussortiert“ bleibt außen vor. Immer das aktuelle Projekt: Ohne Projektangabe geöffnet, nimmt FotoKit die Fotos des Projekts, an dem gerade in Spektron gearbeitet wird; „Fotos neu einlesen“ wechselt zu diesem Projekt, wenn in einer anderen App inzwischen ein anderes geöffnet wurde (mit Hinweis beim Zurückkommen). „Projekt öffnen …“ beginnt im Archivordner statt im zuletzt gewählten Ordner.'],
@@ -769,7 +771,7 @@ function flushProject(){
   clearTimeout(P.timer);
   if (P.loading || !P.dirty || !S.dir || !P.data || P.readOnly) return P.writing;
   P.dirty = false;
-  const dir = S.dir, session = P.session;
+  const dir = S.data || S.dir, session = P.session;
   P.writes++;
   P.writing = P.writing.then(async () => {
     try{
@@ -861,17 +863,17 @@ function mergeExternal(theirs){
 /* coming back to the window: pick up what others saved meanwhile, without writing anything ourselves */
 async function checkExternal(){
   if (!S.dir || !P.data || P.readOnly || S.busy || S.changing) return;
-  const dir = S.dir, session = P.session;
+  const dir = S.data || S.dir, session = P.session;
   await P.writing;
-  if (S.changing || S.dir !== dir || P.session !== session) return;
+  if (S.changing || (S.data || S.dir) !== dir || P.session !== session) return;
   try{
     const snapshot = await photoSnapshot(dir);
     const onDisk = snapshot.exists ? photoText(snapshot) : '';
-    if (S.dir !== dir || P.session !== session || !onDisk.trim() || onDisk === P.lastText) return;
+    if ((S.data || S.dir) !== dir || P.session !== session || !onDisk.trim() || onDisk === P.lastText) return;
     const o = JSON.parse(onDisk), theirs = projFromJson(o);
     requireWritableProject(o);
     if (P.lastBytes) await photoBackup(dir, 'ausgang', P.lastBytes);
-    if (P.session !== session || S.dir !== dir || S.changing) return;
+    if (P.session !== session || (S.data || S.dir) !== dir || S.changing) return;
     mergeExternal(theirs);
     P.lastText = onDisk; P.lastBytes = snapshot.bytes; P.base = projFromJson(JSON.parse(onDisk));
     if (!same(P.data, P.base)) scheduleProjSave();      // our unsaved changes still have to be written
@@ -1286,7 +1288,25 @@ async function findSubdir(dir, name){
   return null;
 }
 async function readPJ(projDir){
+  if (!projDir) return {};   // Projektdaten-Ordner gibt es noch nicht
   return (await ProjectStore.read(projDir)).data;
+}
+/* ---------- Spektron-Ordner (spektron-ordner.js, byte-gleich in allen Projekt-Apps) ----------
+   Wo liegen die App-Daten? Künftig in „<Projekt>/_Spektron/…“. Solange ein Projekt keinen „_Spektron“-Ordner hat und
+   UMSTELLUNG aus ist, liefert SpektronOrdner.ort() den bisherigen Ort – also genau das bisherige Verhalten:
+   _Projekt.json im Projektordner, _Bildumbenenner.json und _FotoKit_Fassungen im Fotos-Ordner. */
+const SO = window.SpektronOrdner;
+/** Ordner eines Bereichs im Projekt; am neuen Ort wird er bei Bedarf angelegt (dann gibt es „_Spektron“ ja schon). */
+async function spektronOrt(projDir, bereich){
+  const r = await SO.ort(projDir, bereich);
+  return r.wo === 'neu' && !r.dir ? await SO.ort(projDir, bereich, { anlegen: true }) : r;
+}
+/** Beim Öffnen: wo liegen Projektdaten (proj.pjDir) und FotoKit-Datei (Rückgabe)? Ohne Projekt: der geöffnete Ordner. */
+async function spektronOrteSetzen(dir, proj){
+  if (!proj || !proj.dir) return dir;
+  proj.pjDir = (await spektronOrt(proj.dir, 'projekt')).dir;
+  const fk = await spektronOrt(proj.dir, 'fotokit');
+  return fk.wo === 'neu' ? fk.dir : dir;   // bisher: im geöffneten Fotos-Ordner
 }
 /* project values fill the fields; the project file wins over this app's own copy, because it is what Projektzentrale
    and coworkers edit. Returns true if something changed. */
@@ -1308,7 +1328,7 @@ function mountPJRecovery(){
   PJ.recoveryRefresh=null;
   if (!S.proj) return;
   const proj=S.proj;
-  PJ.recoveryRefresh=ProjectStore.recoveryButton($('pjRecovery'),proj.dir,proj.name,{
+  PJ.recoveryRefresh=ProjectStore.recoveryButton($('pjRecovery'),proj.pjDir||proj.dir,proj.name,{
     before: async()=>{ await flushPJ(); if(S.proj!==proj || PJ.failed || Object.keys(PJ.pending).length || P.readOnly) throw Error('Bitte offene Eingaben zuerst speichern oder das Projekt bewusst neu öffnen. Geschützte Projekte bleiben unverändert.'); },
     after: async()=>{ if(S.proj===proj){ await loadPJ(); mountPJRecovery(); banner('ok','Die ausgewählte vollständige Projektfassung wurde wiederhergestellt.'); } }
   });
@@ -1316,7 +1336,7 @@ function mountPJRecovery(){
 async function loadPJ(){
   PJ.data = null; PJ.sent = {}; PJ.shown = null; PJ.pending = {}; PJ.failed = false;
   if (!S.proj) return '';
-  try{ PJ.data = await readPJ(S.proj.dir); }
+  try{ PJ.data = await readPJ(S.proj.pjDir || S.proj.dir); }
   catch(e){ return `„${PJ_FILE}“ ist nicht lesbar (${esc(e.message)}) – gemeinsame Projektdaten werden in dieser Sitzung nicht übernommen.`; }
   for (const [, pk] of PJ_MAP) PJ.sent[pk] = (PJ.data[pk] || '').trim();
   const meta = projGet('meta', {});
@@ -1348,7 +1368,7 @@ function flushPJ(){
     try{
       if (!Object.keys(patch).length) return !PJ.failed;
       /* Lesen → ändern → Schreiben unter einer Sperre je Projekt: Projektzentrale (anderer Tab) schreibt dieselbe Datei und nimmt dieselbe Sperre. */
-      const o = await ProjectStore.update(proj.dir, proj.name, cur => {
+      const o = await ProjectStore.update(proj.pjDir || proj.dir, proj.name, cur => {
         const o = { ...cur, ...patch, format: 'mosaik-projekt', version: 1, hinweis: PJ_HINWEIS,
           projektnummer: proj.nr, schadenort: String(cur?.schadenort || '').trim() || proj.ort, geaendert: new Date().toISOString(), geaendertMit: APP_NAME + ' ' + APP_VERSION };
         return o;
@@ -1676,7 +1696,8 @@ async function openDir(dir, proj = null){
     P.loading = true;
     try{
       S.dir = dir; S.proj = proj; S.lastRun = null;
-      let note = await loadProject(dir);
+      S.data = await spektronOrteSetzen(dir, proj);   // Ordner der FotoKit-Datei (_Bildumbenenner.json, _FotoKit_Fassungen)
+      let note = await loadProject(S.data);
       const pjNote = await loadPJ();
       SKALEN_STAND = await skalenAbgleich();   // gemeinsame Bewertungsskalen des Büros (Archivordner)
       if (pjNote) note = note ? note + '<br>' + pjNote : pjNote;
@@ -2876,9 +2897,11 @@ async function writeChecksumRecord(onStep){
     onStep && onStep(it);
   }
   const name = `Pruefsummen_Originale_${fmtISO(now)}_${pad(now.getHours(), 2)}${pad(now.getMinutes(), 2)}.sha256`;
-  const fh = await S.dir.getFileHandle(name, { create: true });
+  // Ort: bisher im Fotos-Ordner, künftig „_Spektron/FotoKit/Pruefsummen“ (spektron-ordner.js)
+  const ziel = S.proj && S.proj.dir ? (await SO.ort(S.proj.dir, 'fotokitPruefsummen', { anlegen: true })).dir : S.dir;
+  const fh = await ziel.getFileHandle(name, { create: true });
   const w = await fh.createWritable(); await w.write(lines.join('\n') + '\n'); await w.close();
-  S.otherNames.add(name.toLowerCase());
+  if (ziel === S.dir || (ziel.isSameEntry && await ziel.isSameEntry(S.dir).catch(() => false))) S.otherNames.add(name.toLowerCase());
   return { name, count: lines.length };
 }
 
@@ -3559,8 +3582,8 @@ function openRecovery(){
         if (P.writes || PJ.writes || P.dirty || Object.keys(PJ.pending).length || P.failed || PJ.failed) throw Error('Aktuelle Speicherungen zuerst abschließen.');
         const folder = await recoveryFolder(record.id);
         if (!folder || !await dir.isSameEntry(folder)) throw Error('Anderer oder nicht eindeutig zugeordneter Ordner. Nur Download möglich.');
-        if (await recoveryCurrentText(dir) !== record.baseline) throw Error('Konflikt: Projektdatei wurde seit diesen Eingaben geändert. Keine Übernahme; Kopie herunterladen und bewusst vergleichen.');
-        if (JSON.stringify(S.proj ? await readPJ(S.proj.dir) : null) !== record.shared) throw Error('Konflikt: Gemeinsame Projektdaten wurden geändert. Keine Übernahme.');
+        if (await recoveryCurrentText(S.data || dir) !== record.baseline) throw Error('Konflikt: Projektdatei wurde seit diesen Eingaben geändert. Keine Übernahme; Kopie herunterladen und bewusst vergleichen.');
+        if (JSON.stringify(S.proj ? await readPJ(S.proj.pjDir || S.proj.dir) : null) !== record.shared) throw Error('Konflikt: Gemeinsame Projektdaten wurden geändert. Keine Übernahme.');
         if (session !== P.session || dir !== S.dir) throw Error('Projekt wurde gewechselt.');
         const state = record.state, object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
         if (!object(state.drafts) || Object.values(state.drafts).some(v => typeof v !== 'string') || !object(state.extra) || Object.values(state.extra).some(v => !object(v) || typeof v.sec !== 'string' || typeof v.probe !== 'string') || !object(state.rot) || Object.values(state.rot).some(v => ![0,90,180,270].includes(v)) || !object(state.settings) || !object(state.meta) || !object(state.dialog) || Object.values(state.dialog).some(v => typeof v !== 'string') || !Array.isArray(state.discard) || state.discard.some(v => typeof v !== 'string')) throw Error('Beschädigte Sitzungseingaben. Keine Übernahme.');
@@ -3653,12 +3676,12 @@ window.addEventListener('offline', () => updateStatus('Offline: Programmstand ni
 /* ---------- info dialog ---------- */
 async function openPhotoVersions(){
   if (!S.dir || S.busy || S.changing) return;
-  const dir = S.dir, session = P.session;
+  const dir = S.data || S.dir, session = P.session;
   showDialog('<h3>Gesicherte FotoKit-Fassungen</h3><p>Lese gesicherte Fassungen …</p><button id="vClose">Schließen</button>');
   $('vClose').onclick = closeDialog;
   try{
     const result = await photoVersions(dir);
-    if (P.session !== session || S.dir !== dir || !$('overlay').classList.contains('show') || !$('vClose')) return;
+    if (P.session !== session || (S.data || S.dir) !== dir || !$('overlay').classList.contains('show') || !$('vClose')) return;
     const labels = { ausgang:'Geladener Ausgangsstand', vorher:'Stand vor dem Schreiben', kandidat:'Gesicherter Schreibkandidat', bestaetigt:'Nach dem Schreiben bestätigt' };
     showDialog(`<h3>Gesicherte FotoKit-Fassungen</h3>
       <p>Jede Fassung enthält die vollständigen Bildmetadaten. „Bestätigt“ bedeutet: nach dem Schreiben erneut gelesen und geprüft. Ein Kandidat kann auch zu einem abgebrochenen Speichervorgang gehören.</p>
@@ -3677,7 +3700,7 @@ async function openPhotoVersions(){
         $('vPreview').textContent = photoText(version.snapshot);
         $('vBack').onclick = openPhotoVersions;
         $('vRestore').onclick = async () => {
-          if (P.session !== session || S.dir !== dir || S.changing || S.busy) return;
+          if (P.session !== session || (S.data || S.dir) !== dir || S.changing || S.busy) return;
           S.changing = true;
           const inert = document.body.inert; document.body.inert = true;
           try{
@@ -3685,10 +3708,10 @@ async function openPhotoVersions(){
             if (PJ.failed || Object.keys(PJ.pending).length) throw new Error('Gemeinsame Projektdaten sind noch nicht gesichert. Bitte zuerst deren Speicherung abschließen.');
             clearTimeout(P.timer);
             await P.writing; await PJ.writing;
-            if (P.session !== session || S.dir !== dir) throw new Error('Das Projekt hat sich geändert.');
+            if (P.session !== session || (S.data || S.dir) !== dir) throw new Error('Das Projekt hat sich geändert.');
             flushDrafts(); saveExtra(); clearTimeout(P.timer);
             await photoBackup(dir, 'kandidat', photoEncode(projToJson(clone(P.data))));
-            await restorePhotoVersion(dir, version, result.current, () => P.session === session && S.dir === dir);
+            await restorePhotoVersion(dir, version, result.current, () => P.session === session && (S.data || S.dir) === dir);
             await loadProject(dir);
             P.writing = Promise.resolve(true);
             await loadItems();
@@ -3807,7 +3830,7 @@ async function loadBohrkernZuordnung(){
   BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.datei = '';
   const proj = S.proj; if (!proj) return;
   try{
-    const d = await findSubdir(proj.dir, 'Laboraufträge'); if (!d) return;
+    const d = (await SO.ort(proj.dir, 'labelkit')).dir; if (!d) return;   // LabelKit-Datei: „Laboraufträge“ oder künftig „_Spektron/LabelKit“
     let best = null;
     for await (const h of d.values()){
       if (h.kind !== 'file' || !/_Daten\.json$/i.test(h.name)) continue;
@@ -3991,7 +4014,7 @@ async function loadSkalenregel(){
   SK.usage = ''; SK.nutzung = String((PJ.data && PJ.data.nutzung) || '').trim(); SK.vds = {}; SK.quelle = '';
   if (!S.proj) return;
   try{
-    const d = await findSubdir(S.proj.dir, 'Pläne');
+    const d = (await SO.ort(S.proj.dir, 'plankit')).dir;   // „Pläne“ oder künftig „_Spektron/PlanKit“
     const h = d ? await d.getFileHandle(`Probenplan ${S.proj.name}.probenplan`).catch(() => null) : null;
     const r = h ? JSON.parse(await (await h.getFile()).text()).results : null;
     if (r && typeof r === 'object'){
@@ -4202,9 +4225,11 @@ async function findLabFiles(){
   const d = await findSubdir(S.proj.dir, LAB_DIR).catch(() => null);
   if (!d) return;
   const stand = [];
+  const erg = await SO.ort(S.proj.dir, 'resultkit');   // _Ergebnisse.json: „Laborergebnisse“ oder künftig „_Spektron/ResultKit“
+  if (erg.wo === 'neu' && erg.dir) for await (const h of erg.dir.values()) if (h.kind === 'file' && h.name === ERGEBNIS_DATEI){ const f = await h.getFile(); LAB.ergebnis = { handle: h, mod: f.lastModified }; }
   for await (const h of d.values()){
     if (h.kind !== 'file') continue;
-    if (h.name === ERGEBNIS_DATEI){ const f = await h.getFile(); LAB.ergebnis = { handle: h, mod: f.lastModified }; continue; }
+    if (h.name === ERGEBNIS_DATEI){ if (erg.wo !== 'neu'){ const f = await h.getFile(); LAB.ergebnis = { handle: h, mod: f.lastModified }; } continue; }
     if (!/\.(xml|pdf)$/i.test(h.name)) continue;
     const f = await h.getFile();
     stand.push({ name: h.name, size: f.size, t: f.lastModified });
@@ -4212,8 +4237,8 @@ async function findLabFiles(){
   }
   LAB.files.sort((a, b) => b.mod - a.mod);
   // Neueste LabelKit-Datei gehört zum Stand der Übernahme (wie in ResultKit)
-  const la = await findSubdir(S.proj.dir, 'Laboraufträge').catch(() => null);
-  if (la){ let neu = null; for await (const h of la.values()) if (h.kind === 'file' && /_Daten\.json$/i.test(h.name)){ const f = await h.getFile(); if (!neu || f.lastModified > neu.t) neu = { name: 'Laboraufträge/' + h.name, size: f.size, t: f.lastModified }; } if (neu) stand.push(neu); }
+  const lk = await SO.ort(S.proj.dir, 'labelkit').catch(() => ({ dir: null })), la = lk.dir, laPfad = lk.wo === 'neu' ? lk.pfad : 'Laboraufträge';   // Pfad wie in ResultKit
+  if (la){ let neu = null; for await (const h of la.values()) if (h.kind === 'file' && /_Daten\.json$/i.test(h.name)){ const f = await h.getFile(); if (!neu || f.lastModified > neu.t) neu = { name: laPfad + '/' + h.name, size: f.size, t: f.lastModified }; } if (neu) stand.push(neu); }
   LAB.stand = standKennung(stand);
 }
 async function loadLabFile(file){
@@ -4539,7 +4564,7 @@ $('btnReload').onclick = async () => {
   if (akt){ hideBanner(); return openFromZentrale(akt, '(gerade in Spektron geöffnet)'); }
   return withSavedProject('Das erneute Einlesen', async () => {
     S.lastRun = null; hideBanner();
-    const note = await loadProject(S.dir);      // picks up changes a coworker saved meanwhile
+    const note = await loadProject(S.data || S.dir);      // picks up changes a coworker saved meanwhile
     await loadPJ();
     await loadItems();
     await recoveryOpened(); // N3 recovery hook
