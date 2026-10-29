@@ -19,8 +19,9 @@ function welt({ archiv = true, lesen = 'granted', schreiben = 'granted', datei, 
     async requestPermission({ mode }){ log.gefragt++; return perm[mode] === 'prompt' ? (perm[mode] = 'granted') : perm[mode]; },
     async getFileHandle(name, o = {}){
       if (!files.has(name) && !o.create){ const e = new Error('fehlt'); e.name = 'NotFoundError'; throw e; }
+      if (o.create && !files.has(name)) files.set(name, '');   // wie der Browser: „create“ legt sofort eine leere Datei an
       return { async getFile(){ const t = files.get(name) ?? ''; return { async text(){ return t; } }; },
-        async createWritable(){ let buf = ''; return { async write(x){ buf += x; }, async close(){ const f = log.beimSchreiben; log.beimSchreiben = null; if (f) await f(); files.set(name, buf); log.geschrieben++; } }; } };
+        async createWritable(){ const o = log.beimOeffnen; log.beimOeffnen = null; if (o) await o(); let buf = ''; return { async write(x){ buf += x; }, async close(){ const f = log.beimSchreiben; log.beimSchreiben = null; if (f) await f(); files.set(name, buf); log.geschrieben++; } }; } };
     }
   };
   const idb = { open(){ const r = {}; setTimeout(() => { r.result = { close(){}, transaction(){ return { objectStore(){ return { get(){ const q = {}; setTimeout(() => { q.result = archiv ? dir : undefined; q.onsuccess(); }); return q; } }; } }; } }; r.onsuccess(); }); return r; } };
@@ -111,6 +112,19 @@ let n = 0; const check = async (name, fn) => { await fn(); n++; console.log('OK 
     assert.equal(w.lokal()[PCB].name, 'PCB neu', 'Arbeitskopie nicht mit dem alten Stand überschrieben'); assert.deepEqual(plain(w.offen()), { [PCB]: 1 }, 'PCB bleibt offen');
     assert.equal(w.lokal()[MKW].name, 'MKW neu');
     assert.equal(await spaeter, true); assert.equal(w.datei().skalen[PCB].name, 'PCB neu'); assert.equal(w.datei().skalen[MKW].name, 'MKW neu'); assert.deepEqual(plain(w.offen()), {});
+  });
+  await check('Kollege teilt gleichzeitig: nichts überschrieben, eigene Skala bleibt offen und geht beim nächsten Mal mit (Audit F12)', async () => {
+    const w = welt({ merker: true, datei: { format: 'spektron-skalen', version: 1, skalen: {} } });
+    await w.skalenAbgleich(); const l = w.lokal(); l[MKW] = S('MKW', 1000); w.setLokal(l);
+    w.log.beimOeffnen = async () => { w.setDatei({ format: 'spektron-skalen', version: 1, skalen: { [PCB]: S('PCB Kollege', 5) } }); };
+    assert.equal(await w.skalaTeilen(MKW, l[MKW]), false, 'nicht als geteilt gemeldet');
+    assert.deepEqual(Object.keys(w.datei().skalen), [PCB], 'Skala des Kollegen bleibt'); assert.deepEqual(plain(w.offen()), { [MKW]: 1 }, 'eigene bleibt offen');
+    assert.equal(await w.skalaTeilen(MKW, w.lokal()[MKW]), true, 'zweiter Versuch');
+    assert.deepEqual(Object.keys(w.datei().skalen).sort(), [MKW, PCB].sort(), 'jetzt beide'); assert.deepEqual(plain(w.offen()), {});
+  });
+  await check('leere Datei (abgebrochenes erstes Anlegen) gilt als „noch keine Skalen“', async () => {
+    const w = welt({ lokal: { [MKW]: S('MKW', 1000) }, datei: '' });
+    assert.equal(await w.skalenAbgleich(), 'datei'); assert.deepEqual(Object.keys(w.datei().skalen), [MKW]);
   });
   console.log(`${n} Prüfungen gemeinsame Skalen bestanden`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

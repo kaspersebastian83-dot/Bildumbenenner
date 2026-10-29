@@ -503,11 +503,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.25.1';
+const APP_VERSION = '1.26.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:fea05adc69bde5c5c7095b75b47691894e28698bdf8411143f2c5cbf120ce58c';
-const APP_DATE = '2026-10-28';
+const APP_BUILD = 'sha256:38e6c50ff0f25ebb062eddc78456e99357d8a2f5085a578293347a5fe5ce1073';
+const APP_DATE = '2026-10-29';
 const CHANGELOG = [
+  ['1.26.0', '29.10.2026', 'Prüfbericht vom 29.10., Teil 2: Muss FotoKit beim Umbenennen kopieren statt verschieben, wird die Kopie jetzt Byte für Byte mit dem Original verglichen (bisher nur die Dateigröße) und das Original vor dem Löschen noch einmal – weicht etwas ab, bleiben beide Dateien liegen und FotoKit meldet es. Zwei FotoKit-Fenster benennen nicht mehr gleichzeitig um (im selben Browser); hat ein anderer Rechner den Zielnamen inzwischen belegt, wird nichts überschrieben und nichts gelöscht. Gemeinsame Skalen: Hat ein Kollege die Datei inzwischen geändert, wird nichts überschrieben; die eigene Skala bleibt „noch nicht geteilt“ und wird beim nächsten Mal mitgeschickt. Hilfe nennt den Ort von „_Ergebnisse.json“ nach dem Umzug.'],
   ['1.25.1', '29.10.2026', 'Gemeinsames Modul spektron-ordner.js: Beim Umzug und bei der Ortswahl zählen in „Abrechnung“ nur noch die Dateien, die BelegKit selbst schreibt (Aufwand_<Kürzel>.json, _Abrechnung.json, <Nr>_Aufwand_<Datum>.json, _BelegKit_Sicherungen) – andere JSON dort bleiben liegen. Für FotoKit keine sichtbare Änderung.'],
   ['1.25.0', '28.10.2026', 'Spektron-Ordner ist da: Neue Projekte (ab 26.0560) und per Projektzentrale umgezogene Projekte haben ihre App-Daten jetzt im Unterordner „_Spektron“ (bitte nicht anfassen). Noch nicht umgezogene Projekte werden weiter am bisherigen Ort gelesen und geschrieben. Fotos, Bilddokumentation und „_aussortiert“ bleiben, wo sie sind.'],
   ['1.24.2', '28.10.2026', 'Leiste oben: die Haken für Proben, Fotos, Ergebnisse, Plan und Abrechnung finden die App-Daten auch im künftigen Ordner „_Spektron“ (spektron-ordner.js). Keine sichtbare Änderung.'],
@@ -1219,11 +1220,13 @@ async function skalenArchiv(modus, fragen){
 async function skalenDatei(a){
   let f;
   try{ f = await (await a.getFileHandle(SKALEN_DATEI)).getFile(); }catch(e){ if (e && e.name === 'NotFoundError') return { skalen: null, roh: null }; throw e; }
-  const o = JSON.parse(await f.text());
+  const text = await f.text();
+  if (!text.trim()) return { skalen: null, roh: null, text };   // leer (abgebrochenes erstes Anlegen) = noch keine gemeinsamen Skalen
+  const o = JSON.parse(text);
   if (!o || o.format !== 'spektron-skalen' || !o.skalen || typeof o.skalen !== 'object' || Array.isArray(o.skalen)) throw Error(SKALEN_DATEI + ': unbekanntes Format');
   const skalen = {};
   for (const [k, v] of Object.entries(o.skalen)) if (skalaGueltig(v)) skalen[k] = v;
-  return { skalen, roh: o };
+  return { skalen, roh: o, text };
 }
 /** Stand der Datei plus eigene, noch nicht geteilte Änderungen (und beim ersten Mal: eigene Skalen, die dort fehlen). */
 function skalenZusammen(datei, lokal, offen, erst){
@@ -1242,18 +1245,27 @@ function skalenNachHochladen(skalen, hochgeladen, lokalVorher){
 }
 /** Datei schreiben, wenn Schreibrecht da ist (fragen = nach einem Klick nachfragen dürfen). true = geteilt. */
 function skalenHochladen(fragen){
-  skalenLaeuft = skalenLaeuft.then(async () => {
+  const lauf = async () => {
     const a = await skalenArchiv('readwrite', fragen); if (!a) return false;
     try{
       const d = await skalenDatei(a), lokal = skLesen(SKALEN_LOKAL, {}), z = skalenZusammen(d.skalen, lokal, skLesen(SKALEN_OFFEN, {}), localStorage.getItem(SKALEN_MERKER) !== '1');
       if (!Object.keys(z.offen).length){ if (d.skalen) skSchreiben(SKALEN_LOKAL, z.skalen); return true; }
       const o = Object.assign({}, d.roh || {}, { format: 'spektron-skalen', version: 1, geaendert: new Date().toISOString(), skalen: z.skalen });
       const w = await (await a.getFileHandle(SKALEN_DATEI, { create: true })).createWritable();
-      await w.write(JSON.stringify(o, null, 2)); await w.close();
+      // Direkt vor dem Schreiben: hat inzwischen jemand anderes geteilt? Dann nichts überschreiben – die eigenen Skalen bleiben
+      // „offen“ und gehen beim nächsten Abgleich mit. „create“ legt eine leere Datei an – leer = es gab noch keine.
+      try{
+        const jetzt = await (await (await a.getFileHandle(SKALEN_DATEI)).getFile()).text();
+        if (jetzt !== (d.text || '')) throw Error('Gemeinsame Skalen inzwischen geändert.');
+        const text = JSON.stringify(o, null, 2); await w.write(text); await w.close();
+        if ((await skalenDatei(a)).text !== text) throw Error('Gemeinsame Skalen konnten nicht bestätigt werden.');
+      }catch(e){ await w.abort().catch(() => {}); throw e; }
       skalenNachHochladen(z.skalen, z.offen, lokal); localStorage.setItem(SKALEN_MERKER, '1');
       return true;
     }catch(e){ return false; }
-  });
+  };
+  const sperre = typeof navigator !== 'undefined' && navigator.locks;   // dieselbe Sperre in FotoKit, ResultKit und PlanKit
+  skalenLaeuft = skalenLaeuft.catch(() => false).then(() => sperre ? sperre.request('spektron:skalen', lauf) : lauf());
   return skalenLaeuft;
 }
 /** Beim Öffnen eines Projekts: gemeinsame Skalen holen. 'datei' = Stand des Archivordners, 'lokal' = ohne Archiv/Recht. */
@@ -2239,7 +2251,8 @@ document.addEventListener('keydown', e => {
 function assertOriginalsWritable(){
   if (P.readOnly) throw new Error(PROTECTED_PROJECT);
 }
-async function exists(dir, name){ try{ await dir.getFileHandle(name); return true; }catch(e){ return false; } }
+// Only a confirmed "not found" means free – a permission or drive error must not look like a free name.
+async function exists(dir, name){ try{ await dir.getFileHandle(name); return true; }catch(e){ if (e && e.name === 'NotFoundError') return false; throw e; } }
 // A lookup of an invalid name throws TypeError; a merely missing file throws NotFoundError.
 async function assertNameOk(dir, name){
   try{ await dir.getFileHandle(name); }
@@ -2254,7 +2267,24 @@ const browserVer = (navigator.userAgent.match(/(Edg|OPR|Chrome)\/[\d.]+/) || ['u
 /* Moves/renames one file and VERIFIES the result on disk.
    1st choice: native handle.move(). If the browser reports success but the disk
    says otherwise (or move is unsupported), switch to copy + verify + delete. */
-async function transfer(src, dst, from, to){
+// One rename/move operation at a time per browser profile – held across a whole multi-file run including its rollback,
+// so two FotoKit windows cannot interleave and take each other's names (other PCs are not covered – a browser lock
+// cannot reach them; transferLocked's checks are the protection there).
+const originaleSperre = fn => navigator.locks ? navigator.locks.request('fotokit:originale', fn) : fn();
+function transfer(src, dst, from, to){ return originaleSperre(() => transferLocked(src, dst, from, to)); }
+// Byte-for-byte comparison in 4 MB slices – large TIFFs must not be loaded twice in full.
+async function sameBytes(a, b){
+  if (a.size !== b.size) return false;
+  const STUECK = 4 << 20, teil = (f, i) => f.slice ? f.slice(i, i + STUECK).arrayBuffer() : f.arrayBuffer().then(x => x.slice(i, i + STUECK));
+  for (let i = 0; i < a.size || i === 0; i += STUECK){
+    const x = new Uint8Array(await teil(a, i)), y = new Uint8Array(await teil(b, i));
+    if (x.length !== y.length) return false;
+    for (let k = 0; k < x.length; k++) if (x[k] !== y[k]) return false;
+    if (!a.size) break;
+  }
+  return true;
+}
+async function transferLocked(src, dst, from, to){
   assertOriginalsWritable();
   if (await exists(dst, to)) throw new Error('Zieldatei existiert bereits: ' + to);
   const h = await src.getFileHandle(from);
@@ -2278,17 +2308,20 @@ async function transfer(src, dst, from, to){
   assertOriginalsWritable();
   const nh = await dst.getFileHandle(to, { create:true });
   assertOriginalsWritable();
+  // The target must still be empty – otherwise another PC (whose browser lock we cannot see) took the same name after our
+  // exists() check, and writing would replace its photo. The old content stays readable while our writer is open.
+  const belegt = async () => (await nh.getFile()).size > 0;
   const w = await nh.createWritable();
   try{
+    if (await belegt()) throw new Error(`„${to}“ wurde gerade an einem anderen Rechner angelegt – nichts verändert, bitte erneut umbenennen.`);
     assertOriginalsWritable(); await w.write(f);
+    if (await belegt()) throw new Error(`„${to}“ wurde gerade an einem anderen Rechner angelegt – nichts verändert, bitte erneut umbenennen.`);
     assertOriginalsWritable(); await w.close();
   }catch(e){ try{ await w.abort(); }catch(_){} throw e; }
-  const copy = await nh.getFile();
-  if (copy.size !== f.size){
-    assertOriginalsWritable();
-    try{ await dst.removeEntry(to); }catch(_){}
-    throw new Error('Kopie unvollständig, Original bleibt erhalten: ' + from);
-  }
+  // Compare every byte (same size is not enough) – and the original again, in case it changed meanwhile.
+  // On any difference nothing is deleted: the copy may hold another writer's photo, so both files stay for a manual check.
+  if (!(await sameBytes(await nh.getFile(), f)) || !(await sameBytes(await (await src.getFileHandle(from)).getFile(), f)))
+    throw new Error(`Kopie „${to}“ stimmt nicht mit dem Original „${from}“ überein – beide Dateien bleiben liegen, bitte prüfen.`);
   await dst.getFileHandle(to);                                          // throws if the copy is not there
   assertOriginalsWritable();
   let rmErr = null;
@@ -2296,14 +2329,15 @@ async function transfer(src, dst, from, to){
   // Nur ein bestätigtes „nicht gefunden“ zählt als entfernt; scheitert die Prüfung selbst (Berechtigung, Laufwerk), gilt das Original als noch da.
   const nochDa = await src.getFileHandle(from).then(() => true, e => !(e && e.name === 'NotFoundError'));
   if (nochDa){
-    // the original stays – remove the copy again, otherwise the photo exists twice
-    assertOriginalsWritable();
-    try{ await dst.removeEntry(to); }catch(_){}
+    // the original stays – remove the copy again (only while it is still exactly our copy), otherwise the photo exists twice
+    if (await sameBytes(await nh.getFile(), f)){ assertOriginalsWritable(); try{ await dst.removeEntry(to); }catch(_){} }
     throw rmErr || new Error(`„${from}“ konnte nicht entfernt werden – ist die Datei in einem anderen Programm geöffnet?`);
   }
 }
 const renameFile = (dir, from, to) => transfer(dir, dir, from, to);
-async function runPairs(pairs, onStep){
+function runPairs(pairs, onStep){ return originaleSperre(() => runPairsLocked(pairs, onStep)); }
+async function runPairsLocked(pairs, onStep){
+  const renameFile = (d, from, to) => transferLocked(d, d, from, to);   // the whole run already holds the lock
   assertOriginalsWritable();
   const dir = S.dir, stamp = Date.now().toString(36);
   const P = pairs.map((p, i) => ({ ...p, tmp: `${TMP_PREFIX}${stamp}_${i}${extOf(p.from)}` }));
@@ -2339,7 +2373,9 @@ async function freeName(dir, name){
   const ext = extOf(name), base = ext ? name.slice(0, -ext.length) : name;
   for (let n = 2; ; n++){ const c = `${base}_${n}${ext}`; if (!(await exists(dir, c))) return c; }
 }
-async function runMoves(moves, onStep){
+function runMoves(moves, onStep){ return originaleSperre(() => runMovesLocked(moves, onStep)); }
+async function runMovesLocked(moves, onStep){
+  const moveBetween = (src, dst, from, to) => transferLocked(src, dst, from, to);
   assertOriginalsWritable();
   const sub = await S.dir.getDirectoryHandle(DISCARD_DIR, { create:true });
   const done = [];
@@ -2353,7 +2389,9 @@ async function runMoves(moves, onStep){
     throw e;
   }
 }
-async function undoMoves(moves){
+function undoMoves(moves){ return originaleSperre(() => undoMovesLocked(moves)); }
+async function undoMovesLocked(moves){
+  const moveBetween = (src, dst, from, to) => transferLocked(src, dst, from, to);
   assertOriginalsWritable();
   const sub = await S.dir.getDirectoryHandle(DISCARD_DIR);
   for (const m of moves) await moveBetween(sub, S.dir, m.to, m.from);
@@ -4192,7 +4230,7 @@ function labText(res){
     '\r\n\r\n' + res.foot.join('\r\n');
 }
 
-/* Laborergebnisse aus ResultKit (ab 1.19): Im Projekt kommen die Werte aus „Laborergebnisse/_Ergebnisse.json“ – dort sind die
+/* Laborergebnisse aus ResultKit (ab 1.19): Im Projekt kommen die Werte aus „_Spektron/ResultKit/_Ergebnisse.json“ (bei älteren Projekten „Laborergebnisse/_Ergebnisse.json“) – dort sind die
    Prüfberichte geprüft und zusammengeführt (endgültig vor vorläufig, ersetzte Berichte entfallen). FotoKit liest die Datei nur.
    Format spektron-ergebnisse v1 (ResultKit src/ergebnisse.ts). Ergebnis hat dieselbe Form wie parseLabXml, damit labTables gleich bleibt. */
 const ERGEBNIS_DATEI = '_Ergebnisse.json';
@@ -4264,7 +4302,7 @@ async function openLabDialog(){
   recompute();
   await findLabFiles();
   await loadBohrkernZuordnung();
-  // Im Projekt: immer der in ResultKit übernommene Stand („Laborergebnisse/_Ergebnisse.json“) – nach erneuter Übernahme ohne neues Öffnen.
+  // Im Projekt: immer der in ResultKit übernommene Stand („_Spektron/ResultKit/_Ergebnisse.json“ (bei älteren Projekten „Laborergebnisse/_Ergebnisse.json“)) – nach erneuter Übernahme ohne neues Öffnen.
   // Ohne Projekt (beliebiger Fotoordner) bleibt die von Hand gewählte XML, bis ein anderer Ordner geöffnet wird.
   SKALEN_STAND = await skalenAbgleich();
   await loadSkalenregel();
@@ -4461,7 +4499,7 @@ const HELP_HTML = `
       <li><b>Umbenennen</b> – benennt die Dateien im Ordner nach der Beschreibung (z. B. <code>03_P2_Küche_Decke.jpg</code>). Rückgängig ist danach möglich.</li>
       <li><b>Bilddokumentation erstellen …</b> – Bilddokumentation als PDF mit Deckblatt, 2 Bildern pro Seite und Probenahmestellen; wird im Ordner <code>Fotos</code> gespeichert als <code>Bilddokumentation_26.0123_Köln_2026-10-19.pdf</code> (ältere Dateien werden nie überschrieben), bei Bedarf in Teile ≤ 14 MB aufgeteilt. <b>Bildqualität</b>: Standard reicht für Druck und Bildschirm; „E-Mail“ für kleinste Dateien, „Detail“ zum starken Hineinzoomen.</li>
       <li><b>ZIP exportieren</b> – Bilder mit neuen Namen plus Anweisung, wenn eine KI die Dokumentation erstellen soll.</li>
-      <li><b>Ergebnistabelle …</b> – nimmt die in <b>ResultKit</b> geprüften und übernommenen Laborergebnisse (<code>Laborergebnisse/_Ergebnisse.json</code>; Prüfberichte werden nur dort importiert – ohne Projektordner geht weiterhin „Andere Datei …“ mit dem XML-Export), ordnet die Proben über die Probe-Nr. den Fotos zu (bei Bohrkernen auch über die Kern-ID, z. B. <code>EG-WZ-B-7</code> – Zuordnung aus LabelKit; Regel: <a href="../aidkit/#bohrkern" target="aidkit" rel="noopener">📘 Probenbezeichnung Bohrkerne</a>), bewertet nach eurer Skala (eigene Skalen liegen im Archivordner in <code>_Spektron-Skalen.json</code> und gelten fürs ganze Büro) und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
+      <li><b>Ergebnistabelle …</b> – nimmt die in <b>ResultKit</b> geprüften und übernommenen Laborergebnisse (<code>_Spektron/ResultKit/_Ergebnisse.json</code>, bei älteren, noch nicht umgezogenen Projekten <code>Laborergebnisse/_Ergebnisse.json</code>; Prüfberichte werden nur dort importiert – ohne Projektordner geht weiterhin „Andere Datei …“ mit dem XML-Export), ordnet die Proben über die Probe-Nr. den Fotos zu (bei Bohrkernen auch über die Kern-ID, z. B. <code>EG-WZ-B-7</code> – Zuordnung aus LabelKit; Regel: <a href="../aidkit/#bohrkern" target="aidkit" rel="noopener">📘 Probenbezeichnung Bohrkerne</a>), bewertet nach eurer Skala (eigene Skalen liegen im Archivordner in <code>_Spektron-Skalen.json</code> und gelten fürs ganze Büro) und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
     </ul></li>
 </ol>
 <h4>Tastenkürzel</h4>
