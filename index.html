@@ -503,11 +503,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.25.0';
+const APP_VERSION = '1.25.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:246b9275cc4ecdc7482dd242a4e949d2ddfa361afbaa0c42e9c999d0989c6126';
+const APP_BUILD = 'sha256:fea05adc69bde5c5c7095b75b47691894e28698bdf8411143f2c5cbf120ce58c';
 const APP_DATE = '2026-10-28';
 const CHANGELOG = [
+  ['1.25.1', '29.10.2026', 'Gemeinsames Modul spektron-ordner.js: Beim Umzug und bei der Ortswahl zählen in „Abrechnung“ nur noch die Dateien, die BelegKit selbst schreibt (Aufwand_<Kürzel>.json, _Abrechnung.json, <Nr>_Aufwand_<Datum>.json, _BelegKit_Sicherungen) – andere JSON dort bleiben liegen. Für FotoKit keine sichtbare Änderung.'],
   ['1.25.0', '28.10.2026', 'Spektron-Ordner ist da: Neue Projekte (ab 26.0560) und per Projektzentrale umgezogene Projekte haben ihre App-Daten jetzt im Unterordner „_Spektron“ (bitte nicht anfassen). Noch nicht umgezogene Projekte werden weiter am bisherigen Ort gelesen und geschrieben. Fotos, Bilddokumentation und „_aussortiert“ bleiben, wo sie sind.'],
   ['1.24.2', '28.10.2026', 'Leiste oben: die Haken für Proben, Fotos, Ergebnisse, Plan und Abrechnung finden die App-Daten auch im künftigen Ordner „_Spektron“ (spektron-ordner.js). Keine sichtbare Änderung.'],
   ['1.24.1', '28.10.2026', 'Gemeinsames Modul spektron-ordner.js: Unterordner werden zuerst direkt mit ihrem Namen gesucht (wie überall sonst in den Apps), erst dann ohne Groß-/Kleinschreibung. Keine sichtbare Änderung.'],
