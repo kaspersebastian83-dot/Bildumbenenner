@@ -505,7 +505,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.26.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:27ac2e755a3015feccdf89d9d8925ec14e7ab0711b26787a4a413946ec8b59a6';
+const APP_BUILD = 'sha256:38e6c50ff0f25ebb062eddc78456e99357d8a2f5085a578293347a5fe5ce1073';
 const APP_DATE = '2026-10-29';
 const CHANGELOG = [
   ['1.26.0', '29.10.2026', 'Prüfbericht vom 29.10., Teil 2: Muss FotoKit beim Umbenennen kopieren statt verschieben, wird die Kopie jetzt Byte für Byte mit dem Original verglichen (bisher nur die Dateigröße) und das Original vor dem Löschen noch einmal – weicht etwas ab, bleiben beide Dateien liegen und FotoKit meldet es. Zwei FotoKit-Fenster benennen nicht mehr gleichzeitig um (im selben Browser); hat ein anderer Rechner den Zielnamen inzwischen belegt, wird nichts überschrieben und nichts gelöscht. Gemeinsame Skalen: Hat ein Kollege die Datei inzwischen geändert, wird nichts überschrieben; die eigene Skala bleibt „noch nicht geteilt“ und wird beim nächsten Mal mitgeschickt. Hilfe nennt den Ort von „_Ergebnisse.json“ nach dem Umzug.'],
@@ -2267,17 +2267,21 @@ const browserVer = (navigator.userAgent.match(/(Edg|OPR|Chrome)\/[\d.]+/) || ['u
 /* Moves/renames one file and VERIFIES the result on disk.
    1st choice: native handle.move(). If the browser reports success but the disk
    says otherwise (or move is unsupported), switch to copy + verify + delete. */
-// One transfer at a time per browser profile, so two FotoKit windows cannot both see a target name as free
-// (other PCs are not covered – a browser lock cannot reach them).
-function transfer(src, dst, from, to){
-  const run = () => transferLocked(src, dst, from, to);
-  return navigator.locks ? navigator.locks.request('fotokit:originale', run) : run();
-}
+// One rename/move operation at a time per browser profile – held across a whole multi-file run including its rollback,
+// so two FotoKit windows cannot interleave and take each other's names (other PCs are not covered – a browser lock
+// cannot reach them; transferLocked's checks are the protection there).
+const originaleSperre = fn => navigator.locks ? navigator.locks.request('fotokit:originale', fn) : fn();
+function transfer(src, dst, from, to){ return originaleSperre(() => transferLocked(src, dst, from, to)); }
+// Byte-for-byte comparison in 4 MB slices – large TIFFs must not be loaded twice in full.
 async function sameBytes(a, b){
   if (a.size !== b.size) return false;
-  const x = new Uint8Array(await a.arrayBuffer()), y = new Uint8Array(await b.arrayBuffer());
-  if (x.length !== y.length) return false;
-  for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return false;
+  const STUECK = 4 << 20, teil = (f, i) => f.slice ? f.slice(i, i + STUECK).arrayBuffer() : f.arrayBuffer().then(x => x.slice(i, i + STUECK));
+  for (let i = 0; i < a.size || i === 0; i += STUECK){
+    const x = new Uint8Array(await teil(a, i)), y = new Uint8Array(await teil(b, i));
+    if (x.length !== y.length) return false;
+    for (let k = 0; k < x.length; k++) if (x[k] !== y[k]) return false;
+    if (!a.size) break;
+  }
   return true;
 }
 async function transferLocked(src, dst, from, to){
@@ -2331,7 +2335,9 @@ async function transferLocked(src, dst, from, to){
   }
 }
 const renameFile = (dir, from, to) => transfer(dir, dir, from, to);
-async function runPairs(pairs, onStep){
+function runPairs(pairs, onStep){ return originaleSperre(() => runPairsLocked(pairs, onStep)); }
+async function runPairsLocked(pairs, onStep){
+  const renameFile = (d, from, to) => transferLocked(d, d, from, to);   // the whole run already holds the lock
   assertOriginalsWritable();
   const dir = S.dir, stamp = Date.now().toString(36);
   const P = pairs.map((p, i) => ({ ...p, tmp: `${TMP_PREFIX}${stamp}_${i}${extOf(p.from)}` }));
@@ -2367,7 +2373,9 @@ async function freeName(dir, name){
   const ext = extOf(name), base = ext ? name.slice(0, -ext.length) : name;
   for (let n = 2; ; n++){ const c = `${base}_${n}${ext}`; if (!(await exists(dir, c))) return c; }
 }
-async function runMoves(moves, onStep){
+function runMoves(moves, onStep){ return originaleSperre(() => runMovesLocked(moves, onStep)); }
+async function runMovesLocked(moves, onStep){
+  const moveBetween = (src, dst, from, to) => transferLocked(src, dst, from, to);
   assertOriginalsWritable();
   const sub = await S.dir.getDirectoryHandle(DISCARD_DIR, { create:true });
   const done = [];
@@ -2381,7 +2389,9 @@ async function runMoves(moves, onStep){
     throw e;
   }
 }
-async function undoMoves(moves){
+function undoMoves(moves){ return originaleSperre(() => undoMovesLocked(moves)); }
+async function undoMovesLocked(moves){
+  const moveBetween = (src, dst, from, to) => transferLocked(src, dst, from, to);
   assertOriginalsWritable();
   const sub = await S.dir.getDirectoryHandle(DISCARD_DIR);
   for (const m of moves) await moveBetween(sub, S.dir, m.to, m.from);

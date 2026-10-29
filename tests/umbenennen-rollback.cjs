@@ -96,6 +96,9 @@ const PAIRS = [{ from: '02_Kueche.jpg', to: '01_Kueche.jpg' }, { from: '03_Kuech
     w.navigator.locks = { request: async (name, fn) => { namen.push(name); return fn(); } };
     await w.renameFile(w.dir, 'IMG_4.jpg', '04_Flur.jpg');
     assert.deepEqual(namen, ['fotokit:originale']); assert.deepEqual(w.stand(), { '04_Flur.jpg': 'U' });
+    // ein ganzer Lauf (Phase 1, Phase 2, ggf. Rücksetzen) hält die Sperre genau einmal – kein Verschränken mit einem zweiten Fenster
+    namen.length = 0; await w.runPairs([{ from: '04_Flur.jpg', to: '01_Flur.jpg' }], () => {});
+    assert.deepEqual(namen, ['fotokit:originale']); assert.deepEqual(w.stand(), { '01_Flur.jpg': 'U' });
   }
   console.log('OK Umbenennen: Rücksetzen bei getauschten Nummern, gesperrte Datei gemeldet, keine doppelte Kopie, abweichende Kopie erkannt');
 })().catch(e => { console.error(e); process.exitCode = 1; });
