@@ -83,6 +83,14 @@ const PAIRS = [{ from: '02_Kueche.jpg', to: '01_Kueche.jpg' }, { from: '03_Kuech
     assert.equal(w.files.get('IMG_3.jpg'), 'QRST', 'Original unverändert da');
     assert.equal(w.files.get('03_Flur.jpg'), 'QRSX', 'abweichende Kopie bleibt zur Prüfung liegen');
   }
+  { // Ein anderer Rechner legt dasselbe Ziel zwischen Prüfung und Schreiben an (Audit F04) → sein Foto bleibt, unser Original auch
+    const w = welt({ 'IMG_5.jpg': 'MEIN' });
+    w.noMove.add('IMG_5.jpg');
+    const get = w.dir.getFileHandle.bind(w.dir);
+    w.dir.getFileHandle = async (n, o) => { const h = await get(n, o); if (n !== '05_Flur.jpg' || !(o && o.create)) return h; w.files.set(n, 'FREMD'); return h; };
+    await assert.rejects(() => w.renameFile(w.dir, 'IMG_5.jpg', '05_Flur.jpg'), /anderen Rechner angelegt/);
+    assert.deepEqual(w.stand(), { '05_Flur.jpg': 'FREMD', 'IMG_5.jpg': 'MEIN' }, 'nichts überschrieben, nichts gelöscht');
+  }
   { // Zwei Umbenennungen nacheinander, nicht verschränkt: mit Web Locks läuft jede Übertragung unter „fotokit:originale“
     const w = welt({ 'IMG_4.jpg': 'U' }), namen = [];
     w.navigator.locks = { request: async (name, fn) => { namen.push(name); return fn(); } };

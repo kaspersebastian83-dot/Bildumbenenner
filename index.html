@@ -505,10 +505,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.26.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:c66ffff3de564c8594ab09760151e5a9873b85aef43b29d151530e4dd53e9db0';
+const APP_BUILD = 'sha256:27ac2e755a3015feccdf89d9d8925ec14e7ab0711b26787a4a413946ec8b59a6';
 const APP_DATE = '2026-10-29';
 const CHANGELOG = [
-  ['1.26.0', '29.10.2026', 'Prüfbericht vom 29.10., Teil 2: Muss FotoKit beim Umbenennen kopieren statt verschieben, wird die Kopie jetzt Byte für Byte mit dem Original verglichen (bisher nur die Dateigröße) und das Original vor dem Löschen noch einmal – weicht etwas ab, bleiben beide Dateien liegen und FotoKit meldet es. Zwei FotoKit-Fenster benennen nicht mehr gleichzeitig um (im selben Browser). Gemeinsame Skalen: Hat ein Kollege die Datei inzwischen geändert, wird nichts überschrieben; die eigene Skala bleibt „noch nicht geteilt“ und wird beim nächsten Mal mitgeschickt. Hilfe nennt den Ort von „_Ergebnisse.json“ nach dem Umzug.'],
+  ['1.26.0', '29.10.2026', 'Prüfbericht vom 29.10., Teil 2: Muss FotoKit beim Umbenennen kopieren statt verschieben, wird die Kopie jetzt Byte für Byte mit dem Original verglichen (bisher nur die Dateigröße) und das Original vor dem Löschen noch einmal – weicht etwas ab, bleiben beide Dateien liegen und FotoKit meldet es. Zwei FotoKit-Fenster benennen nicht mehr gleichzeitig um (im selben Browser); hat ein anderer Rechner den Zielnamen inzwischen belegt, wird nichts überschrieben und nichts gelöscht. Gemeinsame Skalen: Hat ein Kollege die Datei inzwischen geändert, wird nichts überschrieben; die eigene Skala bleibt „noch nicht geteilt“ und wird beim nächsten Mal mitgeschickt. Hilfe nennt den Ort von „_Ergebnisse.json“ nach dem Umzug.'],
   ['1.25.1', '29.10.2026', 'Gemeinsames Modul spektron-ordner.js: Beim Umzug und bei der Ortswahl zählen in „Abrechnung“ nur noch die Dateien, die BelegKit selbst schreibt (Aufwand_<Kürzel>.json, _Abrechnung.json, <Nr>_Aufwand_<Datum>.json, _BelegKit_Sicherungen) – andere JSON dort bleiben liegen. Für FotoKit keine sichtbare Änderung.'],
   ['1.25.0', '28.10.2026', 'Spektron-Ordner ist da: Neue Projekte (ab 26.0560) und per Projektzentrale umgezogene Projekte haben ihre App-Daten jetzt im Unterordner „_Spektron“ (bitte nicht anfassen). Noch nicht umgezogene Projekte werden weiter am bisherigen Ort gelesen und geschrieben. Fotos, Bilddokumentation und „_aussortiert“ bleiben, wo sie sind.'],
   ['1.24.2', '28.10.2026', 'Leiste oben: die Haken für Proben, Fotos, Ergebnisse, Plan und Abrechnung finden die App-Daten auch im künftigen Ordner „_Spektron“ (spektron-ordner.js). Keine sichtbare Änderung.'],
@@ -2304,9 +2304,14 @@ async function transferLocked(src, dst, from, to){
   assertOriginalsWritable();
   const nh = await dst.getFileHandle(to, { create:true });
   assertOriginalsWritable();
+  // The target must still be empty – otherwise another PC (whose browser lock we cannot see) took the same name after our
+  // exists() check, and writing would replace its photo. The old content stays readable while our writer is open.
+  const belegt = async () => (await nh.getFile()).size > 0;
   const w = await nh.createWritable();
   try{
+    if (await belegt()) throw new Error(`„${to}“ wurde gerade an einem anderen Rechner angelegt – nichts verändert, bitte erneut umbenennen.`);
     assertOriginalsWritable(); await w.write(f);
+    if (await belegt()) throw new Error(`„${to}“ wurde gerade an einem anderen Rechner angelegt – nichts verändert, bitte erneut umbenennen.`);
     assertOriginalsWritable(); await w.close();
   }catch(e){ try{ await w.abort(); }catch(_){} throw e; }
   // Compare every byte (same size is not enough) – and the original again, in case it changed meanwhile.
