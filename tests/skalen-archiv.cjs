@@ -19,6 +19,7 @@ function welt({ archiv = true, lesen = 'granted', schreiben = 'granted', datei, 
     async requestPermission({ mode }){ log.gefragt++; return perm[mode] === 'prompt' ? (perm[mode] = 'granted') : perm[mode]; },
     async getFileHandle(name, o = {}){
       if (!files.has(name) && !o.create){ const e = new Error('fehlt'); e.name = 'NotFoundError'; throw e; }
+      if(o.create&&!files.has(name))files.set(name,'');
       return { async getFile(){ const t = files.get(name) ?? ''; return { async text(){ return t; } }; },
         async createWritable(){ let buf = ''; return { async write(x){ buf += x; }, async close(){ const f = log.beimSchreiben; log.beimSchreiben = null; if (f) await f(); files.set(name, buf); log.geschrieben++; } }; } };
     }

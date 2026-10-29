@@ -503,11 +503,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.25.0';
+const APP_VERSION = '1.26.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:246b9275cc4ecdc7482dd242a4e949d2ddfa361afbaa0c42e9c999d0989c6126';
-const APP_DATE = '2026-10-28';
+const APP_BUILD = 'sha256:ab2a2c64792dfba54845f65131cc76c5c1c31f4d79e7bf5a1def0cb11b463a95';
+const APP_DATE = '2026-10-29';
 const CHANGELOG = [
+  ['1.26.0', '29.10.2026', 'Umgezogene LabelKit-Dateien behalten ihren fachlichen Zeitstand. Fotokopien werden byteweise geprüft; bei Abweichungen bleiben beide Dateien erhalten. Gemeinsame Skalen prüfen parallele Änderungen vor dem Schreiben; lokale Änderungen während des Teilens bleiben erhalten.'],
   ['1.25.0', '28.10.2026', 'Spektron-Ordner ist da: Neue Projekte (ab 26.0560) und per Projektzentrale umgezogene Projekte haben ihre App-Daten jetzt im Unterordner „_Spektron“ (bitte nicht anfassen). Noch nicht umgezogene Projekte werden weiter am bisherigen Ort gelesen und geschrieben. Fotos, Bilddokumentation und „_aussortiert“ bleiben, wo sie sind.'],
   ['1.24.2', '28.10.2026', 'Leiste oben: die Haken für Proben, Fotos, Ergebnisse, Plan und Abrechnung finden die App-Daten auch im künftigen Ordner „_Spektron“ (spektron-ordner.js). Keine sichtbare Änderung.'],
   ['1.24.1', '28.10.2026', 'Gemeinsames Modul spektron-ordner.js: Unterordner werden zuerst direkt mit ihrem Namen gesucht (wie überall sonst in den Apps), erst dann ohne Groß-/Kleinschreibung. Keine sichtbare Änderung.'],
@@ -518,7 +519,7 @@ const CHANGELOG = [
   ['1.21.0', '26.10.2026', 'Projektdaten: Das Schadendatum kann „nicht bekannt“ sein (Knopf neben dem Feld; gespeichert wie in der Projektzentrale als „unbekannt“, auf dem Deckblatt „nicht bekannt“). Das Schadenereignis ist keine Pflichtangabe mehr. Das helle Firmenzeichen auf dem Deckblatt steht jetzt waagrecht mittig. Umbenennen: Scheitert ein Schritt, nachdem Bilder schon ihre Nummern getauscht haben (z. B. erstes Bild ans Ende gezogen), werden alle Namen wieder richtig zurückgesetzt; lässt sich eine Datei nicht zurückbenennen, nennt die Meldung sie. Im Kopiermodus bleibt keine doppelte Kopie liegen, wenn das Original gesperrt ist. „Rückgängig“ überschreibt keine Beschreibung mehr, die nach dem Umbenennen geändert wurde. Bewertungsskala: Eine Kategorie ohne „ab“-Wert wird nicht gespeichert und bewertet keine Werte (vorher landete jeder Wert in ihr). Wiederherstellen einer Projektfassung prüft die Projektnummer jetzt auch bei 2–6-stelligen Nummern richtig. Gemeinsame Skalen: Eine Skala, die geändert wird, während eine andere gerade in die gemeinsame Datei geschrieben wird, geht nicht mehr verloren (wie PlanKit 1.38.0).'],
   ['1.20.1', '26.10.2026', 'Ergebnistabelle: Liefert das Labor denselben Parameter je Probe und je Fläche (Eurofins: Chlorid in µg/Probe und berechnet in mg/m²), steht in der Übersicht immer der Wert je Fläche – wie in ResultKit und PlanKit. Vorher konnte je nach Reihenfolge im Bericht der Wert je Probe in einer eigenen Tabelle landen.'],
   ['1.20.0', '26.10.2026', 'Ergebnistabelle: Chlorid wird bewertet – wie in ResultKit und PlanKit nach VdS 2357 (5–10 µg/cm² korrosionschemisch relevante Größenordnung): unterhalb (< 5), im Bereich (5 – < 10), oberhalb (≥ 10 µg/cm²), unabhängig von der Nutzung. Ältere Berichte in mg/m² mit umgerechneten Grenzen (1 µg/cm² = 10 mg/m²).'],
-  ['1.19.0', '26.10.2026', 'Ergebnistabelle: Im Projekt kommen die Laborwerte jetzt aus ResultKit (dort importiert, geprüft und übernommen – „Laborergebnisse/_Ergebnisse.json“), mit allen geltenden Prüfberichten in einer Tabelle. Hinweis, wenn sich der Ordner seit der Übernahme geändert hat oder noch Proben fehlen; Knopf „🧪 ResultKit öffnen“. Eine XML direkt („Andere Datei …“) nur noch ohne Projektordner. Spektron-Leiste mit fünftem Schritt ResultKit, passt auch auf schmale Handys.'],
+  ['1.19.0', '26.10.2026', 'Ergebnistabelle: Im Projekt kommen die Laborwerte jetzt aus ResultKit (dort importiert, geprüft und übernommen – „_Spektron/ResultKit/_Ergebnisse.json“ (bei älteren Projekten „Laborergebnisse/_Ergebnisse.json“)), mit allen geltenden Prüfberichten in einer Tabelle. Hinweis, wenn sich der Ordner seit der Übernahme geändert hat oder noch Proben fehlen; Knopf „🧪 ResultKit öffnen“. Eine XML direkt („Andere Datei …“) nur noch ohne Projektordner. Spektron-Leiste mit fünftem Schritt ResultKit, passt auch auf schmale Handys.'],
   ['1.18.0', '26.10.2026', 'Spektron-Leiste oben: rechts „💬 Rückmeldung“ (bei schmalem Fenster nur 💬, auf dem Handy im Projektmenü ▾). Öffnet das Rückmeldeformular in einem eigenen Fenster; Programm, Version und – bei geöffnetem Projekt – die Projektnummer sind schon eingetragen (nur die Nummer, kein Ort). Die Leiste ist in allen Apps gleich.'],
   ['1.17.1', '26.10.2026', 'Bildzeile: Der geplante neue Name bleibt sichtbar, auch bei langen Originalnamen und in schmalen Fenstern – reicht der Platz nicht, steht er in einer eigenen Zeile. „Name doppelt“ und „aussortiert“ stehen immer vollständig in eigener Zeile, lange Namen brechen dabei um.'],
   ['1.17.0', '26.10.2026', 'Aufgeräumt – mehr Platz für die Fotos: Oben zwei statt vier Zeilen. Selten Gebrauchtes (Projektfassungen, Gesicherte Fassungen, Gesicherte Eingaben, Programmstand prüfen, Version und Build) steht unter „⋯ Mehr“; muss dort etwas entschieden werden, zeigt der Knopf einen roten Punkt. „Projekt öffnen“, „Fotos neu einlesen“, „Projektdaten“, Sortierung und „Dateibenennung“ bleiben in einer Zeile, der Speicherstatus steht klein daneben (Fehler rot). Bildkarten etwa ein Drittel niedriger: Originalname und geplanter neuer Name in einer Zeile, ohne die Zeile „Abschnitt: nicht zugeordnet“ (das Feld zeigt den übernommenen Abschnitt). ▲ ✕ ▼ bleiben an jedem Bild. Unten eine Zeile; die Tastenkürzel stehen unter „⌨ Tastenkürzel“ und in der Kurzanleitung. Das Beispiel für Dateinamen steht jetzt in „Dateibenennung“.'],
@@ -1218,11 +1219,11 @@ async function skalenArchiv(modus, fragen){
 async function skalenDatei(a){
   let f;
   try{ f = await (await a.getFileHandle(SKALEN_DATEI)).getFile(); }catch(e){ if (e && e.name === 'NotFoundError') return { skalen: null, roh: null }; throw e; }
-  const o = JSON.parse(await f.text());
+  const text=await f.text(),o = JSON.parse(text);
   if (!o || o.format !== 'spektron-skalen' || !o.skalen || typeof o.skalen !== 'object' || Array.isArray(o.skalen)) throw Error(SKALEN_DATEI + ': unbekanntes Format');
   const skalen = {};
   for (const [k, v] of Object.entries(o.skalen)) if (skalaGueltig(v)) skalen[k] = v;
-  return { skalen, roh: o };
+  return { skalen, roh: o, text };
 }
 /** Stand der Datei plus eigene, noch nicht geteilte Änderungen (und beim ersten Mal: eigene Skalen, die dort fehlen). */
 function skalenZusammen(datei, lokal, offen, erst){
@@ -1241,18 +1242,23 @@ function skalenNachHochladen(skalen, hochgeladen, lokalVorher){
 }
 /** Datei schreiben, wenn Schreibrecht da ist (fragen = nach einem Klick nachfragen dürfen). true = geteilt. */
 function skalenHochladen(fragen){
-  skalenLaeuft = skalenLaeuft.then(async () => {
+  skalenLaeuft = skalenLaeuft.catch(()=>false).then(() => {const run=async()=>{
     const a = await skalenArchiv('readwrite', fragen); if (!a) return false;
     try{
       const d = await skalenDatei(a), lokal = skLesen(SKALEN_LOKAL, {}), z = skalenZusammen(d.skalen, lokal, skLesen(SKALEN_OFFEN, {}), localStorage.getItem(SKALEN_MERKER) !== '1');
       if (!Object.keys(z.offen).length){ if (d.skalen) skSchreiben(SKALEN_LOKAL, z.skalen); return true; }
       const o = Object.assign({}, d.roh || {}, { format: 'spektron-skalen', version: 1, geaendert: new Date().toISOString(), skalen: z.skalen });
       const w = await (await a.getFileHandle(SKALEN_DATEI, { create: true })).createWritable();
-      await w.write(JSON.stringify(o, null, 2)); await w.close();
+      try{
+        const latest=await(await(await a.getFileHandle(SKALEN_DATEI)).getFile()).text();
+        if(latest!==(d.text??''))throw Error('Gemeinsame Skalen inzwischen geändert.');
+        const text=JSON.stringify(o,null,2);await w.write(text);await w.close();
+        if((await skalenDatei(a)).text!==text)throw Error('Gemeinsame Skalen konnten nicht bestätigt werden.');
+      }catch(e){await w.abort().catch(()=>{});throw e;}
       skalenNachHochladen(z.skalen, z.offen, lokal); localStorage.setItem(SKALEN_MERKER, '1');
       return true;
     }catch(e){ return false; }
-  });
+  };return globalThis.navigator?.locks?globalThis.navigator.locks.request("spektron:skalen",run):run();});
   return skalenLaeuft;
 }
 /** Beim Öffnen eines Projekts: gemeinsame Skalen holen. 'datei' = Stand des Archivordners, 'lokal' = ohne Archiv/Recht. */
@@ -2238,7 +2244,7 @@ document.addEventListener('keydown', e => {
 function assertOriginalsWritable(){
   if (P.readOnly) throw new Error(PROTECTED_PROJECT);
 }
-async function exists(dir, name){ try{ await dir.getFileHandle(name); return true; }catch(e){ return false; } }
+async function exists(dir, name){ try{ await dir.getFileHandle(name); return true; }catch(e){ if(e.name==='NotFoundError')return false;throw e; } }
 // A lookup of an invalid name throws TypeError; a merely missing file throws NotFoundError.
 async function assertNameOk(dir, name){
   try{ await dir.getFileHandle(name); }
@@ -2253,7 +2259,11 @@ const browserVer = (navigator.userAgent.match(/(Edg|OPR|Chrome)\/[\d.]+/) || ['u
 /* Moves/renames one file and VERIFIES the result on disk.
    1st choice: native handle.move(). If the browser reports success but the disk
    says otherwise (or move is unsupported), switch to copy + verify + delete. */
-async function transfer(src, dst, from, to){
+async function transfer(src,dst,from,to){
+  const run=()=>transferLocked(src,dst,from,to);
+  return navigator.locks?navigator.locks.request("fotokit:originale",run):run();
+}
+async function transferLocked(src, dst, from, to){
   assertOriginalsWritable();
   if (await exists(dst, to)) throw new Error('Zieldatei existiert bereits: ' + to);
   const h = await src.getFileHandle(from);
@@ -2282,11 +2292,10 @@ async function transfer(src, dst, from, to){
     assertOriginalsWritable(); await w.write(f);
     assertOriginalsWritable(); await w.close();
   }catch(e){ try{ await w.abort(); }catch(_){} throw e; }
-  const copy = await nh.getFile();
-  if (copy.size !== f.size){
-    assertOriginalsWritable();
-    try{ await dst.removeEntry(to); }catch(_){}
-    throw new Error('Kopie unvollständig, Original bleibt erhalten: ' + from);
+  const identical=async(a,b)=>{if(a.size!==b.size)return false;const x=new Uint8Array(await a.arrayBuffer()),y=new Uint8Array(await b.arrayBuffer());return x.length===y.length&&x.every((v,i)=>v===y[i]);};
+  const copy=await nh.getFile();
+  if(!await identical(copy,f)||!await identical(await(await src.getFileHandle(from)).getFile(),f)){
+    throw new Error('Kopie oder Original inzwischen abweichend – beide Dateien bleiben erhalten: '+from);
   }
   await dst.getFileHandle(to);                                          // throws if the copy is not there
   assertOriginalsWritable();
@@ -2295,9 +2304,8 @@ async function transfer(src, dst, from, to){
   // Nur ein bestätigtes „nicht gefunden“ zählt als entfernt; scheitert die Prüfung selbst (Berechtigung, Laufwerk), gilt das Original als noch da.
   const nochDa = await src.getFileHandle(from).then(() => true, e => !(e && e.name === 'NotFoundError'));
   if (nochDa){
-    // the original stays – remove the copy again, otherwise the photo exists twice
-    assertOriginalsWritable();
-    try{ await dst.removeEntry(to); }catch(_){}
+    // Remove only our still-identical copy while the original remains.
+    if(await identical(await nh.getFile(),f)){assertOriginalsWritable();await dst.removeEntry(to);}
     throw rmErr || new Error(`„${from}“ konnte nicht entfernt werden – ist die Datei in einem anderen Programm geöffnet?`);
   }
 }
@@ -3845,7 +3853,7 @@ async function loadBohrkernZuordnung(){
     let best = null;
     for await (const h of d.values()){
       if (h.kind !== 'file' || !/_Daten\.json$/i.test(h.name)) continue;
-      const f = await h.getFile(); if (!best || f.lastModified > best.lastModified) best = f;
+      const f = await SO.dateiLesen(d, h); if (!best || f.lastModified > best.lastModified) best = f;
     }
     if (!best) return;
     const daten = JSON.parse(await best.text());
@@ -4191,7 +4199,7 @@ function labText(res){
     '\r\n\r\n' + res.foot.join('\r\n');
 }
 
-/* Laborergebnisse aus ResultKit (ab 1.19): Im Projekt kommen die Werte aus „Laborergebnisse/_Ergebnisse.json“ – dort sind die
+/* Laborergebnisse aus ResultKit (ab 1.19): Im Projekt kommen die Werte aus „_Spektron/ResultKit/_Ergebnisse.json“ (bei älteren Projekten „Laborergebnisse/_Ergebnisse.json“) – dort sind die
    Prüfberichte geprüft und zusammengeführt (endgültig vor vorläufig, ersetzte Berichte entfallen). FotoKit liest die Datei nur.
    Format spektron-ergebnisse v1 (ResultKit src/ergebnisse.ts). Ergebnis hat dieselbe Form wie parseLabXml, damit labTables gleich bleibt. */
 const ERGEBNIS_DATEI = '_Ergebnisse.json';
@@ -4249,7 +4257,7 @@ async function findLabFiles(){
   LAB.files.sort((a, b) => b.mod - a.mod);
   // Neueste LabelKit-Datei gehört zum Stand der Übernahme (wie in ResultKit)
   const la = (await SO.ort(S.proj.dir, 'labelkit').catch(() => ({ dir: null }))).dir, laPfad = 'Laboraufträge';   // feste Kennung wie in ResultKit – bleibt nach dem Umzug gleich
-  if (la){ let neu = null; for await (const h of la.values()) if (h.kind === 'file' && /_Daten\.json$/i.test(h.name)){ const f = await h.getFile(); if (!neu || f.lastModified > neu.t) neu = { name: laPfad + '/' + h.name, size: f.size, t: f.lastModified }; } if (neu) stand.push(neu); }
+  if (la){ let neu = null; for await (const h of la.values()) if (h.kind === 'file' && /_Daten\.json$/i.test(h.name)){ const f = await SO.dateiLesen(la, h); if (!neu || f.lastModified > neu.t) neu = { name: laPfad + '/' + h.name, size: f.size, t: f.lastModified }; } if (neu) stand.push(neu); }
   LAB.stand = standKennung(stand);
 }
 async function loadLabFile(file){
@@ -4263,7 +4271,7 @@ async function openLabDialog(){
   recompute();
   await findLabFiles();
   await loadBohrkernZuordnung();
-  // Im Projekt: immer der in ResultKit übernommene Stand („Laborergebnisse/_Ergebnisse.json“) – nach erneuter Übernahme ohne neues Öffnen.
+  // Im Projekt: immer der in ResultKit übernommene Stand („_Spektron/ResultKit/_Ergebnisse.json“ (bei älteren Projekten „Laborergebnisse/_Ergebnisse.json“)) – nach erneuter Übernahme ohne neues Öffnen.
   // Ohne Projekt (beliebiger Fotoordner) bleibt die von Hand gewählte XML, bis ein anderer Ordner geöffnet wird.
   SKALEN_STAND = await skalenAbgleich();
   await loadSkalenregel();
@@ -4460,7 +4468,7 @@ const HELP_HTML = `
       <li><b>Umbenennen</b> – benennt die Dateien im Ordner nach der Beschreibung (z. B. <code>03_P2_Küche_Decke.jpg</code>). Rückgängig ist danach möglich.</li>
       <li><b>Bilddokumentation erstellen …</b> – Bilddokumentation als PDF mit Deckblatt, 2 Bildern pro Seite und Probenahmestellen; wird im Ordner <code>Fotos</code> gespeichert als <code>Bilddokumentation_26.0123_Köln_2026-10-19.pdf</code> (ältere Dateien werden nie überschrieben), bei Bedarf in Teile ≤ 14 MB aufgeteilt. <b>Bildqualität</b>: Standard reicht für Druck und Bildschirm; „E-Mail“ für kleinste Dateien, „Detail“ zum starken Hineinzoomen.</li>
       <li><b>ZIP exportieren</b> – Bilder mit neuen Namen plus Anweisung, wenn eine KI die Dokumentation erstellen soll.</li>
-      <li><b>Ergebnistabelle …</b> – nimmt die in <b>ResultKit</b> geprüften und übernommenen Laborergebnisse (<code>Laborergebnisse/_Ergebnisse.json</code>; Prüfberichte werden nur dort importiert – ohne Projektordner geht weiterhin „Andere Datei …“ mit dem XML-Export), ordnet die Proben über die Probe-Nr. den Fotos zu (bei Bohrkernen auch über die Kern-ID, z. B. <code>EG-WZ-B-7</code> – Zuordnung aus LabelKit; Regel: <a href="../aidkit/#bohrkern" target="aidkit" rel="noopener">📘 Probenbezeichnung Bohrkerne</a>), bewertet nach eurer Skala (eigene Skalen liegen im Archivordner in <code>_Spektron-Skalen.json</code> und gelten fürs ganze Büro) und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
+      <li><b>Ergebnistabelle …</b> – nimmt die in <b>ResultKit</b> geprüften und übernommenen Laborergebnisse (<code>_Spektron/ResultKit/_Ergebnisse.json</code>, bei älteren, noch nicht umgezogenen Projekten <code>Laborergebnisse/_Ergebnisse.json</code>; Prüfberichte werden nur dort importiert – ohne Projektordner geht weiterhin „Andere Datei …“ mit dem XML-Export), ordnet die Proben über die Probe-Nr. den Fotos zu (bei Bohrkernen auch über die Kern-ID, z. B. <code>EG-WZ-B-7</code> – Zuordnung aus LabelKit; Regel: <a href="../aidkit/#bohrkern" target="aidkit" rel="noopener">📘 Probenbezeichnung Bohrkerne</a>), bewertet nach eurer Skala (eigene Skalen liegen im Archivordner in <code>_Spektron-Skalen.json</code> und gelten fürs ganze Büro) und kopiert die Tabelle zum Einfügen ins Gutachten (Word: <kbd>Strg+V</kbd>).</li>
     </ul></li>
 </ol>
 <h4>Tastenkürzel</h4>

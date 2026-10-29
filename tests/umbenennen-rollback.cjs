@@ -25,13 +25,13 @@ function welt(start){
           if (files.has(to)) throw err('InvalidModificationError', 'existiert');
           files.set(to, files.get(n)); files.delete(n);
         },
-        async getFile(){ const v = files.get(n); return { size: v.length, v }; },
+        async getFile(){ const v = files.get(n); return { size: v.length, v, arrayBuffer:async()=>new TextEncoder().encode(v).buffer }; },
         async createWritable(){ let buf = ''; return { async write(f){ buf = f.v; }, async close(){ files.set(n, buf); }, async abort(){} }; } };
     },
     async removeEntry(n){ if (locked.has(n)) throw err('NoModificationAllowedError', 'Datei gesperrt'); files.delete(n); }
   };
   const ctx = { S: { dir }, P: { readOnly: false }, TMP_PREFIX: 'umb-tmp_', extOf: n => n.slice(n.lastIndexOf('.')),
-    PROTECTED_PROJECT: 'x', navigator: { userAgent: '' }, Date, Error, TypeError };
+    PROTECTED_PROJECT: 'x', navigator: { userAgent: '' }, Date, Error, TypeError, TextEncoder, Uint8Array };
   vm.runInNewContext('function assertOriginalsWritable(){}\n' + html.slice(a, b) + ';this.runPairs = runPairs; this.renameFile = renameFile;', ctx);
   return { ...ctx, files, locked, noMove, noCreate, dir, stand: () => Object.fromEntries([...files].sort()) };
 }

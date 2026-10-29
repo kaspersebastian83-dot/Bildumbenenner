@@ -62,7 +62,7 @@ const BEREICHE = Object.freeze({
   labelkitAblage:     Object.freeze({ app: 'LabelKit', alt: ['Feldprotokolle'], neu: ['LabelKit'], passt: datei('_Ablage-Protokoll.txt') }),
   resultkit:          Object.freeze({ app: 'ResultKit', alt: ['Laborergebnisse'], neu: ['ResultKit'], passt: datei('_Ergebnisse.json', '_Ergebnisse.vorher.json') }),
   plankit:            Object.freeze({ app: 'PlanKit', alt: ['Pläne'], neu: ['PlanKit'], passt: muster(/\.probenplan$/i) }),
-  belegkit:           Object.freeze({ app: 'BelegKit', alt: ['Abrechnung'], neu: ['BelegKit'], passt: oder(muster(/\.json$/i), ordner('_BelegKit_Sicherungen')) }),
+  belegkit:           Object.freeze({ app: 'BelegKit', alt: ['Abrechnung'], neu: ['BelegKit'], passt: oder(datei('_Abrechnung.json'), muster(/^Aufwand_[A-Za-zÄÖÜäöü]{1,6}\.json$/i), muster(/^\d{2}[.-]\d{2,6}_Aufwand_\d{4}-\d{2}-\d{2}(?:_\d+)?\.json$/i), ordner('_BelegKit_Sicherungen')) }),
   buero:              Object.freeze({ app: 'BüroKit, Projektzentrale', alt: ['_Buero'], neu: ['Buero'], passt: () => true }),
   anlagenProtokoll:   Object.freeze({ app: 'Projektzentrale, PlanKit', alt: ['Mitteilungen'], neu: ['Protokolle'], passt: datei('_Anlagen-Protokoll.txt') })
 });
@@ -115,6 +115,18 @@ async function umzugVermerk(sp){
     return o && o.format === 'spektron-umzug' && typeof o.version === 'number' && o.version >= 1 && o.bereiche && typeof o.bereiche === 'object' ? o : null;   // auch neuere Fassungen zählen als Vermerk
   }catch(e){ return null; }          // unlesbar = kein Vermerk; dann gilt der frühere Ort, solange dort etwas liegt
 }
+// Copying cannot preserve filesystem timestamps. Use the recorded source time only
+// for an unchanged, hash-verified copy; any later write uses its real timestamp.
+const quellStaende = new WeakMap();
+async function dateiLesen(dir, handle){
+  const f = await handle.getFile(), staende = quellStaende.get(dir);
+  const s = staende && staende.find(x => x.name === handle.name);
+  if (!s || !Number.isFinite(s.t) || s.bytes !== f.size || s.kopieT !== f.lastModified) return f;
+  const hash = Array.from(new Uint8Array(await (root.crypto || globalThis.crypto).subtle.digest('SHA-256', await f.arrayBuffer())), b => b.toString(16).padStart(2, '0')).join('');
+  if (hash !== s.sha256) return f;
+  if (typeof File === 'function' && f instanceof Blob) return new File([f], f.name, { type: f.type, lastModified: s.t });
+  return { ...f, name: f.name || handle.name, lastModified: s.t, text: () => f.text(), arrayBuffer: () => f.arrayBuffer() };
+}
 async function hinweisSchreiben(sp){
   if (await kind(sp, HINWEIS_DATEI)) return;
   const w = await (await sp.getFileHandle(HINWEIS_DATEI, { create: true })).createWritable();
@@ -151,6 +163,11 @@ async function ort(projektDir, bereich, optionen){
   const fertig = async (wo, dir, konflikt, umgezogen) => {
     if (anlegen && wo === 'neu'){ const sp = await spektronDir(projektDir, true); if (!dir) dir = await unter(sp, b.neu, true); }
     else if (anlegen && !dir) dir = await unter(projektDir, altPfad, true);
+    if (dir && wo === 'neu' && bereich === 'labelkit'){
+      const v = await umzugVermerk(await hatSpektron(projektDir));
+      const s = v && v.bereiche.labelkit && v.bereiche.labelkit.staende;
+      if (Array.isArray(s)) quellStaende.set(dir, s); else quellStaende.delete(dir);
+    }
     return { dir: dir || null, wo, pfad: (wo === 'neu' ? neuPfad : altPfad).join('/'), konflikt: !!konflikt, umgezogen: !!umgezogen, bereich };
   };
   const altDir = await unter(projektDir, altPfad, false);
@@ -179,7 +196,7 @@ async function umzugListe(projektDir){
 }
 
 const api = Object.freeze({ VERSION, ORDNER, AB, UMSTELLUNG, MARKER, HINWEIS_DATEI, HINWEIS_TEXT, BEREICHE,
-  projektKey, istSpektronProjekt, ort, umzugListe, spektronDir, unter });
+  projektKey, istSpektronProjekt, ort, umzugListe, spektronDir, unter, dateiLesen });
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 root.SpektronOrdner = api;
 })(typeof window !== 'undefined' ? window : globalThis);

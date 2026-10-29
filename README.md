@@ -1,5 +1,9 @@
 # FotoKit (früher Bildumbenenner)
 
+## 1.26.0 · 29.10.2026
+
+Umgezogene LabelKit-Dateien behalten ihren fachlichen Zeitstand. Fotokopien werden byteweise geprüft; bei Abweichungen bleiben beide Dateien erhalten. Gemeinsame Skalen prüfen parallele Änderungen vor dem Schreiben; lokale Änderungen während des Teilens bleiben erhalten.
+
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
 **App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.23.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
