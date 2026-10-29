@@ -25,13 +25,13 @@ function welt(start){
           if (files.has(to)) throw err('InvalidModificationError', 'existiert');
           files.set(to, files.get(n)); files.delete(n);
         },
-        async getFile(){ const v = files.get(n); return { size: v.length, v }; },
+        async getFile(){ const v = files.get(n); return { size: v.length, v, arrayBuffer: async () => new TextEncoder().encode(v).buffer }; },
         async createWritable(){ let buf = ''; return { async write(f){ buf = f.v; }, async close(){ files.set(n, buf); }, async abort(){} }; } };
     },
     async removeEntry(n){ if (locked.has(n)) throw err('NoModificationAllowedError', 'Datei gesperrt'); files.delete(n); }
   };
   const ctx = { S: { dir }, P: { readOnly: false }, TMP_PREFIX: 'umb-tmp_', extOf: n => n.slice(n.lastIndexOf('.')),
-    PROTECTED_PROJECT: 'x', navigator: { userAgent: '' }, Date, Error, TypeError };
+    PROTECTED_PROJECT: 'x', navigator: { userAgent: '' }, Date, Error, TypeError, TextEncoder, Uint8Array };
   vm.runInNewContext('function assertOriginalsWritable(){}\n' + html.slice(a, b) + ';this.runPairs = runPairs; this.renameFile = renameFile;', ctx);
   return { ...ctx, files, locked, noMove, noCreate, dir, stand: () => Object.fromEntries([...files].sort()) };
 }
@@ -74,5 +74,20 @@ const PAIRS = [{ from: '02_Kueche.jpg', to: '01_Kueche.jpg' }, { from: '03_Kuech
     await assert.rejects(() => w.renameFile(w.dir, 'IMG_2.jpg', '02_Flur.jpg'), /gesperrt/);
     assert.deepEqual(w.stand(), { 'IMG_2.jpg': 'Y' }, 'keine doppelte Datei');
   }
-  console.log('OK Umbenennen: Rücksetzen bei getauschten Nummern, gesperrte Datei gemeldet, keine doppelte Kopie');
+  { // Kopiermodus: Kopie gleich groß, aber anderer Inhalt (Audit F04) → Fehler, Original bleibt, nichts gelöscht
+    const w = welt({ 'IMG_3.jpg': 'QRST' });
+    w.noMove.add('IMG_3.jpg');
+    const get = w.dir.getFileHandle.bind(w.dir);
+    w.dir.getFileHandle = async (n, o) => { const h = await get(n, o); if (n !== '03_Flur.jpg') return h; return { ...h, async createWritable(){ return { async write(){}, async close(){ w.files.set(n, 'QRSX'); }, async abort(){} }; } }; };
+    await assert.rejects(() => w.renameFile(w.dir, 'IMG_3.jpg', '03_Flur.jpg'), /stimmt nicht mit dem Original/);
+    assert.equal(w.files.get('IMG_3.jpg'), 'QRST', 'Original unverändert da');
+    assert.equal(w.files.get('03_Flur.jpg'), 'QRSX', 'abweichende Kopie bleibt zur Prüfung liegen');
+  }
+  { // Zwei Umbenennungen nacheinander, nicht verschränkt: mit Web Locks läuft jede Übertragung unter „fotokit:originale“
+    const w = welt({ 'IMG_4.jpg': 'U' }), namen = [];
+    w.navigator.locks = { request: async (name, fn) => { namen.push(name); return fn(); } };
+    await w.renameFile(w.dir, 'IMG_4.jpg', '04_Flur.jpg');
+    assert.deepEqual(namen, ['fotokit:originale']); assert.deepEqual(w.stand(), { '04_Flur.jpg': 'U' });
+  }
+  console.log('OK Umbenennen: Rücksetzen bei getauschten Nummern, gesperrte Datei gemeldet, keine doppelte Kopie, abweichende Kopie erkannt');
 })().catch(e => { console.error(e); process.exitCode = 1; });
