@@ -528,11 +528,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.28.0';
+const APP_VERSION = '1.29.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:a1f6443e9f284a337e6ff1766d059ac446be4a9ff8b384a18994a33058b576c6';
+const APP_BUILD = 'sha256:ff4ccfc044e361aa566be9338ab7e6369290b1974bb5a45077993dad4b812ce3';
 const APP_DATE = '2026-10-30';
 const CHANGELOG = [
+  ['1.29.0', '30.10.2026', 'Für BerichtKit (Anlagen): „Anlagen-Nr.“ ist ohne Eintrag „Anlage 2“ – feste Hausreihenfolge im Bericht: Anlage 1 Prüfbericht(e), 2 Bilddokumentation, 3 Probenplan (änderbar, z. B. „Anlage 3“ bei zwei Prüfberichten). FotoKit vermerkt in _Bildumbenenner.json, welche Bilddokumentation zuletzt erstellt wurde (Dateien, Zeit, Anlagen-Nr.) und wann sich danach etwas geändert hat, was in der Doku steht (Beschreibungen, Abschnitte, Proben, Drehung, Auswahl, Reihenfolge, Dateinamen, Projektdaten, neue oder entfernte Fotos – auch über „Fotos übernehmen“ und Änderungen eines Kollegen, die beim Zusammenführen hereinkommen). So erkennt BerichtKit eine veraltete Bilddoku und nimmt sie nicht ungefragt als Anlage. Sonst keine sichtbare Änderung.'],
   ['1.28.0', '30.10.2026', 'Bilder für die Doku auswählen: Jede Zeile hat jetzt einen Haken (Haken = kommt in die Bilddokumentation). Oben „Alle“, „Keine“, „Umkehren“ und „… nicht angehakte aussortieren“ – praktisch, wenn nur wenige von vielen Fotos in die Doku sollen. Aussortiert wird wie mit ✕ (nichts wird gelöscht, ↺ holt zurück). Sind beim Erstellen der Doku, beim ZIP oder beim Umbenennen noch Bilder nicht angehakt, fragt FotoKit nach. Das ✕ funktioniert wie bisher.'],
   ['1.27.0', '30.10.2026', 'Spektron-Leiste: neuer Schritt „BerichtKit“ (Asbest-Untersuchungsbericht) zwischen PlanKit und BelegKit – Haken, sobald ein Bericht in „Mitteilungen“ liegt. Gemeinsames Modul spektron-ordner.js: neuer Bereich „BerichtKit“ (Angaben zum Bericht in „_Spektron/BerichtKit“).'],
   ['1.26.0', '29.10.2026', 'Prüfbericht vom 29.10., Teil 2: Muss FotoKit beim Umbenennen kopieren statt verschieben, wird die Kopie jetzt Byte für Byte mit dem Original verglichen (bisher nur die Dateigröße) und das Original vor dem Löschen noch einmal – weicht etwas ab, bleiben beide Dateien liegen und FotoKit meldet es. Zwei FotoKit-Fenster benennen nicht mehr gleichzeitig um (im selben Browser); hat ein anderer Rechner den Zielnamen inzwischen belegt, wird nichts überschrieben und nichts gelöscht. Gemeinsame Skalen: Hat ein Kollege die Datei inzwischen geändert, wird nichts überschrieben; die eigene Skala bleibt „noch nicht geteilt“ und wird beim nächsten Mal mitgeschickt. Hilfe nennt den Ort von „_Ergebnisse.json“ nach dem Umzug.'],
@@ -627,7 +628,41 @@ const store = {
 function projGet(kind, d){ return P.data && P.data[kind] !== undefined ? clone(P.data[kind]) : d; }
 function projSet(kind, v){
   if (!P.data || JSON.stringify(P.data[kind]) === JSON.stringify(v)) return;
-  P.data[kind] = clone(v); scheduleProjSave();
+  P.data[kind] = clone(v);
+  if (DOKU_KINDS.includes(kind)) dokuGeaendert();
+  scheduleProjSave();
+}
+/* Stand der Bilddokumentation für BerichtKit (Anlagen): „bilddoku“ = zuletzt erstellte PDF (Dateien, Zeit, Anlagen-Nr.),
+   „dokuGeaendert“ = letzte Änderung an dem, was in der Doku steht (Beschreibungen, Abschnitte, Proben, Drehung, Auswahl,
+   Reihenfolge, Dateinamen, Projektdaten). dokuGeaendert nach bilddoku.erstellt → die PDF ist veraltet. Prüfsummen zählen nicht.
+   Beides liegt oben in _Bildumbenenner.json (bei den übrigen Feldern ohne eigene Bearbeitung, „extensions“) und wird beim
+   Zusammenführen nicht als Widerspruch gewertet: es gilt der jeweils neuere Stand (doku­StandMischen). */
+const DOKU_KINDS = ['drafts', 'discard', 'rot', 'extra', 'orig', 'order', 'meta'];
+function dokuGeaendert(){ P.data.extensions = { ...(P.data.extensions || {}), dokuGeaendert: new Date().toISOString() }; }
+/** Fotos neu eingelesen (neue/entfernte Dateien, Fotos übernommen): Bestand anders als bei der PDF → Doku geändert (einmal) */
+function dokuBestandPruefen(){
+  const ext = P.data && P.data.extensions, b = ext && ext.bilddoku;
+  if (!b || !Array.isArray(b.bestand) || P.readOnly) return;
+  if (ext.dokuGeaendert && ext.dokuGeaendert > b.erstellt) return;   // schon veraltet
+  const damals = new Set(b.bestand), jetzt = S.items.map(it => it.name);
+  if (jetzt.length !== damals.size || jetzt.some(n => !damals.has(n))){ dokuGeaendert(); scheduleProjSave(); }
+}
+function bilddokuVermerken(dateien, anlage){
+  if (!P.data) return;
+  P.data.extensions = { ...(P.data.extensions || {}), bilddoku: { dateien: [...dateien], erstellt: new Date().toISOString(), anlage: String(anlage || '').trim(), version: APP_VERSION,
+    bestand: S.items.map(it => it.name) } };
+  scheduleProjSave();
+}
+const DOKU_FELDER = ['bilddoku', 'dokuGeaendert'];
+/** Doku-Inhalte vergleichbar (Schlüsselreihenfolge und Reihenfolge von „aussortiert“ egal, fehlend = leer) */
+const kanonisch = v => JSON.stringify(v, (k, x) => x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map(n => [n, x[n]])) : x);
+const dokuInhalt = d => kanonisch(DOKU_KINDS.map(k => k === 'discard' ? [...(d[k] || [])].sort() : d[k] === undefined ? (k === 'order' ? [] : {}) : d[k]));
+const ohneDokuStand = x => { const r = { ...(x || {}) }; for (const k of DOKU_FELDER) delete r[k]; return r; };
+function dokuStandMischen(o, t){
+  o = o || {}; t = t || {}; const r = {};
+  const g = [o.dokuGeaendert, t.dokuGeaendert].filter(v => typeof v === 'string' && v).sort().pop(); if (g) r.dokuGeaendert = g;
+  const b = [o.bilddoku, t.bilddoku].filter(v => v && typeof v === 'object').sort((x, y) => String(x.erstellt || '').localeCompare(String(y.erstellt || ''))).pop(); if (b) r.bilddoku = clone(b);
+  return r;
 }
 
 function projToJson(d = P.data){
@@ -864,7 +899,8 @@ function mergeExternal(theirs){
   flushDrafts(); saveExtra();                         // newest typing is part of "ours"
   const b = P.base || projFromJson({}), o = P.data, out = { theirs: new Set(), conflicts: new Set() };
   const m = {};
-  for (const kind of ['drafts', 'rot', 'extra', 'orig', 'hash', 'meta', 'extensions', 'imageExtensions']) m[kind] = mergeMap(b[kind], o[kind], theirs[kind], kind, out);
+  for (const kind of ['drafts', 'rot', 'extra', 'orig', 'hash', 'meta', 'imageExtensions']) m[kind] = mergeMap(b[kind], o[kind], theirs[kind], kind, out);
+  m.extensions = { ...mergeMap(ohneDokuStand(b.extensions), ohneDokuStand(o.extensions), ohneDokuStand(theirs.extensions), 'extensions', out), ...dokuStandMischen(o.extensions, theirs.extensions) };
   m.settings = theirs.settings || o.settings ? mergeMap(b.settings, o.settings, theirs.settings, 'settings', out) : null;
   m.discard = Object.keys(mergeMap(asSet(b.discard), asSet(o.discard), asSet(theirs.discard), 'discard', out));
   const orderChanged = !same(o.order, b.order) ? false : !same(theirs.order, o.order);
@@ -874,6 +910,11 @@ function mergeExternal(theirs){
     banner('err', 'Widersprüchliche Änderungen wurden nicht zusammengeführt. Deine Eingaben bleiben geöffnet. Bitte „Gesicherte Fassungen“ prüfen; eine Wiederherstellung muss ausdrücklich bestätigt werden.');
     throw new Error('Widersprüchliche Änderungen: ' + [...out.conflicts].join(', '));
   }
+  /* Doku-Stand über beide Fenster: Bringt das Zusammenführen Doku-Inhalte der anderen Seite herein, ist eine hier erstellte PDF
+     nicht mehr aktuell; bleibt eigener Doku-Inhalt übrig, den die andere Seite nicht hatte, fehlt er in deren neuer PDF.
+     In beiden Fällen gilt die Doku jetzt als geändert – Zeitstempel allein sagen nichts darüber, woraus eine PDF gebaut wurde. */
+  if (dokuInhalt(m) !== dokuInhalt(o) || (dokuInhalt(m) !== dokuInhalt(theirs) && !same(theirs.extensions && theirs.extensions.bilddoku, b.extensions && b.extensions.bilddoku)))
+    m.extensions.dokuGeaendert = new Date().toISOString();
   P.data = m;
   applyMergedToItems(orderChanged);
   out.theirs.delete('');
@@ -1689,6 +1730,7 @@ async function fotoUebernehmen(ordner, alsAbschnitt){
       if (log.length){
         const ext = P.data.extensions || (P.data.extensions = {});
         ext.fotoUebernahmen = [...(Array.isArray(ext.fotoUebernahmen) ? ext.fotoUebernahmen : []), ...log];
+        dokuGeaendert();   // neue Fotos: eine vorher erstellte Bilddoku ist nicht mehr vollständig
         scheduleProjSave();
       }
     }finally{ S.busy = false; }
@@ -1818,6 +1860,7 @@ async function loadItems(){
   applySort(items);
   const previousItems = S.items;
   S.items = items; S.otherNames = otherNames; S.focus = -1;
+  dokuBestandPruefen();
   ROT = rot; HASH = hash; EXTRA = extra; ORIG = orig;
   $('list').innerHTML = '';
   hideBanner();
@@ -2740,12 +2783,15 @@ const SUM_NAME = 'Pruefsummen.sha256';
 /* ---------- project data + AI instructions ---------- */
 /* Pflichtangaben (wie Projektzentrale „Projektdaten“): stehen auf dem Deckblatt der Bilddokumentation. Nur hervorgehoben, nie blockierend. */
 const META_PFLICHT = ['proj', 'anlage', 'objekt', 'sdatum', 'ort', 'sv'];
+/* Anlagen-Nr. ohne Eintrag: feste Hausreihenfolge im Bericht (Basti, 30.10.2026) – Anlage 1 Prüfbericht(e), 2 Bilddokumentation, 3 Probenplan.
+   BerichtKit nummeriert genauso und meldet, wenn die Bilddoku eine andere Nummer trägt (z. B. bei zwei Prüfberichten: Anlage 3). */
+const ANLAGE_STANDARD = 'Anlage 2';
 /* Schadendatum darf „nicht bekannt“ sein: gespeichert als „unbekannt“ (wie Projektzentrale), angezeigt „nicht bekannt“. */
 const META_UNBEKANNT = ['sdatum'], UNBEKANNT = 'unbekannt';
 const META_FIELDS = [
   // key, label, placeholder name, input type, scope
   ['proj',     'Projektnummer',            'Projektnummer',    'text', 'project', 'z. B. P2026-114'],
-  ['anlage',   'Anlagen-Nr.',              'Anlage',           'text', 'project', 'z. B. Anlage 3'],
+  ['anlage',   'Anlagen-Nr.',              'Anlage',           'text', 'project', 'z. B. Anlage 2'],
   ['objekt',   'Objekt / Adresse',         'Objekt',           'text', 'project', 'z. B. EFH, Musterstr. 1, 52525 Heinsberg'],
   ['ereignis', 'Schadenereignis',          'Schadenereignis',  'text', 'project', 'z. B. Brand im Erdgeschoss (Küche)'],
   ['sdatum',   'Schadendatum',             'Schadendatum',     'date', 'project', ''],
@@ -2795,6 +2841,7 @@ function loadMeta(){
   const g = store.get('bu-global', {});
   const m = Object.assign({ proj: cfg.prefix.trim(), anlage: '', objekt: '', ereignis: '', sdatum: '', ort: '', notes: '', onlyDesc: true },
                           projGet('meta', {}));
+  if (!String(m.anlage || '').trim()) m.anlage = ANLAGE_STANDARD;   // Hausreihenfolge: Prüfbericht 1, Bilddoku 2, Probenplan 3 – änderbar
   m.sv = (S.proj && PJ.data && (PJ.data.sachverstaendiger || '').trim()) || g.sv || '';
   m.template = g.template || DEFAULT_TEMPLATE;
   return m;
@@ -3610,6 +3657,7 @@ async function doPdf(meta){
       if (sz !== p.blob.size) throw new Error(`„${p.name}“ unvollständig gespeichert (${sz} statt ${p.blob.size} Bytes).`);
       S.otherNames.add(p.name.toLowerCase());
     }
+    bilddokuVermerken(res.parts.map(p => p.name), meta.anlage);   // für BerichtKit: welche PDF, wann, mit welcher Anlagen-Nr.
     closeDialog(); S.busy = false; recompute();
     S.lastPdf = res.parts;
     const list = res.parts.map((p, k) => `<button class="pdfOpen" data-k="${k}" title="Im Browser öffnen">„${esc(p.name)}“</button> ${(p.blob.size / 1e6).toFixed(1).replace('.', ',')} MB, ${p.pages} S.`).join(' · ');
@@ -3742,7 +3790,7 @@ function openRecovery(){
         // Only editable fields are replayed; raw project JSON and original images are never replaced.
         for (const it of S.items){ it.el=null; it.desc=state.drafts[it.name] || ''; it.sec=state.extra[it.name]?.sec || ''; it.probe=state.extra[it.name]?.probe || ''; it.discard=state.discard.includes(it.name); }
         ROT=clone(state.rot); cfg={...cfg,...state.settings}; applyCfgToUI();
-        P.data.meta=clone(state.meta); P.data.order=clone(state.order);
+        P.data.meta=clone(state.meta); P.data.order=clone(state.order); dokuGeaendert();
         S.items.sort((a,b) => state.order.indexOf(a.name)-state.order.indexOf(b.name));
         buildRows(); recompute(); flushDrafts(); saveExtra(); saveRot(); saveDiscards(); scheduleProjSave();
         closeDialog();

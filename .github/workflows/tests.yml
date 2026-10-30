@@ -47,6 +47,7 @@ jobs:
       - run: node tests/n3-writer-conflict.cjs
       - run: node tests/ordnername.cjs
       - run: node tests/umbenennen-rollback.cjs
+      - run: node tests/bilddoku-stand.cjs
 
   browser-tests:
     name: Browser tests (${{ matrix.browser }})
