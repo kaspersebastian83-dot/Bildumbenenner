@@ -48,6 +48,7 @@ jobs:
       - run: node tests/ordnername.cjs
       - run: node tests/umbenennen-rollback.cjs
       - run: node tests/bilddoku-stand.cjs
+      - run: node tests/bilddoku-deckblatt.cjs
 
   browser-tests:
     name: Browser tests (${{ matrix.browser }})
