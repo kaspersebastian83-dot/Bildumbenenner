@@ -107,6 +107,8 @@ jobs:
         run: node tests/ci-wiederholen.cjs tests/bildnummerierung-browser.cjs ${{ matrix.browser }}
       - name: Fotos übernehmen and current project in the real browser
         run: node tests/ci-wiederholen.cjs tests/fotos-uebernehmen-browser.cjs ${{ matrix.browser }}
+      - name: Choose photos for the documentation (ticks, bulk sort-out, check before export)
+        run: node tests/ci-wiederholen.cjs tests/auswahl-browser.cjs ${{ matrix.browser }}
       - name: Active project context stays consistent across URL, FotoKit and suite navigation
         run: node tests/ci-wiederholen.cjs tests/projektkontext-browser.cjs ${{ matrix.browser }}
       - name: Independent sessions retain complete confirmed photo metadata and explicit recovery
