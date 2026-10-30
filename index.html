@@ -141,7 +141,7 @@ main{flex:1;display:flex;min-height:0}
 #listWrap{min-width:0}
 .preview-content{display:flex;flex-direction:column;flex:1;min-height:0}
 #btnPreview{display:none}
-.row{display:grid;grid-template-columns:30px 80px 1fr 28px;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 8px;margin-bottom:5px}
+.row{display:grid;grid-template-columns:24px 30px 80px 1fr 28px;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 8px;margin-bottom:5px}
 .row.active{background:var(--focus);border-color:var(--accent)}
 .nr{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right}
 .thumb{width:80px;height:60px;border-radius:5px;background:var(--panel2);overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);cursor:pointer}
@@ -183,6 +183,23 @@ main{flex:1;display:flex;min-height:0}
 .row.discarded .desc{text-decoration:line-through;color:var(--muted)}
 .row.discarded.active{opacity:.85}
 .res.discard{color:var(--warn)}
+/* Auswahl für die Bilddoku (1.28): Haken = kommt in die Doku; nicht angehakte Zeilen blass, bis sie aussortiert werden */
+.pick{display:flex;align-items:center;justify-content:center;cursor:pointer}
+.pick input{width:20px;height:20px;margin:0;cursor:pointer;accent-color:var(--accent)}
+.row.discarded .pick{visibility:hidden}
+.row.unpicked{opacity:.5}
+.row.unpicked .thumb img{filter:grayscale(.6)}
+.row.unpicked.active{opacity:.8}
+#pickBar{position:sticky;top:-10px;z-index:3;display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-10px -12px 8px;padding:8px 12px;background:var(--panel2);border-bottom:1px solid var(--line)}
+#pickBar[hidden]{display:none}
+#pickBar .cnt{margin-right:6px;font-size:14px}
+#pickBar .cnt b{color:var(--accent);font-size:15px}
+#pickBar button{min-height:30px}
+#pickBar .spacer{flex:1}
+#pickBar .hint{flex-basis:100%;font-size:12px;color:var(--muted)}
+.dialog .pickNums{display:flex;gap:28px;background:var(--panel2);border-radius:8px;padding:10px 16px}
+.dialog .pickNums b{display:block;font-size:24px;color:var(--accent)}
+.dialog .pickNums .out b{color:var(--muted)}
 .divider{display:flex;align-items:center;gap:10px;margin:16px 2px 8px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
 .divider::after{content:"";flex:1;height:1px;background:var(--line)}
 .dialog .list .mv{color:var(--warn)}
@@ -300,7 +317,7 @@ progress{width:100%}
   .pv-nav{flex-wrap:wrap;gap:6px;padding:0 12px 8px}
   .pv-meta{padding:6px 12px;font-size:12px}
   .pv-img{min-height:80px}
-  .row{grid-template-columns:28px 72px minmax(0,1fr) 28px;gap:6px}
+  .row{grid-template-columns:22px 28px 72px minmax(0,1fr) 28px;gap:6px}
   .thumb{width:72px;height:54px}
   .meta2{flex-wrap:wrap}
   .meta2 .sec{flex-basis:100%}
@@ -437,7 +454,15 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 </div>
 
 <main id="app" style="display:none">
-  <div id="listWrap"><div id="list"></div></div>
+  <div id="listWrap"><div id="pickBar" hidden role="group" aria-label="Fotos für die Bilddokumentation auswählen">
+    <span class="cnt" id="pickCount" aria-live="polite"></span>
+    <button id="pickAll" title="Alle Bilder anhaken">Alle</button>
+    <button id="pickNone" title="Alle Haken entfernen – danach die gewünschten Bilder anhaken">Keine</button>
+    <button id="pickInvert" title="Haken umkehren">Umkehren</button>
+    <span class="spacer"></span>
+    <button id="pickApply" class="primary" disabled>Nichts auszusortieren</button>
+    <span class="hint">Haken = kommt in die Bilddokumentation. Mit ✕ sortieren Sie ein einzelnes Bild aus (wie bisher).</span>
+  </div><div id="list"></div></div>
   <aside id="previewPane" aria-label="Bildvorschau">
     <button id="btnPreview" aria-expanded="true" aria-controls="previewContent">Bildvorschau einklappen</button>
     <div id="previewContent" class="preview-content">
@@ -503,11 +528,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.27.0';
+const APP_VERSION = '1.28.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:77d7d1c0af2533f3900969c0aeca258299d44d4488c0a15ce7a8e0475e29383d';
+const APP_BUILD = 'sha256:ea23e913c1ea0c02e37b799a9ec9c6706d74f21d793e268142e4c9f80089b549';
 const APP_DATE = '2026-10-30';
 const CHANGELOG = [
+  ['1.28.0', '30.10.2026', 'Bilder für die Doku auswählen: Jede Zeile hat jetzt einen Haken (Haken = kommt in die Bilddokumentation). Oben „Alle“, „Keine“, „Umkehren“ und „… nicht angehakte aussortieren“ – praktisch, wenn nur wenige von vielen Fotos in die Doku sollen. Aussortiert wird wie mit ✕ (nichts wird gelöscht, ↺ holt zurück). Sind beim Erstellen der Doku, beim ZIP oder beim Umbenennen noch Bilder nicht angehakt, fragt FotoKit nach. Das ✕ funktioniert wie bisher.'],
   ['1.27.0', '30.10.2026', 'Spektron-Leiste: neuer Schritt „BerichtKit“ (Asbest-Untersuchungsbericht) zwischen PlanKit und BelegKit – Haken, sobald ein Bericht in „Mitteilungen“ liegt. Gemeinsames Modul spektron-ordner.js: neuer Bereich „BerichtKit“ (Angaben zum Bericht in „_Spektron/BerichtKit“).'],
   ['1.26.0', '29.10.2026', 'Prüfbericht vom 29.10., Teil 2: Muss FotoKit beim Umbenennen kopieren statt verschieben, wird die Kopie jetzt Byte für Byte mit dem Original verglichen (bisher nur die Dateigröße) und das Original vor dem Löschen noch einmal – weicht etwas ab, bleiben beide Dateien liegen und FotoKit meldet es. Zwei FotoKit-Fenster benennen nicht mehr gleichzeitig um (im selben Browser); hat ein anderer Rechner den Zielnamen inzwischen belegt, wird nichts überschrieben und nichts gelöscht. Gemeinsame Skalen: Hat ein Kollege die Datei inzwischen geändert, wird nichts überschrieben; die eigene Skala bleibt „noch nicht geteilt“ und wird beim nächsten Mal mitgeschickt. Hilfe nennt den Ort von „_Ergebnisse.json“ nach dem Umzug.'],
   ['1.25.1', '29.10.2026', 'Gemeinsames Modul spektron-ordner.js: Beim Umzug und bei der Ortswahl zählen in „Abrechnung“ nur noch die Dateien, die BelegKit selbst schreibt (Aufwand_<Kürzel>.json, _Abrechnung.json, <Nr>_Aufwand_<Datum>.json, _BelegKit_Sicherungen) – andere JSON dort bleiben liegen. Für FotoKit keine sichtbare Änderung.'],
@@ -1868,7 +1894,7 @@ function buildRows(){
     if (!it.el){
       const r = document.createElement('div');
       r.className = 'row';
-      r.innerHTML = `<div class="nr"><span class="grip" title="Ziehen zum Verschieben">⠿</span><span class="n"></span></div>
+      r.innerHTML = `<label class="pick" title="Haken = kommt in die Bilddokumentation"><input type="checkbox" checked></label><div class="nr"><span class="grip" title="Ziehen zum Verschieben">⠿</span><span class="n"></span></div>
         <div class="thumb">…</div>
         <div class="mid">
           <div class="line1"><div class="orig"></div><div class="res"></div></div>
@@ -1911,6 +1937,9 @@ function buildRows(){
       r.querySelector('.up').addEventListener('click', () => move(it, -1));
       r.querySelector('.down').addEventListener('click', () => move(it, 1));
       r.querySelector('.x').addEventListener('click', () => toggleDiscard(it));
+      const pk = r.querySelector('.pick input');
+      pk.setAttribute('aria-label', 'In die Bilddokumentation: ' + it.name);
+      pk.addEventListener('change', () => { if (it.discard) return; it.unpicked = !pk.checked; showPick(it); updatePickBar(); });
       // drag & drop: grab the row anywhere except the text field / buttons
       thumb.title = 'Ziehen zum Verschieben · Doppelklick: Vollbild';
       r.addEventListener('mousedown', e => { r.draggable = !e.target.closest('input,button'); });
@@ -1941,7 +1970,9 @@ function buildRows(){
       io.observe(thumb);
     }
     const r = it.el;
+    if (it.discard) it.unpicked = false;            // aussortierte Bilder haben keinen Haken
     r.classList.toggle('discarded', it.discard);
+    showPick(it);
     r.classList.toggle('rotated', !!rotOf(it));
     r.querySelector('.desc').readOnly = it.discard;
     r.querySelector('.sec').readOnly = it.discard; r.querySelector('.probe').readOnly = it.discard;
@@ -1953,6 +1984,72 @@ function buildRows(){
     x.title = it.discard ? 'Wiederherstellen (Alt+X)' : 'Aussortieren (Alt+X)';
     list.appendChild(r);
   });
+  updatePickBar();
+}
+
+/* ---------- Auswahl für die Bilddoku (1.28) ----------
+   Zwei Wege zum selben Ergebnis: einzelne Bilder mit ✕ aussortieren – oder die gewünschten anhaken und die übrigen
+   gesammelt aussortieren. Der Haken ist nur Vorbereitung (nur im Speicher, nicht in _Bildumbenenner.json):
+   aussortiert wird wie mit ✕ (it.discard), verschoben nach _aussortiert erst beim Umbenennen. */
+function showPick(it){
+  if (!it.el) return;
+  it.el.classList.toggle('unpicked', !!it.unpicked && !it.discard);
+  it.el.querySelector('.pick input').checked = !it.unpicked;
+}
+const pickActive = () => S.view.filter(it => !it.discard);
+const pickOpen = () => pickActive().filter(it => it.unpicked);
+function updatePickBar(){
+  const act = pickActive(), open = act.filter(it => it.unpicked).length;
+  $('pickBar').hidden = !act.length;
+  $('pickCount').innerHTML = `<b>${act.length - open}</b> von ${act.length} angehakt`;
+  const b = $('pickApply');
+  b.disabled = !open || S.busy;
+  b.textContent = open ? `${open} nicht angehakte aussortieren` : 'Nichts auszusortieren';
+  b.title = open ? 'Die nicht angehakten Bilder aussortieren (wie ✕) – nichts wird gelöscht' : 'Alle Bilder sind angehakt';
+}
+function setPicks(fn){
+  for (const it of pickActive()){ it.unpicked = fn(it); showPick(it); }
+  updatePickBar();
+}
+$('pickAll').onclick = () => setPicks(() => false);
+$('pickNone').onclick = () => setPicks(() => true);
+$('pickInvert').onclick = () => setPicks(it => !it.unpicked);
+function applyPicks(){
+  const out = pickOpen();
+  if (!out.length) return 0;
+  for (const it of out){ it.discard = true; it.unpicked = false; }
+  saveDiscards();
+  buildRows(); recompute(); saveOrder();
+  if (S.view.length) setFocus(0, false);
+  return out.length;
+}
+function pickDialogText(n){
+  const keep = pickActive().length - n;
+  const move = cfg.discard === 'move' && !P.readOnly;
+  return `<p>Die ${n === 1 ? 'nicht angehakte Bild wandert' : `${n} nicht angehakten Bilder wandern`} ans Ende unter „Aussortiert“ und ${n === 1 ? 'kommt' : 'kommen'} nicht in die Bilddokumentation.
+    Nichts wird gelöscht – mit ↺ holen Sie jedes Bild zurück.${move ? ` In den Unterordner <code>${DISCARD_DIR}</code> verschoben wird erst beim Umbenennen.` : ''}</p>
+    <div class="pickNums"><div><b>${keep}</b>${keep === 1 ? 'bleibt' : 'bleiben'} in der Doku</div><div class="out"><b>${n}</b>aussortiert</div></div>`;
+}
+$('pickApply').onclick = () => {
+  const n = pickOpen().length;
+  if (!n || S.busy) return;
+  showDialog(`<h3>${n} ${n === 1 ? 'Bild' : 'Bilder'} aussortieren?</h3>${pickDialogText(n)}
+    <div class="btns"><button id="dCancel">Abbrechen</button><button class="primary" id="dOk">${n} ${n === 1 ? 'Bild' : 'Bilder'} aussortieren</button></div>`);
+  $('dCancel').onclick = closeDialog;
+  $('dOk').onclick = () => { closeDialog(); const k = applyPicks(); banner('ok', `✕ ${k} ${k === 1 ? 'Bild' : 'Bilder'} aussortiert – mit ↺ einzeln zurückholen.`); };
+};
+/* Vor PDF, ZIP und Umbenennen: nicht angehakte Bilder würden sonst unbemerkt mitgenommen. */
+function guardPicks(next){
+  return (...a) => {
+    const n = pickOpen().length;
+    if (!n) return next(...a);
+    showDialog(`<h3>${n} ${n === 1 ? 'Bild ist' : 'Bilder sind'} nicht angehakt</h3>
+      <p>Nicht angehakte Bilder kommen trotzdem mit, solange sie nicht aussortiert sind. Erst aussortieren?</p>
+      <div class="btns"><button id="dCancel">Abbrechen</button><button id="dAll">Alle mitnehmen</button><button class="primary" id="dOk">Aussortieren und weiter</button></div>`);
+    $('dCancel').onclick = closeDialog;
+    $('dAll').onclick = () => { closeDialog(); setPicks(() => false); next(...a); };
+    $('dOk').onclick = () => { closeDialog(); applyPicks(); next(...a); };
+  };
 }
 
 function clearDropMarks(){
@@ -2408,7 +2505,7 @@ function plan(){
   return { pairs, moves };
 }
 
-$('btnRename').onclick = () => {
+$('btnRename').onclick = guardPicks(() => {
   if (P.readOnly){ banner('err', esc(PROTECTED_PROJECT)); return false; }
   const { pairs, moves } = plan();
   if (!pairs.length && !moves.length) return;
@@ -2420,7 +2517,7 @@ $('btnRename').onclick = () => {
     <div class="btns"><button id="dCancel">Abbrechen</button><button class="primary" id="dOk">Jetzt ausführen</button></div>`);
   $('dCancel').onclick = closeDialog;
   $('dOk').onclick = () => doRename(pairs, moves);
-};
+});
 
 async function doRename(pairs, moves){
   if (P.readOnly){ banner('err', esc(PROTECTED_PROJECT)); return false; }
@@ -4493,7 +4590,7 @@ const HELP_HTML = `
   <li><b>Fotos übernehmen:</b> Haben Kollegen ihre Fotos in Unterordnern von <code>Fotos</code> abgelegt (z. B. <code>Begehung Ben</code>), erscheint oben „📥 Fotos übernehmen“. Angehakte Unterordner werden nach <code>Fotos</code> verschoben (nicht kopiert), die Dateinamen bleiben – nur bei gleichem Namen kommt das Kürzel dazu. Der Ordnername wird auf Wunsch Abschnitt; die Herkunft jeder Datei steht in <code>_Bildumbenenner.json</code>. Die leeren Unterordner bleiben stehen.</li>
   <li><b>Dateibenennung:</b> „Dateibenennung ▸“ klappt Benennung und weitere Einstellungen auf, mit Beispiel-Dateinamen. Die Bildnummer zählt aktive Bilder in Listenreihenfolge ab 1; die Dateinummer folgt derselben Position mit der eingestellten Startnummer. Ohne Beschreibung bleibt der Dateiname erhalten. Sortieren ändert keine Dateien: Geplante Namen werden erst mit „Ausführen“ und „Jetzt ausführen“ übernommen.</li>
   <li><b>Bilder beschreiben:</b> links ein Bild anklicken, rechts erscheint die Vorschau. Beschreibung eintippen, <kbd>Enter</kbd> springt zum nächsten Bild. Darunter optional <b>Abschnitt</b> (z. B. „Küche“ – gilt für die folgenden Bilder mit) und <b>Probe-Nr.</b> (z. B. „P1“).</li>
-  <li><b>Aufräumen:</b> unbrauchbare Bilder mit ✕ aussortieren (sie wandern ans Ende, nichts wird gelöscht). Reihenfolge per Ziehen ändern oder mit Sortierung „nach Abschnitt (Begehung)“ nach Räumen ordnen, schiefe Bilder mit ↻ drehen.</li>
+  <li><b>Aufräumen:</b> unbrauchbare Bilder mit ✕ aussortieren (sie wandern ans Ende, nichts wird gelöscht). Sollen nur wenige Bilder in die Doku: oben „Keine“, die gewünschten anhaken, dann „… nicht angehakte aussortieren“. Reihenfolge per Ziehen ändern oder mit Sortierung „nach Abschnitt (Begehung)“ nach Räumen ordnen, schiefe Bilder mit ↻ drehen.</li>
   <li><b>Projektdaten prüfen:</b> „Projektdaten …“ – Anlagen-Nr., Objekt, Schadenereignis, Daten, Sachverständiger. Was in der Projektzentrale schon eingetragen ist, steht hier bereits. Gelb markierte Felder sind Pflicht (sie stehen auf dem Deckblatt); die Zahl am Knopf zeigt, wie viele noch fehlen.</li>
   <li><b>Ausgeben:</b>
     <ul>
@@ -4601,8 +4698,8 @@ $('btnInfo').textContent = 'Version ' + APP_VERSION + ' · Build ' + APP_BUILD.s
 $('btnInfo').title = 'Geladen: ' + APP_VERSION + ' / ' + APP_BUILD;
 updateStatus('Programmstand wird gleich online geprüft …');
 document.title = `${APP_NAME} ${APP_VERSION}`;
-$('btnZip').onclick = openZipDialog;
-$('btnPdf').onclick = openPdfDialog;
+$('btnZip').onclick = guardPicks(openZipDialog);
+$('btnPdf').onclick = guardPicks(openPdfDialog);
 $('btnVersions').onclick = openPhotoVersions;
 $('btnMeta').onclick = () => openMetaDialog(false);
 $('btnOpen2').onclick = pickFolder;
