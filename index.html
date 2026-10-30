@@ -530,10 +530,10 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.29.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:4fc44d917715b03143a0767f360a816427eb0694466348808c34902e1edb8e36';
+const APP_BUILD = 'sha256:ff4ccfc044e361aa566be9338ab7e6369290b1974bb5a45077993dad4b812ce3';
 const APP_DATE = '2026-10-30';
 const CHANGELOG = [
-  ['1.29.0', '30.10.2026', 'Für BerichtKit (Anlagen): „Anlagen-Nr.“ ist ohne Eintrag „Anlage 2“ – feste Hausreihenfolge im Bericht: Anlage 1 Prüfbericht(e), 2 Bilddokumentation, 3 Probenplan (änderbar, z. B. „Anlage 3“ bei zwei Prüfberichten). FotoKit vermerkt in _Bildumbenenner.json, welche Bilddokumentation zuletzt erstellt wurde (Dateien, Zeit, Anlagen-Nr.) und wann sich danach etwas geändert hat, was in der Doku steht (Beschreibungen, Abschnitte, Proben, Drehung, Auswahl, Reihenfolge, Dateinamen, Projektdaten). So erkennt BerichtKit eine veraltete Bilddoku und nimmt sie nicht ungefragt als Anlage. Sonst keine sichtbare Änderung.'],
+  ['1.29.0', '30.10.2026', 'Für BerichtKit (Anlagen): „Anlagen-Nr.“ ist ohne Eintrag „Anlage 2“ – feste Hausreihenfolge im Bericht: Anlage 1 Prüfbericht(e), 2 Bilddokumentation, 3 Probenplan (änderbar, z. B. „Anlage 3“ bei zwei Prüfberichten). FotoKit vermerkt in _Bildumbenenner.json, welche Bilddokumentation zuletzt erstellt wurde (Dateien, Zeit, Anlagen-Nr.) und wann sich danach etwas geändert hat, was in der Doku steht (Beschreibungen, Abschnitte, Proben, Drehung, Auswahl, Reihenfolge, Dateinamen, Projektdaten, neue oder entfernte Fotos – auch über „Fotos übernehmen“ und Änderungen eines Kollegen, die beim Zusammenführen hereinkommen). So erkennt BerichtKit eine veraltete Bilddoku und nimmt sie nicht ungefragt als Anlage. Sonst keine sichtbare Änderung.'],
   ['1.28.0', '30.10.2026', 'Bilder für die Doku auswählen: Jede Zeile hat jetzt einen Haken (Haken = kommt in die Bilddokumentation). Oben „Alle“, „Keine“, „Umkehren“ und „… nicht angehakte aussortieren“ – praktisch, wenn nur wenige von vielen Fotos in die Doku sollen. Aussortiert wird wie mit ✕ (nichts wird gelöscht, ↺ holt zurück). Sind beim Erstellen der Doku, beim ZIP oder beim Umbenennen noch Bilder nicht angehakt, fragt FotoKit nach. Das ✕ funktioniert wie bisher.'],
   ['1.27.0', '30.10.2026', 'Spektron-Leiste: neuer Schritt „BerichtKit“ (Asbest-Untersuchungsbericht) zwischen PlanKit und BelegKit – Haken, sobald ein Bericht in „Mitteilungen“ liegt. Gemeinsames Modul spektron-ordner.js: neuer Bereich „BerichtKit“ (Angaben zum Bericht in „_Spektron/BerichtKit“).'],
   ['1.26.0', '29.10.2026', 'Prüfbericht vom 29.10., Teil 2: Muss FotoKit beim Umbenennen kopieren statt verschieben, wird die Kopie jetzt Byte für Byte mit dem Original verglichen (bisher nur die Dateigröße) und das Original vor dem Löschen noch einmal – weicht etwas ab, bleiben beide Dateien liegen und FotoKit meldet es. Zwei FotoKit-Fenster benennen nicht mehr gleichzeitig um (im selben Browser); hat ein anderer Rechner den Zielnamen inzwischen belegt, wird nichts überschrieben und nichts gelöscht. Gemeinsame Skalen: Hat ein Kollege die Datei inzwischen geändert, wird nichts überschrieben; die eigene Skala bleibt „noch nicht geteilt“ und wird beim nächsten Mal mitgeschickt. Hilfe nennt den Ort von „_Ergebnisse.json“ nach dem Umzug.'],
@@ -639,12 +639,24 @@ function projSet(kind, v){
    Zusammenführen nicht als Widerspruch gewertet: es gilt der jeweils neuere Stand (doku­StandMischen). */
 const DOKU_KINDS = ['drafts', 'discard', 'rot', 'extra', 'orig', 'order', 'meta'];
 function dokuGeaendert(){ P.data.extensions = { ...(P.data.extensions || {}), dokuGeaendert: new Date().toISOString() }; }
+/** Fotos neu eingelesen (neue/entfernte Dateien, Fotos übernommen): Bestand anders als bei der PDF → Doku geändert (einmal) */
+function dokuBestandPruefen(){
+  const ext = P.data && P.data.extensions, b = ext && ext.bilddoku;
+  if (!b || !Array.isArray(b.bestand) || P.readOnly) return;
+  if (ext.dokuGeaendert && ext.dokuGeaendert > b.erstellt) return;   // schon veraltet
+  const damals = new Set(b.bestand), jetzt = S.items.map(it => it.name);
+  if (jetzt.length !== damals.size || jetzt.some(n => !damals.has(n))){ dokuGeaendert(); scheduleProjSave(); }
+}
 function bilddokuVermerken(dateien, anlage){
   if (!P.data) return;
-  P.data.extensions = { ...(P.data.extensions || {}), bilddoku: { dateien: [...dateien], erstellt: new Date().toISOString(), anlage: String(anlage || '').trim(), version: APP_VERSION } };
+  P.data.extensions = { ...(P.data.extensions || {}), bilddoku: { dateien: [...dateien], erstellt: new Date().toISOString(), anlage: String(anlage || '').trim(), version: APP_VERSION,
+    bestand: S.items.map(it => it.name) } };
   scheduleProjSave();
 }
 const DOKU_FELDER = ['bilddoku', 'dokuGeaendert'];
+/** Doku-Inhalte vergleichbar (Schlüsselreihenfolge und Reihenfolge von „aussortiert“ egal, fehlend = leer) */
+const kanonisch = v => JSON.stringify(v, (k, x) => x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map(n => [n, x[n]])) : x);
+const dokuInhalt = d => kanonisch(DOKU_KINDS.map(k => k === 'discard' ? [...(d[k] || [])].sort() : d[k] === undefined ? (k === 'order' ? [] : {}) : d[k]));
 const ohneDokuStand = x => { const r = { ...(x || {}) }; for (const k of DOKU_FELDER) delete r[k]; return r; };
 function dokuStandMischen(o, t){
   o = o || {}; t = t || {}; const r = {};
@@ -898,6 +910,11 @@ function mergeExternal(theirs){
     banner('err', 'Widersprüchliche Änderungen wurden nicht zusammengeführt. Deine Eingaben bleiben geöffnet. Bitte „Gesicherte Fassungen“ prüfen; eine Wiederherstellung muss ausdrücklich bestätigt werden.');
     throw new Error('Widersprüchliche Änderungen: ' + [...out.conflicts].join(', '));
   }
+  /* Doku-Stand über beide Fenster: Bringt das Zusammenführen Doku-Inhalte der anderen Seite herein, ist eine hier erstellte PDF
+     nicht mehr aktuell; bleibt eigener Doku-Inhalt übrig, den die andere Seite nicht hatte, fehlt er in deren neuer PDF.
+     In beiden Fällen gilt die Doku jetzt als geändert – Zeitstempel allein sagen nichts darüber, woraus eine PDF gebaut wurde. */
+  if (dokuInhalt(m) !== dokuInhalt(o) || (dokuInhalt(m) !== dokuInhalt(theirs) && !same(theirs.extensions && theirs.extensions.bilddoku, b.extensions && b.extensions.bilddoku)))
+    m.extensions.dokuGeaendert = new Date().toISOString();
   P.data = m;
   applyMergedToItems(orderChanged);
   out.theirs.delete('');
@@ -1713,6 +1730,7 @@ async function fotoUebernehmen(ordner, alsAbschnitt){
       if (log.length){
         const ext = P.data.extensions || (P.data.extensions = {});
         ext.fotoUebernahmen = [...(Array.isArray(ext.fotoUebernahmen) ? ext.fotoUebernahmen : []), ...log];
+        dokuGeaendert();   // neue Fotos: eine vorher erstellte Bilddoku ist nicht mehr vollständig
         scheduleProjSave();
       }
     }finally{ S.busy = false; }
@@ -1842,6 +1860,7 @@ async function loadItems(){
   applySort(items);
   const previousItems = S.items;
   S.items = items; S.otherNames = otherNames; S.focus = -1;
+  dokuBestandPruefen();
   ROT = rot; HASH = hash; EXTRA = extra; ORIG = orig;
   $('list').innerHTML = '';
   hideBanner();
@@ -3771,7 +3790,7 @@ function openRecovery(){
         // Only editable fields are replayed; raw project JSON and original images are never replaced.
         for (const it of S.items){ it.el=null; it.desc=state.drafts[it.name] || ''; it.sec=state.extra[it.name]?.sec || ''; it.probe=state.extra[it.name]?.probe || ''; it.discard=state.discard.includes(it.name); }
         ROT=clone(state.rot); cfg={...cfg,...state.settings}; applyCfgToUI();
-        P.data.meta=clone(state.meta); P.data.order=clone(state.order);
+        P.data.meta=clone(state.meta); P.data.order=clone(state.order); dokuGeaendert();
         S.items.sort((a,b) => state.order.indexOf(a.name)-state.order.indexOf(b.name));
         buildRows(); recompute(); flushDrafts(); saveExtra(); saveRot(); saveDiscards(); scheduleProjSave();
         closeDialog();

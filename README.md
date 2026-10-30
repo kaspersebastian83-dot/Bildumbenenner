@@ -12,7 +12,8 @@ Die Webadresse, die Projektdatei `_Bildumbenenner.json` und die gespeicherten Ei
 
 - **Anlagen-Nr.** ist ohne Eintrag „Anlage 2“ – feste Hausreihenfolge im Bericht: Anlage 1 Prüfbericht(e), 2 Bilddokumentation, 3 Probenplan. Bei zwei Prüfberichten z. B. „Anlage 3“ eintragen; BerichtKit meldet, wenn die Nummer nicht passt.
 - `_Bildumbenenner.json` vermerkt oben `bilddoku` (Dateien der zuletzt erstellten PDF, Zeit, Anlagen-Nr.) und `dokuGeaendert` (letzte Änderung an Beschreibungen, Abschnitten, Proben, Drehung, Auswahl, Reihenfolge, Dateinamen oder Projektdaten – Prüfsummen zählen nicht). Liegt `dokuGeaendert` nach dem Erstellen, ist die PDF veraltet: BerichtKit hakt sie dann nicht als Anlage an.
-- Zwei Fenster gleichzeitig: Diese beiden Angaben gelten beim Zusammenführen nie als Widerspruch – es gilt der neuere Stand.
+- Zwei Fenster gleichzeitig: Diese beiden Angaben gelten beim Zusammenführen nie als Widerspruch. Bringt das Zusammenführen Doku-Inhalte des anderen Fensters herein (oder fehlen der neuen PDF des anderen eigene), gilt die Doku als geändert – Zeitstempel allein sagen nicht, woraus eine PDF gebaut wurde.
+- Neue oder entfernte Fotos (Neu einlesen, „Fotos übernehmen“) machen eine vorher erstellte PDF ebenfalls veraltet (`bilddoku.bestand`).
 
 ## Neu in 1.23.0 · 28.10.2026 – deutlich kleinere PDFs
 
