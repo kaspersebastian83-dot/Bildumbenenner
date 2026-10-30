@@ -530,7 +530,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.28.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:ea23e913c1ea0c02e37b799a9ec9c6706d74f21d793e268142e4c9f80089b549';
+const APP_BUILD = 'sha256:a1f6443e9f284a337e6ff1766d059ac446be4a9ff8b384a18994a33058b576c6';
 const APP_DATE = '2026-10-30';
 const CHANGELOG = [
   ['1.28.0', '30.10.2026', 'Bilder für die Doku auswählen: Jede Zeile hat jetzt einen Haken (Haken = kommt in die Bilddokumentation). Oben „Alle“, „Keine“, „Umkehren“ und „… nicht angehakte aussortieren“ – praktisch, wenn nur wenige von vielen Fotos in die Doku sollen. Aussortiert wird wie mit ✕ (nichts wird gelöscht, ↺ holt zurück). Sind beim Erstellen der Doku, beim ZIP oder beim Umbenennen noch Bilder nicht angehakt, fragt FotoKit nach. Das ✕ funktioniert wie bisher.'],
@@ -1939,7 +1939,9 @@ function buildRows(){
       r.querySelector('.x').addEventListener('click', () => toggleDiscard(it));
       const pk = r.querySelector('.pick input');
       pk.setAttribute('aria-label', 'In die Bilddokumentation: ' + it.name);
-      pk.addEventListener('change', () => { if (it.discard) return; it.unpicked = !pk.checked; showPick(it); updatePickBar(); });
+      // Haken sind nur Vorbereitung (nicht gespeichert) – nicht als ungesicherte Eingabe für die Wiederherstellung zählen
+      pk.addEventListener('input', e => e.stopPropagation());
+      pk.addEventListener('change', e => { e.stopPropagation(); if (it.discard) return; it.unpicked = !pk.checked; showPick(it); updatePickBar(); });
       // drag & drop: grab the row anywhere except the text field / buttons
       thumb.title = 'Ziehen zum Verschieben · Doppelklick: Vollbild';
       r.addEventListener('mousedown', e => { r.draggable = !e.target.closest('input,button'); });

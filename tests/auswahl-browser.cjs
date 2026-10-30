@@ -53,6 +53,7 @@ const root = path.join(__dirname, '..');
   assert.equal(await apply.isDisabled(), true, 'alles angehakt → nichts auszusortieren');
 
   // 3 von 10 behalten: Keine → drei anhaken
+  await page.evaluate(() => { window.__seitenEingaben = 0; for (const t of ['input', 'change']) document.addEventListener(t, () => window.__seitenEingaben++); });
   await page.click('#pickNone');
   assert.match(await count(), /0 von 10/);
   assert.equal(await page.locator('#list .row.unpicked').count(), 10);
@@ -60,6 +61,7 @@ const root = path.join(__dirname, '..');
   for (const i of [0, 3, 7]) await rows.nth(i).locator('.pick input').check();
   assert.match(await count(), /3 von 10/);
   assert.equal(await apply.textContent(), '7 nicht angehakte aussortieren');
+  assert.equal(await page.evaluate(() => window.__seitenEingaben), 0, 'Haken zählen nicht als ungesicherte Eingabe (Wiederherstellung)');
 
   // Umkehren hin und zurück
   await page.click('#pickInvert'); assert.match(await count(), /7 von 10/);
