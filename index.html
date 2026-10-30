@@ -528,11 +528,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.29.0';
+const APP_VERSION = '1.30.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:ff4ccfc044e361aa566be9338ab7e6369290b1974bb5a45077993dad4b812ce3';
+const APP_BUILD = 'sha256:949771666aac333b55677d6f5ce430b4302f9ff0442280e840d4e9618744f4ff';
 const APP_DATE = '2026-10-30';
 const CHANGELOG = [
+  ['1.30.0', '30.10.2026', 'Bilddokumentation nach dem ersten Testlauf mit BerichtKit: Auf dem Deckblatt steht „zum Untersuchungsbericht …“ statt „zum Gutachten …“. Ist das Schadendatum leer oder „nicht bekannt“, fehlt die Zeile ganz. Die Person unter „Sachverständiger“ steht auf dem Deckblatt jetzt unter „Bearbeitung“ – passt auch, wenn sie im Bericht als Messtechniker unterschreibt (Eingabefeld und Name bleiben). Die Übersicht der Probenahmestellen zeigt die Spalte „Abschnitt“ nur, wenn mindestens eine Probe einen Abschnitt hat; sonst bekommt die Beschreibung den Platz. Die KI-Anweisung im ZIP ist genauso angepasst (gespeicherte eigene Anweisungen bleiben unverändert).'],
   ['1.29.0', '30.10.2026', 'Für BerichtKit (Anlagen): „Anlagen-Nr.“ ist ohne Eintrag „Anlage 2“ – feste Hausreihenfolge im Bericht: Anlage 1 Prüfbericht(e), 2 Bilddokumentation, 3 Probenplan (änderbar, z. B. „Anlage 3“ bei zwei Prüfberichten). FotoKit vermerkt in _Bildumbenenner.json, welche Bilddokumentation zuletzt erstellt wurde (Dateien, Zeit, Anlagen-Nr.) und wann sich danach etwas geändert hat, was in der Doku steht (Beschreibungen, Abschnitte, Proben, Drehung, Auswahl, Reihenfolge, Dateinamen, Projektdaten, neue oder entfernte Fotos – auch über „Fotos übernehmen“ und Änderungen eines Kollegen, die beim Zusammenführen hereinkommen). So erkennt BerichtKit eine veraltete Bilddoku und nimmt sie nicht ungefragt als Anlage. Sonst keine sichtbare Änderung.'],
   ['1.28.0', '30.10.2026', 'Bilder für die Doku auswählen: Jede Zeile hat jetzt einen Haken (Haken = kommt in die Bilddokumentation). Oben „Alle“, „Keine“, „Umkehren“ und „… nicht angehakte aussortieren“ – praktisch, wenn nur wenige von vielen Fotos in die Doku sollen. Aussortiert wird wie mit ✕ (nichts wird gelöscht, ↺ holt zurück). Sind beim Erstellen der Doku, beim ZIP oder beim Umbenennen noch Bilder nicht angehakt, fragt FotoKit nach. Das ✕ funktioniert wie bisher.'],
   ['1.27.0', '30.10.2026', 'Spektron-Leiste: neuer Schritt „BerichtKit“ (Asbest-Untersuchungsbericht) zwischen PlanKit und BelegKit – Haken, sobald ein Bericht in „Mitteilungen“ liegt. Gemeinsames Modul spektron-ordner.js: neuer Bereich „BerichtKit“ (Angaben zum Bericht in „_Spektron/BerichtKit“).'],
@@ -2802,7 +2803,7 @@ const META_FIELDS = [
 const DEFAULT_TEMPLATE = `ANWEISUNG ZUR ERSTELLUNG DER BILDDOKUMENTATION
 
 Ziel
-Erstelle aus den Bildern in diesem ZIP-Archiv eine Bilddokumentation als PDF. Sie ist {Anlage} zum Gutachten {Projektnummer} und wird dem Gutachten als Anlage beigefügt.
+Erstelle aus den Bildern in diesem ZIP-Archiv eine Bilddokumentation als PDF. Sie ist {Anlage} zum Untersuchungsbericht {Projektnummer} und wird dem Bericht als Anlage beigefügt.
 
 Inhalt und Bildunterschriften
 - Verwende ausschließlich die Bilder aus diesem Archiv, vollständig und in der Reihenfolge des Bildverzeichnisses unten.
@@ -2816,7 +2817,7 @@ Inhalt und Bildunterschriften
 
 Layout
 - DIN A4 Hochformat, Seitenränder ca. 20 mm, schlichte serifenlose Schrift.
-- Seite 1 ist ein Deckblatt: Titel "Bilddokumentation – {Anlage}", darunter die Projektdaten (Projektnummer, Objekt, Schadenereignis, Schadendatum, Ortstermin, Sachverständiger, Anzahl der Bilder).
+- Seite 1 ist ein Deckblatt: Titel "Bilddokumentation – {Anlage}", darunter die Projektdaten (Projektnummer, Objekt, Schadenereignis, Schadendatum, Ortstermin, Bearbeitung = {Sachverständiger}, Anzahl der Bilder). Angaben, die fehlen oder "nicht bekannt" sind, weglassen.
 - Ab Seite 2: zwei Bilder pro Seite untereinander, jeweils mit Bildunterschrift. Ein einzelnes letztes Bild steht allein auf der Seite.
 - Kopfzeile auf jeder Seite außer dem Deckblatt: links "{Anlage} – Bilddokumentation", rechts "Projekt {Projektnummer}".
 - Fußzeile auf jeder Seite: links "{Sachverständiger}", rechts "Seite X von Y".
@@ -3436,13 +3437,16 @@ async function buildAnnex(meta, items, progress){
       for(const l of wrapWords(words(text,font),size,PDF_CW)){room(size+7);pg.wrapped(PDF_M,y,l,size,color);y-=size+lead;}
     };
     next(true);
-    if(meta.proj)paragraph(`zum Gutachten ${meta.proj}`,12.5,'R',PDF_CD.muted);
+    if(meta.proj)paragraph(`zum Untersuchungsbericht ${meta.proj}`,12.5,'R',PDF_CD.muted);
     if(meta.objekt)paragraph(meta.objekt,12.5,'B',PDF_CD.ink);
     if(N>1){y-=4;paragraph(`Teil ${pi+1} von ${N} · ${range(a,b)}`,10.5,'B',PDF_CD.blue);}
     y-=26;
     // Eckdaten: Rubrik in gesperrter Kleinschrift, Wert darunter in zwei Spalten
-    const facts=[['Projektnummer',meta.proj],['Schadenereignis',meta.ereignis],['Schadendatum',deDate(meta.sdatum)],['Ortstermin',deDate(meta.ort)],
-      ['Sachverständiger',meta.sv],['Bilder',N>1?`${range(a,b)} (gesamt ${items.length})`:`${items.length}`],['Erstellt am',fmtDate(now)]].filter(r=>r[1]);
+    // Schadendatum leer oder „nicht bekannt“ (gespeichert „unbekannt“): Zeile entfällt (Testlauf 26.0512).
+    // „Bearbeitung“ statt „Sachverständiger“: die Person kann im Bericht auch als Messtechniker unterschreiben – neutral, passt zu beidem.
+    const sdatum=String(meta.sdatum||'').trim().toLowerCase()==='unbekannt'?'':deDate(meta.sdatum);
+    const facts=[['Projektnummer',meta.proj],['Schadenereignis',meta.ereignis],['Schadendatum',sdatum],['Ortstermin',deDate(meta.ort)],
+      ['Bearbeitung',meta.sv],['Bilder',N>1?`${range(a,b)} (gesamt ${items.length})`:`${items.length}`],['Erstellt am',fmtDate(now)]].filter(r=>r[1]);
     const colW=(PDF_CW-24)/2;
     pg.line(PDF_M,y+14,PDF_W-PDF_M,y+14,0.5,PDF_CD.rule);
     for(let k=0;k<facts.length;k+=2){
@@ -3542,7 +3546,10 @@ async function buildAnnex(meta, items, progress){
 
   const probePages = () => {
     if(!probeRows.length)return[];
-    const out=[],cols=[[PDF_M,62,'Probe-Nr.'],[PDF_M+62,52,'Bild'],[PDF_M+114,120,'Abschnitt'],[PDF_M+234,PDF_CW-234,'Beschreibung']];let pg,y;
+    // Spalte „Abschnitt“ nur, wenn mindestens eine Probe einen Abschnitt hat – sonst stünde überall „–“ (Testlauf 26.0512).
+    const mitSec=probeRows.some(r=>r.sec.trim());
+    const out=[],cols=mitSec?[[PDF_M,62,'Probe-Nr.'],[PDF_M+62,52,'Bild'],[PDF_M+114,120,'Abschnitt'],[PDF_M+234,PDF_CW-234,'Beschreibung']]
+      :[[PDF_M,62,'Probe-Nr.'],[PDF_M+62,52,'Bild'],[PDF_M+114,PDF_CW-114,'Beschreibung']];let pg,y;
     const next=()=>{
       pg=new PdfPage();out.push(pg);y=PDF_TOP-17;
       pg.label(PDF_M,y+16,'Übersicht',7.5,PDF_CD.blue,1.2);
@@ -3552,7 +3559,7 @@ async function buildAnnex(meta, items, progress){
     };
     next();
     for(const r of probeRows){
-      const cells=[[r.p,'B'],[`Bild ${r.n}`,'R'],[r.sec||'–','R'],[r.desc||'–','R']].map(([t,f],j)=>wrapWords(words(t,f),9,cols[j][1]-8));
+      const cells=[[r.p,'B'],[`Bild ${r.n}`,'R'],...(mitSec?[[r.sec||'–','R']]:[]),[r.desc||'–','R']].map(([t,f],j)=>wrapWords(words(t,f),9,cols[j][1]-8));
       const length=Math.max(...cells.map(c=>c.length));let at=0;
       while(at<length){
         if(y-14<PDF_BOTTOM+6)next();
