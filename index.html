@@ -505,7 +505,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.27.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:d4fd271ed9aa45918283f97d24cb3e0346be53190e12ee766e3126073571cf8c';
+const APP_BUILD = 'sha256:77d7d1c0af2533f3900969c0aeca258299d44d4488c0a15ce7a8e0475e29383d';
 const APP_DATE = '2026-10-30';
 const CHANGELOG = [
   ['1.27.0', '30.10.2026', 'Spektron-Leiste: neuer Schritt „BerichtKit“ (Asbest-Untersuchungsbericht) zwischen PlanKit und BelegKit – Haken, sobald ein Bericht in „Mitteilungen“ liegt. Gemeinsames Modul spektron-ordner.js: neuer Bereich „BerichtKit“ (Angaben zum Bericht in „_Spektron/BerichtKit“).'],
@@ -4697,7 +4697,7 @@ updateExample();
     ['bericht', 'BerichtKit', 'berichtkit',  '../berichtkit/',     '#b0683c'],
     ['beleg', 'BelegKit',  'aufwandkit',     '../aufwandkit/',     '#2f7d6d']
   ];
-  var ZENTRALE = '../Projektzentrale/', MAX = 6, RUECKMELDUNG = '../rueckmeldung/', RM_APP = { label: 'labelkit', fotos: 'fotokit', ergebnis: 'resultkit', plan: 'plankit', beleg: 'belegkit' };
+  var ZENTRALE = '../Projektzentrale/', MAX = 6, RUECKMELDUNG = '../rueckmeldung/', RM_APP = { label: 'labelkit', fotos: 'fotokit', ergebnis: 'resultkit', plan: 'plankit', bericht: 'berichtkit', beleg: 'belegkit' };
   var ich = '', kompakt = false, projektName = null, version = null, name = '', stand = null, zuletzt = [], bar = null, pop = null, timer = 0, lauf = 0;
   var nfc = function(s){ try{ return String(s).normalize('NFC'); }catch(e){ return String(s); } };
   /* Kurzfassung von SPEKTRON-ORDNERNAME v1 (Projektzentrale): Kürzel am Ende des Ordnernamens anhand der Mitarbeiterliste */
@@ -4821,9 +4821,9 @@ updateExample();
       var pl = await bereich('plankit', 'Pläne');
       if (pl) for await (var g of pl.values()) if (g.kind === 'file' && /\.probenplan$/i.test(g.name) && !/ \((vorher|Wiederherstellung|Speicherkandidat|Kopie)\b[^)]*\)\.probenplan$/i.test(g.name)){ s.plan = true; break; }
     }catch(e6){}
-    try{   // BerichtKit: Word-Bericht „<n>._Mitteilung_<Nr>.docx“ in „Mitteilungen“ (bleibt dort, auch in Spektron-Projekten)
+    try{   // Bericht in „Mitteilungen“ (bleibt dort, auch in Spektron-Projekten): „1._Mitteilung_26.0528.docx“ (BerichtKit) wie „1__Mitteilung.docx“
       var mi = await unterordner(proj, 'Mitteilungen');
-      if (mi) for await (var m of mi.values()) if (m.kind === 'file' && /^\d+\._Mitteilung_.*\.docx$/i.test(nfc(m.name))){ s.bericht = true; break; }
+      if (mi) for await (var m of mi.values()) if (m.kind === 'file' && /^\d+[._\s]*Mitteilung(?![a-zäöüß]).*\.docx$/i.test(nfc(m.name))){ s.bericht = true; break; }
     }catch(e9){}
     try{
       var ab = await bereich('belegkit', 'Abrechnung');
