@@ -118,4 +118,17 @@ test('Rückfrage vor PDF und ZIP: Text, nur nicht aussortierte Fotos, beide Knö
   assert.ok(!/it\.probe\s*=|\.discard\s*=/.test(g), 'Rückfrage ändert keine Zuordnung');
 });
 
+test('Wechsel zu Fotoordner ohne Projekt: Storno-Stand des vorigen Projekts weg, Zeilen neu berechnet (Codex-Review #76)', () => {
+  const a = html.indexOf('async function loadBohrkernZuordnung('), b = html.indexOf('async function lkLesen(');
+  assert.ok(a > 0 && b > a, 'loadBohrkernZuordnung in index.html');
+  const c = { S: { proj: null }, BK: {}, LK: { proben: new Map(), storniert: new Set(['P2']), datei: 'alt_Daten.json' }, rechnungen: 0 };
+  vm.runInNewContext(html.slice(a, b) + `
+this.recompute = () => { this.rechnungen++; }; this.lkLesen = async () => {}; this.laden = loadBohrkernZuordnung;`, c);
+  c.laden();   // ohne Projekt kehrt die Funktion vor dem ersten await zurück – synchron prüfbar
+  assert.equal(c.LK.storniert.size, 0, 'Storno-Stand des vorigen Projekts gelöscht');
+  assert.equal(c.rechnungen, 1, 'ohne Projekt trotzdem neu berechnet – sonst bleiben Hinweis und Zählung stehen');
+  c.laden();
+  assert.equal(c.rechnungen, 1, 'nichts zu löschen → keine zusätzliche Neuberechnung');
+});
+
 console.log(`OK Storno: ${n} Fälle`);

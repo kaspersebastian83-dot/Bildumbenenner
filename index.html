@@ -535,7 +535,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.31.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:0a3e69beaf8b3f99d4f1d2ddffc7d4cd7121b5ea3ad01c289600d21cc686e622';
+const APP_BUILD = 'sha256:4f94b523bf97e4c7524085b5ff7e27c5aaaf9f845d9c88b68417296daa836225';
 const APP_DATE = '2026-10-31';
 const CHANGELOG = [
   ['1.31.0', '31.10.2026', 'Nachzug zu LabelKit 4.49.0 „Proben stornieren“: In LabelKit stornierte Proben sind keine Proben mehr – FotoKit schlägt sie nicht mehr vor (P7 + Enter, Ergänzung beim Tippen) und ordnet ihnen keine Bohrkern-Fotos mehr zu. Ihre Nummer bleibt vergeben. Ist ein Foto noch einer stornierten Probe zugeordnet oder tippst du die Nummer von Hand ein, steht in der Zeile ein Hinweis (oben mitgezählt) – ordne das Foto dann einer anderen Probe zu oder sortiere es mit ✕ aus. Vor PDF und ZIP fragt FotoKit nach, solange noch ein nicht aussortiertes Foto einer stornierten Probe zugeordnet ist („Abbrechen“ springt zum ersten betroffenen Foto, „Trotzdem exportieren“ exportiert unverändert). FotoKit ändert dabei nichts von selbst: keine Zuordnung, kein Dateiname, kein Ordner. „Fotos neu einlesen“ liest jetzt auch die LabelKit-Datei neu – ist das Storno aufgehoben, wird die Probe wieder vorgeschlagen.'],
@@ -4083,8 +4083,10 @@ const fotoProben = (text, bk) => [...new Set(String(text || '').split(/[,;\/]+/)
   .flatMap(x => { const p = normProbe(x); return (!/^P\d+[a-z]?$/.test(p) && bk && bk.get(p)) || [p]; }))];
 const BK = { map: new Map(), datei: '' };
 async function loadBohrkernZuordnung(){
+  const hatteStorno = LK.storniert.size > 0;
   BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.storniert = new Set(); LK.datei = '';
-  const proj = S.proj; if (!proj) return;
+  // Ohne Projekt (direkt geöffneter Fotoordner): Hinweise aus dem vorigen Projekt gleich wegnehmen
+  const proj = S.proj; if (!proj){ if (hatteStorno) recompute(); return; }
   try{ await lkLesen(proj); } finally { if (S.proj === proj) recompute(); }   // Storno-Hinweise in den Zeilen auffrischen
 }
 async function lkLesen(proj){
