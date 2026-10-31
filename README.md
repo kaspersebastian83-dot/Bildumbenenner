@@ -2,7 +2,7 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.31.1** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.32.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
@@ -46,7 +46,7 @@ Die Webadresse, die Projektdatei `_Bildumbenenner.json` und die gespeicherten Ei
 
 ## Neu in 1.9.5 · 21.10.2026
 
-Alle aktiven Bilder erhalten in Listenreihenfolge eine **Dokumentationsnummer ab 1**, auch Bilder ohne Beschreibung. Aussortierte Bilder zählen nicht mit. Liste, Vorschau, PDF, ZIP-Bildverzeichnis, CSV und Fotoreferenzen der Labortabelle verwenden dieselben Nummern. Die Auswahl „nur Bilder mit Beschreibung“ behält die Listennummern bei und kann deshalb Lücken enthalten.
+Alle aktiven Bilder erhalten in Listenreihenfolge eine **Dokumentationsnummer ab 1**, auch Bilder ohne Beschreibung. Aussortierte Bilder zählen nicht mit. Liste, Vorschau, PDF, ZIP-Bildverzeichnis, CSV und Fotoreferenzen der Labortabelle verwenden dieselben Nummern. Die Auswahl „nur Bilder mit Beschreibung“ im Export-Dialog ist standardmäßig aus (jeder Export nimmt zuerst alle Bilder mit und merkt sich die Wahl nicht); schaltest du sie ein, behält sie die Listennummern bei und kann deshalb Lücken enthalten. Im PDF steht unter jedem Bild der aktuelle Dateiname.
 
 Die **Dateinummer** beginnt weiterhin bei der eingestellten Startnummer; Stellenzahl, Präfix und die übrigen Benennungsoptionen bleiben erhalten. Sie folgt der Position in der aktiven Liste (Startnummer + Bildnummer − 1). Ohne Beschreibung bleibt der Dateiname unverändert. Beispiel: Bild 3 mit Startnummer 7 erhält die Dateinummer 009 bei drei Stellen, auch wenn Bild 2 keine Beschreibung hat.
 
