@@ -1,6 +1,7 @@
 // FotoKit 1.31.0 – in LabelKit stornierte Proben (Nachzug zu LabelKit 4.49.0 „Proben stornieren“) im echten Browser.
 // Synthetisches OPFS-Projekt, LabelKit-Datei in „Laboraufträge“ (nur gelesen): P1 PAK, P2 PAK storniert, P3 Asbest.
 // Prüft: P2 wird nicht vorgeschlagen (P2 + Enter, Ergänzung); P2 von Hand eingetippt → Hinweis in der Zeile und Zählung oben;
+// vor PDF und ZIP Rückfrage (Abbrechen exportiert nichts, springt zum Foto; „Trotzdem exportieren“ erstellt die PDF), keine bei aussortiert;
 // Zuordnung, Dateiname und Ordner bleiben; nach „Fotos neu einlesen“ ist das Foto noch P2 zugeordnet → Hinweis wieder da;
 // aussortiert → kein Hinweis; Storno in LabelKit aufgehoben + „Fotos neu einlesen“ → wieder angeboten, Hinweis weg;
 // LabelKit-Datei unverändert. Nur erfundene Namen.
@@ -51,6 +52,9 @@ let browser, server;
   const gespeicherteProbe = name => page.evaluate(async n => { try { const p = await (await navigator.storage.getDirectory()).getDirectoryHandle('26.0902 Storno');
     const d = await (await p.getDirectoryHandle('_Spektron')).getDirectoryHandle('FotoKit');   // neues Projekt: Projektdatei in „_Spektron/FotoKit“
     const o = JSON.parse(await (await (await d.getFileHandle('_Bildumbenenner.json')).getFile()).text()); return (o.bilder[n] || {}).probe || ''; } catch { return null; } }, name);
+  const pdfs = () => page.evaluate(async () => { const p = await (await navigator.storage.getDirectory()).getDirectoryHandle('26.0902 Storno');
+    const out = []; for await (const h of (await p.getDirectoryHandle('Fotos')).values()) if (/\.(pdf|zip)$/i.test(h.name)) out.push(h.name); return out.sort(); });
+  const dialogOffen = () => page.locator('#overlay').evaluate(e => e.classList.contains('show'));
   const picker = () => page.evaluate(async () => { const p = await (await navigator.storage.getDirectory()).getDirectoryHandle('26.0902 Storno'); window.showDirectoryPicker = async () => p; });
   await page.evaluate(async () => {
     const root = await navigator.storage.getDirectory();
@@ -125,13 +129,45 @@ let browser, server;
   assert.equal(await sichtbar('IMG_0002'), false, 'aussortiert: kein Hinweis');
   assert.doesNotMatch(await page.locator('#stats').textContent(), /stornierter Probe/);
   assert.equal(await probe('IMG_0002').inputValue(), 'P2');
+  // … und vor dem Export keine Rückfrage: das aussortierte Foto kommt nicht in die Doku
+  await page.locator('#btnPdf').click();
+  await page.waitForSelector('#overlay.show #zOk');
+  assert.equal(await page.locator('#dStorno').count(), 0, 'aussortiert: keine Storno-Rückfrage vor dem PDF');
+  await page.locator('#zCancel').click();
   await row('IMG_0002').locator('button.x').click();
   assert.equal(await sichtbar('IMG_0002'), true, 'wiederhergestellt: Hinweis wieder da');
 
-  // 5) LabelKit-Datei nur gelesen
+  // 5) Vor PDF und ZIP: Rückfrage mit Probe und Fotozahl; Abbrechen exportiert nichts und springt zum ersten betroffenen Foto
+  await probe('IMG_0003').fill('P2');
+  const FRAGE = '2 Fotos sind noch P2 zugeordnet – P2 ist in LabelKit storniert. In der Bilddokumentation stehen sie dann weiter unter P2. Trotzdem exportieren?';
+  const exporteVorher = await pdfs();
+  for (const knopf of ['#btnPdf', '#btnZip']) {
+    await page.locator(knopf).click();
+    await page.waitForSelector('#overlay.show #dStorno');
+    assert.equal(await page.locator('#dialog h3').textContent(), '2 Fotos bei stornierter Probe');
+    assert.equal(await page.locator('#dStorno').textContent(), FRAGE);
+    assert.equal(await page.locator('#dCancel').evaluate(e => e === document.activeElement), true, 'Abbrechen ist vorgewählt');
+    await page.keyboard.press('Enter');   // vorgewählt = Abbrechen
+    assert.equal(await dialogOffen(), false, knopf + ': Abbrechen schließt, kein Exportdialog');
+    assert.equal(await page.evaluate(() => { const e = document.activeElement; return e.classList.contains('probe') ? e.value : ''; }), 'P2', 'Fokus im Feld Probe-Nr. des ersten betroffenen Fotos');
+  }
+  assert.deepEqual(await pdfs(), exporteVorher, 'Abbrechen: nichts exportiert');
+  // „Trotzdem exportieren“ → PDF wie bisher, Zuordnungen unverändert
+  await page.locator('#btnPdf').click();
+  await page.waitForSelector('#overlay.show #dStorno');
+  await page.locator('#dOk').click();
+  await page.waitForSelector('#overlay.show #zOk');
+  await page.locator('#zOk').click();
+  await page.waitForFunction(() => !document.querySelector('#overlay').classList.contains('show') && document.querySelector('#banner .pdfOpen'), null, { timeout: 60000 });
+  const neu = (await pdfs()).filter(n => !exporteVorher.includes(n));
+  assert.equal(neu.length, 1, 'eine PDF erstellt'); assert.match(neu[0], /^Bilddokumentation_.*\.pdf$/);
+  assert.equal(await probe('IMG_0002').inputValue(), 'P2'); assert.equal(await probe('IMG_0003').inputValue(), 'P2');
+  assert.equal(await sichtbar('IMG_0003'), true);
+
+  // 6) LabelKit-Datei nur gelesen
   assert.equal(await lkLesen(), labelkitText, 'LabelKit-Datei unverändert');
 
-  // 6) Storno in LabelKit aufgehoben → „Fotos neu einlesen“ → Hinweis weg, P2 wird wieder angeboten
+  // 7) Storno in LabelKit aufgehoben → „Fotos neu einlesen“ → Hinweis weg, P2 wird wieder angeboten
   const aufgehoben = JSON.parse(labelkitText); delete aufgehoben.proben[1].storniert; aufgehoben.proben[1].nrFest = { am: '2026-10-31T09:00:00.000Z', anlass: 'Storno aufgehoben' };
   await lkSchreiben(JSON.stringify(aufgehoben));
   await page.locator('#btnReload').click();
@@ -143,9 +179,13 @@ let browser, server;
   await page.keyboard.press('Enter');
   assert.equal(await probe('IMG_0004').inputValue(), 'P2');
   assert.equal(await sichtbar('IMG_0004'), false);
+  await page.locator('#btnPdf').click();
+  await page.waitForSelector('#overlay.show #zOk');
+  assert.equal(await page.locator('#dStorno').count(), 0, 'ohne stornierte Zuordnung keine Rückfrage');
+  await page.locator('#zCancel').click();
   assert.deepEqual(await fotos(), vorher, 'keine Datei umbenannt oder verschoben');
 
   assert.deepEqual(errors, []);
-  console.log(`OK (${browserName}): stornierte Proben – nicht angeboten, Hinweis bei Zuordnung, nichts geändert, Storno aufgehoben → wieder angeboten`);
+  console.log(`OK (${browserName}): stornierte Proben – nicht angeboten, Hinweis bei Zuordnung, Rückfrage vor PDF/ZIP, nichts geändert, Storno aufgehoben → wieder angeboten`);
   await browser.close(); server.close();
 })().catch(async e => { console.error(e); console.log(`::error title=Browsertest Storno ${browserName}::${String(e && e.message || e).split('\n')[0]}`); try { await browser?.close(); server?.close(); } catch {} process.exit(1); });

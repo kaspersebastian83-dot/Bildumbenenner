@@ -2,6 +2,7 @@
 //  • storniert (Objekt {am, kuerzel, grund} – jeder wahre Wert zählt) → nicht angeboten (P7 + Enter, Ergänzung, Bohrkern-Zuordnung)
 //  • die Nummer bleibt vergeben: fortlaufende Nummern dahinter rücken nicht auf
 //  • Foto mit stornierter Probe-Nr. → Hinweistext; Storno aufgehoben → wieder angeboten, kein Hinweis
+//  • vor PDF und ZIP: Rückfrage, solange ein nicht aussortiertes Foto einer stornierten Probe zugeordnet ist
 // node tests/storno-proben.cjs
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -95,6 +96,26 @@ test('Zeile und Zählung zeigen den Hinweis; FotoKit ändert dabei nichts', () =
   assert.ok(html.includes('bei stornierter Probe</span>'), 'Zählung oben');
   const f = html.slice(html.indexOf('function stornoHinweis('), html.indexOf('function vorschlagKandidaten('));
   assert.ok(!/it\.probe\s*=|\.discard\s*=|rename|move/i.test(f), 'Hinweis ändert keine Zuordnung, keinen Namen, keinen Ordner');
+});
+
+test('Rückfrage vor PDF und ZIP: Text, nur nicht aussortierte Fotos, beide Knöpfe', () => {
+  const fa = html.indexOf('function stornoFotos('), fb = html.indexOf('function guardStorno(');
+  assert.ok(fa > 0 && fb > fa, 'stornoFotos/stornoFrage in index.html');
+  const c = { S: { view: [] }, LK: { storniert: new Set(['P2', 'P5']) } };
+  vm.runInNewContext(/const undListe = .*;/.exec(html)[0] + '\n' + html.slice(html.indexOf('const normProbe = '), html.indexOf('const BK = { map:')) +
+    '\nconst stornoProben = ' + /const stornoProben = (.*);/.exec(html)[1] + ';\n' + html.slice(fa, fb) + '\nthis.stornoFotos = stornoFotos; this.stornoFrage = stornoFrage;', c);
+  assert.equal(c.stornoFrage(2, ['P7']), '2 Fotos sind noch P7 zugeordnet – P7 ist in LabelKit storniert. In der Bilddokumentation stehen sie dann weiter unter P7. Trotzdem exportieren?');
+  assert.equal(c.stornoFrage(1, ['P7']), '1 Foto ist noch P7 zugeordnet – P7 ist in LabelKit storniert. In der Bilddokumentation steht es dann weiter unter P7. Trotzdem exportieren?');
+  assert.equal(c.stornoFrage(3, ['P5', 'P7']), '3 Fotos sind noch P5 und P7 zugeordnet – P5 und P7 sind in LabelKit storniert. In der Bilddokumentation stehen sie dann weiter unter P5 und P7. Trotzdem exportieren?');
+  c.S.view = [{ probe: 'P2' }, { probe: 'P1' }, { probe: 'P5, P2' }, { probe: 'P5', discard: true }];
+  const r = c.stornoFotos();
+  assert.equal(r.fotos.length, 2, 'aussortierte und gültige zählen nicht'); assert.deepEqual(P(r.proben), ['P2', 'P5']);
+  c.S.view = [{ probe: 'P1' }, { probe: 'P5', discard: true }];
+  assert.equal(c.stornoFotos().fotos.length, 0, 'nichts betroffen → keine Rückfrage');
+  assert.ok(html.includes("$('btnZip').onclick = guardPicks(guardStorno(openZipDialog));") && html.includes("$('btnPdf').onclick = guardPicks(guardStorno(openPdfDialog));"), 'PDF und ZIP fragen nach');
+  const g = html.slice(fb, html.indexOf('function clearDropMarks('));
+  assert.ok(!/readOnly/.test(g), 'gilt auch im geschützten Modus');
+  assert.ok(!/it\.probe\s*=|\.discard\s*=/.test(g), 'Rückfrage ändert keine Zuordnung');
 });
 
 console.log(`OK Storno: ${n} Fälle`);
