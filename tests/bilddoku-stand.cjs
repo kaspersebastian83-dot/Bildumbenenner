@@ -109,9 +109,26 @@ async function run() {
     const b = session(d); await b.open(); uhr(b, T);   // Rechner B: Uhr eine Minute zurück
     b.edit('b.jpg', 'danach geändert'); assert.equal(await b.flushProject(), true);
     const j = d.json(); assert.ok(j.dokuGeaendert > j.bilddoku.erstellt, `veraltet trotz nachgehender Uhr (${j.dokuGeaendert} / ${j.bilddoku.erstellt})`);
+    // … und eine neue PDF auf Rechner B (Uhr zurück) ist danach aktuell – nicht sofort wieder veraltet (Codex-Review #77)
+    uhr(b, T + 5); b.ctx.bilddokuVermerken(['Bilddokumentation_B.pdf'], 'Anlage 2'); assert.equal(await b.flushProject(), true);
+    const k = d.json(); assert.deepEqual(k.bilddoku.dateien, ['Bilddokumentation_B.pdf']);
+    assert.ok(k.dokuGeaendert < k.bilddoku.erstellt, `Ersatz-PDF aktuell (${k.dokuGeaendert} / ${k.bilddoku.erstellt})`);
     // ohne PDF bleibt es die echte Zeit
     const e = disk(), c = session(e); await c.open(); uhr(c, T); c.edit('a.jpg', 'x');
     assert.equal(c.P.data.extensions.dokuGeaendert, new Date(T).toISOString());
+  });
+
+  await test('Änderung von einem Rechner mit vorgehender Uhr, PDF auf einem mit nachgehender → aktuell; danach ändern → veraltet', async () => {
+    const d = disk(), a = session(d); await a.open();
+    uhr(a, T + 60000); a.edit('a.jpg', 'schnelle Uhr'); assert.equal(await a.flushProject(), true);
+    const b = session(d); await b.open(); uhr(b, T);
+    b.ctx.bilddokuVermerken(['Bilddokumentation_B.pdf'], 'Anlage 2'); assert.equal(await b.flushProject(), true);
+    let j = d.json(); assert.ok(j.dokuGeaendert < j.bilddoku.erstellt, `PDF enthält die Änderung → aktuell (${j.dokuGeaendert} / ${j.bilddoku.erstellt})`);
+    uhr(b, T + 10); b.edit('b.jpg', 'danach'); assert.equal(await b.flushProject(), true);
+    j = d.json(); assert.ok(j.dokuGeaendert > j.bilddoku.erstellt, 'spätere Änderung → veraltet');
+    // ohne Doku-Änderung bleibt „erstellt“ die echte Zeit
+    const e = disk(), c = session(e); await c.open(); uhr(c, T); c.ctx.bilddokuVermerken(['x.pdf'], '');
+    assert.equal(c.P.data.extensions.bilddoku.erstellt, new Date(T).toISOString());
   });
 
   console.log(`${n} Fälle bestanden.`);
