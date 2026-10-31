@@ -2,11 +2,19 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.30.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.31.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
 Die Webadresse, die Projektdatei `_Bildumbenenner.json` und die gespeicherten Einstellungen behalten den alten Namen – so funktionieren bestehende Projekte, Lesezeichen und installierte Apps weiter. Die aktuelle Version steht oben links in der blauen Kopfzeile (Klick darauf: Änderungen, Problem melden). Daneben öffnet „? Kurzanleitung“ (oder F1) die Kurzanleitung – auch zum Ausdrucken.
+
+## Neu in 1.31.0 · 31.10.2026 – stornierte Proben (Nachzug zu LabelKit 4.49.0 „Proben stornieren“)
+
+- In LabelKit stornierte Proben (`storniert` in `…_Daten.json`) sind keine Proben mehr: FotoKit schlägt sie nicht vor (P7 + Enter, Ergänzung beim Tippen) und ordnet ihnen über Bohrkern-IDs keine Fotos zu (wie Rückstellproben). Ihre Nummer bleibt vergeben – die fortlaufende Nummerierung zählt sie weiter mit.
+- Ist ein Foto noch einer stornierten Probe zugeordnet (oder wird die Nummer von Hand eingetippt), zeigt die Zeile den Hinweis „⚠ P7 ist in LabelKit storniert – dieses Foto ist noch P7 zugeordnet. Ordne es einer anderen Probe zu oder sortiere es mit ✕ aus.“; oben in der Zählung steht „⚠ n Fotos bei stornierter Probe“. Aussortierte Fotos bekommen keinen Hinweis.
+- **Vor „Bilddokumentation erstellen …“ (PDF) und „ZIP exportieren“** fragt FotoKit nach, solange noch ein nicht aussortiertes Foto einer stornierten Probe zugeordnet ist, z. B. „2 Fotos sind noch P7 zugeordnet – P7 ist in LabelKit storniert. In der Bilddokumentation stehen sie dann weiter unter P7. Trotzdem exportieren?“ – **Abbrechen** (vorgewählt) exportiert nichts und springt zum ersten betroffenen Foto, **Trotzdem exportieren** exportiert unverändert. Auch im geschützten Modus.
+- FotoKit ändert dabei nichts von selbst: keine Zuordnung, kein Dateiname, kein Ordner. Die LabelKit-Datei wird weiterhin nur gelesen.
+- **„Fotos neu einlesen“** liest jetzt auch die LabelKit-Datei neu. Ist das Storno in LabelKit aufgehoben, wird die Probe wieder vorgeschlagen und der Hinweis verschwindet.
 
 ## Neu in 1.30.0 · 30.10.2026 – Deckblatt der Bilddokumentation
 
@@ -143,6 +151,8 @@ node tests/sicherer-projektwechsel-browser.cjs [chromium|webkit]   # Speicherfeh
 node tests/geschuetzter-projektmodus-browser.cjs [chromium|webkit]   # Schutz von Originalen/JSON, direkte Dateiaktionen, sichere Exporte
 node tests/oberflaeche-browser.cjs [chromium|webkit]   # Einstellungsbereich, Tastatur, Dateifunktionen/Exporte, 1280, 768, 390 und 320 px; Vorschau, Überbreite und Tastatur
 node tests/serienbeschriftung-browser.cjs [chromium|webkit]   # 5/50/150 Bilder: Tastatur, Fokus, Vorschau, Vererbung und Autosave
+node tests/storno-proben.cjs   # in LabelKit stornierte Proben: nicht angeboten, Nummer bleibt vergeben, Hinweistext
+node tests/storno-proben-browser.cjs [chromium|webkit]   # Hinweis in der Zeile, Rückfrage vor PDF/ZIP, keine Vorschläge, nichts geändert, Storno aufgehoben → wieder angeboten
 ```
 
 GitHub führt alle Tests bei jedem Pull Request aus (`.github/workflows/tests.yml`, Chromium; die WebKit-Aufrufe sind lokal optional). Es gibt nur diesen einen Test-Workflow; zusätzliche Kompatibilitäts- und Integrations-Workflows wurden am 23.10.2026 entfernt.

@@ -170,6 +170,9 @@ main{flex:1;display:flex;min-height:0}
 .meta2 .sec::placeholder{color:var(--muted)}
 .meta2 .sec.inherited::placeholder{color:var(--accent);opacity:.75}
 .row.discarded .meta2 input{color:var(--muted)}
+/* Foto noch einer in LabelKit stornierten Probe zugeordnet (1.31): nur Hinweis, nichts wird geändert */
+.storno{font-size:12px;color:var(--warn);font-weight:600;white-space:normal;overflow-wrap:anywhere}
+.storno[hidden]{display:none}
 .section-status{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .res{font-family:var(--mono);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
 .res.change{color:var(--ok)}
@@ -234,6 +237,7 @@ footer{background:var(--panel);border-top:1px solid var(--line);padding:8px 16px
 #stats{color:var(--muted);white-space:nowrap;flex:0 0 auto}
 #stats b{color:var(--text)}
 #stats .bad{color:var(--err)}
+#stats .warn{color:var(--warn)}
 .keys{color:var(--muted);font-size:12px;flex:0 0 auto;white-space:nowrap;cursor:help;border-bottom:1px dotted var(--line)}
 #btnRename,#btnZip,#btnPdf{flex:0 0 auto;white-space:nowrap}
 .pdfOpen{padding:2px 8px;font-size:12.5px}
@@ -256,6 +260,7 @@ footer{background:var(--panel);border-top:1px solid var(--line);padding:8px 16px
 .dialog pre{font-family:var(--mono);font-size:11.5px;line-height:1.45;white-space:pre-wrap;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:10px;margin:0;max-height:40vh;overflow:auto}
 .dialog .btns.left{justify-content:flex-start}
 .dialog .btns .spacer{flex:1}
+.dialog p.hint{font-size:12.5px;color:var(--muted)}
 .dialog .warn{color:var(--warn);font-weight:600}
 .dialog .m{font-size:13px;color:var(--muted);line-height:1.5}
 .dialog .m b{color:var(--text)}
@@ -528,11 +533,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.30.0';
+const APP_VERSION = '1.31.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:949771666aac333b55677d6f5ce430b4302f9ff0442280e840d4e9618744f4ff';
-const APP_DATE = '2026-10-30';
+const APP_BUILD = 'sha256:4f94b523bf97e4c7524085b5ff7e27c5aaaf9f845d9c88b68417296daa836225';
+const APP_DATE = '2026-10-31';
 const CHANGELOG = [
+  ['1.31.0', '31.10.2026', 'Nachzug zu LabelKit 4.49.0 „Proben stornieren“: In LabelKit stornierte Proben sind keine Proben mehr – FotoKit schlägt sie nicht mehr vor (P7 + Enter, Ergänzung beim Tippen) und ordnet ihnen keine Bohrkern-Fotos mehr zu. Ihre Nummer bleibt vergeben. Ist ein Foto noch einer stornierten Probe zugeordnet oder tippst du die Nummer von Hand ein, steht in der Zeile ein Hinweis (oben mitgezählt) – ordne das Foto dann einer anderen Probe zu oder sortiere es mit ✕ aus. Vor PDF und ZIP fragt FotoKit nach, solange noch ein nicht aussortiertes Foto einer stornierten Probe zugeordnet ist („Abbrechen“ springt zum ersten betroffenen Foto, „Trotzdem exportieren“ exportiert unverändert). FotoKit ändert dabei nichts von selbst: keine Zuordnung, kein Dateiname, kein Ordner. „Fotos neu einlesen“ liest jetzt auch die LabelKit-Datei neu – ist das Storno aufgehoben, wird die Probe wieder vorgeschlagen.'],
   ['1.30.0', '30.10.2026', 'Bilddokumentation nach dem ersten Testlauf mit BerichtKit: Auf dem Deckblatt steht „zum Untersuchungsbericht …“ statt „zum Gutachten …“. Ist das Schadendatum leer oder „nicht bekannt“, fehlt die Zeile ganz. Die Person unter „Sachverständiger“ steht auf dem Deckblatt jetzt unter „Bearbeitung“ – passt auch, wenn sie im Bericht als Messtechniker unterschreibt (Eingabefeld und Name bleiben). Die Übersicht der Probenahmestellen zeigt die Spalte „Abschnitt“ nur, wenn mindestens eine Probe einen Abschnitt hat; sonst bekommt die Beschreibung den Platz. Die KI-Anweisung im ZIP ist genauso angepasst (gespeicherte eigene Anweisungen bleiben unverändert).'],
   ['1.29.0', '30.10.2026', 'Für BerichtKit (Anlagen): „Anlagen-Nr.“ ist ohne Eintrag „Anlage 2“ – feste Hausreihenfolge im Bericht: Anlage 1 Prüfbericht(e), 2 Bilddokumentation, 3 Probenplan (änderbar, z. B. „Anlage 3“ bei zwei Prüfberichten). FotoKit vermerkt in _Bildumbenenner.json, welche Bilddokumentation zuletzt erstellt wurde (Dateien, Zeit, Anlagen-Nr.) und wann sich danach etwas geändert hat, was in der Doku steht (Beschreibungen, Abschnitte, Proben, Drehung, Auswahl, Reihenfolge, Dateinamen, Projektdaten, neue oder entfernte Fotos – auch über „Fotos übernehmen“ und Änderungen eines Kollegen, die beim Zusammenführen hereinkommen). So erkennt BerichtKit eine veraltete Bilddoku und nimmt sie nicht ungefragt als Anlage. Sonst keine sichtbare Änderung.'],
   ['1.28.0', '30.10.2026', 'Bilder für die Doku auswählen: Jede Zeile hat jetzt einen Haken (Haken = kommt in die Bilddokumentation). Oben „Alle“, „Keine“, „Umkehren“ und „… nicht angehakte aussortieren“ – praktisch, wenn nur wenige von vielen Fotos in die Doku sollen. Aussortiert wird wie mit ✕ (nichts wird gelöscht, ↺ holt zurück). Sind beim Erstellen der Doku, beim ZIP oder beim Umbenennen noch Bilder nicht angehakt, fragt FotoKit nach. Das ✕ funktioniert wie bisher.'],
@@ -1944,6 +1950,7 @@ function buildRows(){
           <div class="line1"><div class="orig"></div><div class="res"></div></div>
           <input class="desc" type="text" spellcheck="true" placeholder="Beschreibung eingeben …">
           <div class="meta2"><input class="sec" type="text" list="secList" placeholder="Abschnitt (z. B. Küche)" title="Abschnitt – gilt auch für die folgenden Bilder, bis ein neuer gesetzt wird"><input class="probe" type="text" placeholder="Probe-Nr." title="Probenahmestelle, z. B. P1 (mehrere mit Komma)"></div>
+          <div class="storno" hidden></div>
           <div class="section-status"></div>
         </div>
         <div class="ord"><button class="up" title="nach oben">▲</button><button class="x" title="Aussortieren (Alt+X)">✕</button><button class="down" title="nach unten">▼</button></div>`;
@@ -1956,6 +1963,9 @@ function buildRows(){
       const sectionStatus = r.querySelector('.section-status');
       sectionStatus.id = 'section-status-' + (++nextRowId);
       r.querySelector('.sec').setAttribute('aria-describedby', sectionStatus.id);
+      const storno = r.querySelector('.storno');
+      storno.id = 'storno-' + nextRowId;
+      r.querySelector('.probe').setAttribute('aria-describedby', storno.id);
       inp.value = it.desc;
       inp.addEventListener('input', e => {
         if (it.discard) return;
@@ -2095,6 +2105,40 @@ function guardPicks(next){
     $('dCancel').onclick = closeDialog;
     $('dAll').onclick = () => { closeDialog(); setPicks(() => false); next(...a); };
     $('dOk').onclick = () => { closeDialog(); applyPicks(); next(...a); };
+  };
+}
+/* Vor PDF und ZIP (1.31): Fotos, die noch einer in LabelKit stornierten Probe zugeordnet sind, stünden in der Doku weiter
+   unter dieser Probe. Nur fragen – Zuordnungen bleiben, wie sie sind. Gilt auch im geschützten Modus. */
+function stornoFotos(){
+  const fotos = [], proben = [];
+  for (const it of S.view){
+    if (it.discard) continue;
+    const sp = stornoProben(it.probe); if (!sp.length) continue;
+    fotos.push(it); for (const p of sp) if (!proben.includes(p)) proben.push(p);
+  }
+  return { fotos, proben };
+}
+function stornoFrage(n, proben){
+  const p = undListe(proben), viele = proben.length > 1;
+  return `${n} ${n === 1 ? 'Foto ist' : 'Fotos sind'} noch ${p} zugeordnet – ${p} ${viele ? 'sind' : 'ist'} in LabelKit storniert. ` +
+    `In der Bilddokumentation ${n === 1 ? 'steht es' : 'stehen sie'} dann weiter unter ${p}. Trotzdem exportieren?`;
+}
+function guardStorno(next){
+  return (...a) => {
+    const { fotos, proben } = stornoFotos();
+    if (!fotos.length) return next(...a);
+    const n = fotos.length;
+    showDialog(`<h3>${n} ${n === 1 ? 'Foto' : 'Fotos'} bei stornierter Probe</h3>
+      <p id="dStorno">${esc(stornoFrage(n, proben))}</p>
+      <p class="hint">„Abbrechen“ springt zum ersten betroffenen Foto – ordne es einer anderen Probe zu oder sortiere es mit ✕ aus.</p>
+      <div class="btns"><button class="primary" id="dCancel">Abbrechen</button><button id="dOk">Trotzdem exportieren</button></div>`);
+    $('dCancel').onclick = () => {
+      closeDialog();
+      const i = S.view.indexOf(fotos[0]);
+      if (i >= 0){ setFocus(i, false); fotos[0].el.querySelector('.probe').focus({ preventScroll: true }); }
+    };
+    $('dOk').onclick = () => { closeDialog(); next(...a); };
+    $('dCancel').focus();
   };
 }
 
@@ -2243,8 +2287,10 @@ function recompute(){
   const staying = S.view.filter(it => !(it.discard && moving));
   const count = new Map();
   staying.forEach(it => { const k = it.final.toLowerCase(); count.set(k, (count.get(k)||0) + 1); });
-  let changes = 0, conflicts = 0, tooLong = 0, discarded = 0;
+  let changes = 0, conflicts = 0, tooLong = 0, discarded = 0, storniert = 0;
   S.view.forEach(it => {
+    const sp = it.discard ? [] : stornoProben(it.probe);   // aussortierte Fotos brauchen keinen Hinweis
+    if (sp.length) storniert++;
     const k = it.final.toLowerCase();
     const gone = it.discard && moving;
     it.conflict = !gone && (count.get(k) > 1 || (it.final !== it.name && S.otherNames.has(k)));
@@ -2265,11 +2311,15 @@ function recompute(){
       res.textContent = it.conflict ? '⚠ ' + it.final + ' (Name doppelt / existiert)' : changed ? '→ ' + it.final : '';
     }
     res.title = it.final;
+    const st = it.el.querySelector('.storno'), stText = stornoHinweis(sp);
+    if (st.textContent !== stText) st.textContent = stText;
+    st.hidden = !stText;
   });
   const moves = moving ? discarded : 0;
   let s = `<b>${S.view.length - discarded}</b> Bilder · <b>${changes}</b> werden umbenannt`;
   if (discarded) s += ` · <b>${discarded}</b> aussortiert`;
   if (conflicts) s += ` · <span class="bad">${conflicts} Konflikte</span>`;
+  if (storniert) s += ` · <span class="warn" title="Diese Fotos sind noch Proben zugeordnet, die in LabelKit storniert sind – Hinweis in der Zeile">⚠ ${storniert} ${storniert === 1 ? 'Foto' : 'Fotos'} bei stornierter Probe</span>`;
   if (tooLong) s += ` · <span class="bad">${tooLong} Namen sehr lang</span>`;
   $('stats').title = changes ? 'Dateinamen passen noch nicht zum Plan – nur „Ausführen“ ändert Dateien' : '';
   $('stats').innerHTML = P.readOnly ? `<b>${S.view.length - discarded}</b> Bilder · geschützter Modus – Originalfotos unverändert` : s;
@@ -4019,6 +4069,7 @@ function bohrkernNummern(daten){
   const add = (k, pn) => { k = String(k || '').trim().toUpperCase(); if (!k) return; if (!map.has(k)) map.set(k, []); if (!map.get(k).includes(pn)) map.get(k).push(pn); };
   for (const p of liste){
     if (!p || typeof p !== 'object' || p.matrix !== 'Bohrkern') continue;
+    if (p.storniert) continue;   // in LabelKit storniert (4.49): keine Probe mehr, kein Laborwert – wie eine Rückstellprobe
     if (String(p.bkStatus || '').trim().toUpperCase() === 'R' || String(p.notiz || '').trim() === BK_RUECKSTELL) continue;
     const n = [p._nr, p.chloridNr, p.id].map(Number).find(v => Number.isSafeInteger(v) && v > 0 && v < 1e9);
     if (!n) continue;
@@ -4032,8 +4083,13 @@ const fotoProben = (text, bk) => [...new Set(String(text || '').split(/[,;\/]+/)
   .flatMap(x => { const p = normProbe(x); return (!/^P\d+[a-z]?$/.test(p) && bk && bk.get(p)) || [p]; }))];
 const BK = { map: new Map(), datei: '' };
 async function loadBohrkernZuordnung(){
-  BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.datei = '';
-  const proj = S.proj; if (!proj) return;
+  const hatteStorno = LK.storniert.size > 0;
+  BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.storniert = new Set(); LK.datei = '';
+  // Ohne Projekt (direkt geöffneter Fotoordner): Hinweise aus dem vorigen Projekt gleich wegnehmen
+  const proj = S.proj; if (!proj){ if (hatteStorno) recompute(); return; }
+  try{ await lkLesen(proj); } finally { if (S.proj === proj) recompute(); }   // Storno-Hinweise in den Zeilen auffrischen
+}
+async function lkLesen(proj){
   try{
     const d = (await SO.ort(proj.dir, 'labelkit')).dir; if (!d) return;   // LabelKit-Datei: „Laboraufträge“ oder künftig „_Spektron/LabelKit“
     let best = null;
@@ -4045,8 +4101,8 @@ async function loadBohrkernZuordnung(){
     const daten = JSON.parse(await best.text());
     if (S.proj !== proj) return;   // inzwischen anderes Projekt geöffnet
     BK.map = bohrkernNummern(daten); BK.datei = best.name;
-    LK.proben = labelkitProben(daten); LK.datei = best.name;
-  }catch(e){ if (S.proj === proj){ BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.datei = ''; } }
+    LK.storniert = new Set(); LK.proben = labelkitProben(daten, LK.storniert); LK.datei = best.name;
+  }catch(e){ if (S.proj === proj){ BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.storniert = new Set(); LK.datei = ''; } }
 }
 /* ---------- Beschreibung schneller: Vorschläge ----------
    1) Probe-Nr. → Beschreibung aus LabelKit (neueste …_Daten.json in „Laboraufträge“, nur gelesen):
@@ -4054,21 +4110,37 @@ async function loadBohrkernZuordnung(){
       _nr, sonst fortlaufend ab probenStartNr über PAK → Chlorid → Asbest → Sonstige.
    2) Beim Tippen: Ergänzung aus den Beschreibungen dieses Projekts (zuletzt verwendete zuerst) und den Räumen/Proben aus
       LabelKit – wie in der Adresszeile des Browsers: der ergänzte Rest ist markiert, Enter/Tab übernimmt, Weitertippen ersetzt,
-      Entf/Rücktaste oder Esc verwirft. Ohne Übernahme (Klick woandershin) bleibt nur das Getippte. */
-const LK = { proben: new Map(), datei: '' };
-function labelkitProben(daten){
-  const out = new Map(); if (!daten || typeof daten !== 'object') return out;
+      Entf/Rücktaste oder Esc verwirft. Ohne Übernahme (Klick woandershin) bleibt nur das Getippte.
+   3) In LabelKit stornierte Proben (ab 4.49 `storniert: {am, kuerzel, grund}`) sind keine Proben mehr: nie angeboten, nicht
+      gezählt – ihre Nummer bleibt aber vergeben (zählt bei der fortlaufenden Nummerierung mit). Ist ein Foto noch so einer
+      Probe zugeordnet (oder wird die Nummer von Hand eingetippt), zeigt die Zeile einen Hinweis; FotoKit ändert, benennt
+      und verschiebt dabei nichts. Storno aufgehoben → die Probe wird beim nächsten Lesen der LabelKit-Datei wieder angeboten. */
+const LK = { proben: new Map(), storniert: new Set(), datei: '' };
+function labelkitProben(daten, storniert){
+  const out = new Map(), aktiv = new Set(); if (!daten || typeof daten !== 'object') return out;
   const t = v => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
   let nr = Number.isSafeInteger(+daten.probenStartNr) && +daten.probenStartNr > 0 ? +daten.probenStartNr : 1;
   for (const [liste, teile] of [['proben', p => [p.z2, p.z3, p.z4]], ['chloridProben', p => [p.z2, p.z3, p.z4]], ['asbestProben', p => [p.z2, p.z3]], ['sonstigeProben', p => [p.z2, p.z3, p.z4]]]){
     for (const p of Array.isArray(daten[liste]) ? daten[liste] : []){
       if (!p || typeof p !== 'object'){ nr++; continue; }
       const n = Number.isSafeInteger(+p._nr) && +p._nr > 0 ? +p._nr : nr; nr = n + 1;
+      if (p.storniert){ if (storniert) storniert.add('P' + n); continue; }   // Nummer bleibt vergeben, Probe wird nicht angeboten
+      aktiv.add('P' + n);
       const text = teile(p).map(t).filter(Boolean).join(' ');
       if (text) out.set('P' + n, { text: text.slice(0, 120), raum: t(p.z2) });
     }
   }
+  if (storniert) for (const k of aktiv) storniert.delete(k);   // gleiche Nummer auch als gültige Probe: kein Storno-Hinweis
   return out;
+}
+/** Probe-Nr. eines Fotos → die darin genannten, in LabelKit stornierten Proben („p7, P9“ → ['P7']). */
+const stornoProben = text => LK.storniert.size ? fotoProben(text).filter(p => LK.storniert.has(p)) : [];
+const undListe = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' und ' + a[a.length - 1] : a.join('');
+/** Hinweis in der Zeile (leer = keiner). Nur ein Hinweis – Zuordnung, Dateiname und Ordner bleiben, wie sie sind. */
+function stornoHinweis(sp){
+  if (!sp.length) return '';
+  const n = undListe(sp);
+  return `⚠ ${n} ${sp.length === 1 ? 'ist' : 'sind'} in LabelKit storniert – dieses Foto ist noch ${n} zugeordnet. Ordne es einer anderen Probe zu oder sortiere es mit ✕ aus.`;
 }
 /** Kandidaten für die Ergänzung: Beschreibungen der vorherigen Bilder (nächstgelegene zuerst), dann häufige, dann LabelKit. */
 function vorschlagKandidaten(it){
@@ -4646,7 +4718,7 @@ const HELP_HTML = `
   <li><b>Projekt öffnen:</b> in der Projektzentrale „Fotos &amp; Dokumentation“ – oder hier „Projekt öffnen …“ und den Projektordner (z. B. <code>26.0123 Köln</code>) wählen. Oben in der blauen Leiste stehen dann Projektnummer und Ort. Wurde nur der Ordner <code>Fotos</code> gewählt, oben „Projekt zuordnen …“ klicken. Neue Fotos in diesen Ordner kopieren und „Fotos neu einlesen“ wählen – das liest immer die Fotos des Projekts, an dem gerade in Spektron gearbeitet wird. Ohne Projektangabe geöffnet, nimmt FotoKit dieses Projekt gleich selbst.</li>
   <li><b>Fotos übernehmen:</b> Haben Kollegen ihre Fotos in Unterordnern von <code>Fotos</code> abgelegt (z. B. <code>Begehung Ben</code>), erscheint oben „📥 Fotos übernehmen“. Angehakte Unterordner werden nach <code>Fotos</code> verschoben (nicht kopiert), die Dateinamen bleiben – nur bei gleichem Namen kommt das Kürzel dazu. Der Ordnername wird auf Wunsch Abschnitt; die Herkunft jeder Datei steht in <code>_Bildumbenenner.json</code>. Die leeren Unterordner bleiben stehen.</li>
   <li><b>Dateibenennung:</b> „Dateibenennung ▸“ klappt Benennung und weitere Einstellungen auf, mit Beispiel-Dateinamen. Die Bildnummer zählt aktive Bilder in Listenreihenfolge ab 1; die Dateinummer folgt derselben Position mit der eingestellten Startnummer. Ohne Beschreibung bleibt der Dateiname erhalten. Sortieren ändert keine Dateien: Geplante Namen werden erst mit „Ausführen“ und „Jetzt ausführen“ übernommen.</li>
-  <li><b>Bilder beschreiben:</b> links ein Bild anklicken, rechts erscheint die Vorschau. Beschreibung eintippen, <kbd>Enter</kbd> springt zum nächsten Bild. Darunter optional <b>Abschnitt</b> (z. B. „Küche“ – gilt für die folgenden Bilder mit) und <b>Probe-Nr.</b> (z. B. „P1“).</li>
+  <li><b>Bilder beschreiben:</b> links ein Bild anklicken, rechts erscheint die Vorschau. Beschreibung eintippen, <kbd>Enter</kbd> springt zum nächsten Bild. Darunter optional <b>Abschnitt</b> (z. B. „Küche“ – gilt für die folgenden Bilder mit) und <b>Probe-Nr.</b> (z. B. „P1“). In LabelKit stornierte Proben bietet FotoKit nicht an; ist ein Foto noch so einer Probe zugeordnet, steht in der Zeile ein Hinweis, und vor PDF und ZIP fragt FotoKit nach – ordne es dann einer anderen Probe zu oder sortiere es mit ✕ aus.</li>
   <li><b>Aufräumen:</b> unbrauchbare Bilder mit ✕ aussortieren (sie wandern ans Ende, nichts wird gelöscht). Sollen nur wenige Bilder in die Doku: oben „Keine“, die gewünschten anhaken, dann „… nicht angehakte aussortieren“. Reihenfolge per Ziehen ändern oder mit Sortierung „nach Abschnitt (Begehung)“ nach Räumen ordnen, schiefe Bilder mit ↻ drehen.</li>
   <li><b>Projektdaten prüfen:</b> „Projektdaten …“ – Anlagen-Nr., Objekt, Schadenereignis, Daten, Sachverständiger. Was in der Projektzentrale schon eingetragen ist, steht hier bereits. Gelb markierte Felder sind Pflicht (sie stehen auf dem Deckblatt); die Zahl am Knopf zeigt, wie viele noch fehlen.</li>
   <li><b>Ausgeben:</b>
@@ -4755,8 +4827,8 @@ $('btnInfo').textContent = 'Version ' + APP_VERSION + ' · Build ' + APP_BUILD.s
 $('btnInfo').title = 'Geladen: ' + APP_VERSION + ' / ' + APP_BUILD;
 updateStatus('Programmstand wird gleich online geprüft …');
 document.title = `${APP_NAME} ${APP_VERSION}`;
-$('btnZip').onclick = guardPicks(openZipDialog);
-$('btnPdf').onclick = guardPicks(openPdfDialog);
+$('btnZip').onclick = guardPicks(guardStorno(openZipDialog));
+$('btnPdf').onclick = guardPicks(guardStorno(openPdfDialog));
 $('btnVersions').onclick = openPhotoVersions;
 $('btnMeta').onclick = () => openMetaDialog(false);
 $('btnOpen2').onclick = pickFolder;
@@ -4773,6 +4845,7 @@ $('btnReload').onclick = async () => {
     await loadPJ();
     await loadItems();
     await recoveryOpened(); // N3 recovery hook
+    loadBohrkernZuordnung();   // LabelKit-Datei neu lesen (Storno gesetzt/aufgehoben) – im Hintergrund wie beim Öffnen
     if (note) banner(P.readOnly ? 'err' : 'info', note);
   }).then(r => { fotoUebernahmeKnopf(); return r; });
 };
