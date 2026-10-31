@@ -533,11 +533,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.31.1';
+const APP_VERSION = '1.32.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:8556bca7b2598689bb158f084880aa3dec379b3295e17b0efd695a1ae88676b4';
+const APP_BUILD = 'sha256:6b56e9092b6e7016e6acfb9872331e48eca1278bfa677fe1be502fa0ae07586d';
 const APP_DATE = '2026-10-31';
 const CHANGELOG = [
+  ['1.32.0', '31.10.2026', 'Bilddokumentation und ZIP: „nur Bilder mit Beschreibung“ ist nicht mehr vorgehakt – jeder Export nimmt zuerst alle Bilder mit (vorher fielen Bilder ohne Beschreibung still weg, und die Bildnummern hatten Lücken). Der Haken gilt nur für den einen Export und wird nicht mehr im Projekt gemerkt; hast du ihn früher gesetzt, fängt der nächste Export trotzdem ohne ihn an. Gibt es Bilder ohne Beschreibung, steht im Dialog, wie viele ohne Beschriftung mitkommen. Im PDF steht unter jedem Bild der Dateiname, den das Foto jetzt wirklich hat – nicht mehr der Name, den „Umbenennen“ erst noch vergeben würde. Das ZIP behält die neuen Namen wie bisher.'],
   ['1.31.1', '31.10.2026', 'Behoben: Eine veraltete Bilddokumentation konnte in seltenen Fällen als aktuell gelten (für BerichtKit-Anlagen) – wenn das Zusammenführen mit einem anderen Fenster in dieselbe Millisekunde fiel wie das Erstellen der PDF oder die Uhr des Rechners, der die PDF erstellt hat, vorging. „Doku geändert“ liegt jetzt immer nach der vermerkten PDF und eine neu erstellte PDF immer nach der letzten Änderung – auch wenn die Uhren der Rechner nicht gleich gehen. Sonst keine sichtbare Änderung.'],
   ['1.31.0', '31.10.2026', 'Nachzug zu LabelKit 4.49.0 „Proben stornieren“: In LabelKit stornierte Proben sind keine Proben mehr – FotoKit schlägt sie nicht mehr vor (P7 + Enter, Ergänzung beim Tippen) und ordnet ihnen keine Bohrkern-Fotos mehr zu. Ihre Nummer bleibt vergeben. Ist ein Foto noch einer stornierten Probe zugeordnet oder tippst du die Nummer von Hand ein, steht in der Zeile ein Hinweis (oben mitgezählt) – ordne das Foto dann einer anderen Probe zu oder sortiere es mit ✕ aus. Vor PDF und ZIP fragt FotoKit nach, solange noch ein nicht aussortiertes Foto einer stornierten Probe zugeordnet ist („Abbrechen“ springt zum ersten betroffenen Foto, „Trotzdem exportieren“ exportiert unverändert). FotoKit ändert dabei nichts von selbst: keine Zuordnung, kein Dateiname, kein Ordner. „Fotos neu einlesen“ liest jetzt auch die LabelKit-Datei neu – ist das Storno aufgehoben, wird die Probe wieder vorgeschlagen.'],
   ['1.30.0', '30.10.2026', 'Bilddokumentation nach dem ersten Testlauf mit BerichtKit: Auf dem Deckblatt steht „zum Untersuchungsbericht …“ statt „zum Gutachten …“. Ist das Schadendatum leer oder „nicht bekannt“, fehlt die Zeile ganz. Die Person unter „Sachverständiger“ steht auf dem Deckblatt jetzt unter „Bearbeitung“ – passt auch, wenn sie im Bericht als Messtechniker unterschreibt (Eingabefeld und Name bleiben). Die Übersicht der Probenahmestellen zeigt die Spalte „Abschnitt“ nur, wenn mindestens eine Probe einen Abschnitt hat; sonst bekommt die Beschreibung den Platz. Die KI-Anweisung im ZIP ist genauso angepasst (gespeicherte eigene Anweisungen bleiben unverändert).'],
@@ -605,7 +606,7 @@ const verCmp = (a, b) => { const x = verNum(a), y = verNum(b); for (let i = 0; i
 const $ = id => document.getElementById(id);
 const IMG_EXT = ['jpg','jpeg','png','webp','gif','bmp','tif','tiff','heic','heif'];
 const PREVIEWABLE = ['jpg','jpeg','png','webp','gif','bmp'];
-const S = { dir:null, proj:null, items:[], view:[], otherNames:new Set(), focus:-1, lastRun:null, busy:false, changing:false, pvToken:0, pvUrl:null };
+const S = { dir:null, proj:null, onlyDesc:false, items:[], view:[], otherNames:new Set(), focus:-1, lastRun:null, busy:false, changing:false, pvToken:0, pvUrl:null };
 const DISCARD_DIR = '_aussortiert';
 const TMP_PREFIX = 'umb-tmp_';
 
@@ -2902,15 +2903,18 @@ Die PROJEKTHINWEISE weiter unten haben Vorrang vor dieser Standardanweisung, fal
 
 function loadMeta(){
   const g = store.get('bu-global', {});
-  const m = Object.assign({ proj: cfg.prefix.trim(), anlage: '', objekt: '', ereignis: '', sdatum: '', ort: '', notes: '', onlyDesc: true },
+  const m = Object.assign({ proj: cfg.prefix.trim(), anlage: '', objekt: '', ereignis: '', sdatum: '', ort: '', notes: '' },
                           projGet('meta', {}));
+  // „nur Bilder mit Beschreibung“ ist eine Wahl für den einzelnen Export und steht nie in der Projektdatei (Stände bis 1.31.1 haben sie dort gemerkt – das gilt nicht mehr)
+  m.onlyDesc = !!S.onlyDesc;
   if (!String(m.anlage || '').trim()) m.anlage = ANLAGE_STANDARD;   // Hausreihenfolge: Prüfbericht 1, Bilddoku 2, Probenplan 3 – änderbar
   m.sv = (S.proj && PJ.data && (PJ.data.sachverstaendiger || '').trim()) || g.sv || '';
   m.template = g.template || DEFAULT_TEMPLATE;
   return m;
 }
 function saveMeta(m){
-  const { sv, template, img, pdf, ...project } = m;
+  const { sv, template, img, pdf, onlyDesc, ...project } = m;
+  S.onlyDesc = !!onlyDesc;
   if (img) store.set('bu-zipimg', img);
   if (pdf) store.set('bu-pdf', pdf);
   projSet('meta', { ...projGet('meta', {}), ...project });
@@ -3070,7 +3074,7 @@ function openMetaDialog(mode){
   if (!forPdf){ $('m_notes').value = m.notes || ''; $('m_template').value = m.template; }
   const io0 = loadImgOpt(), po0 = loadPdfOpt();
   if (forExp){
-    $('zOnly').checked = withDesc > 0 && m.onlyDesc !== false;
+    $('zOnly').checked = false;   // jeder Export fängt mit allen Bildern an – nichts fällt still weg
     $('zOnly').disabled = withDesc === 0 || withDesc === active.length;
   }
   if (forZip){ $('zShrink').checked = io0.shrink; $('zEdge').value = String(io0.edge); $('zQ').value = String(io0.q); }
@@ -3100,7 +3104,10 @@ function openMetaDialog(mode){
         : items.reduce((a, it) => a + (canRotate(it) ? (r.img.shrink ? Math.min(it.size, 850000 * Math.pow(r.img.edge / 2000, 2) * qf) : it.size) : it.size), 0);
       const nRot = items.filter(it => rotOf(it)).length;
       if (forZip) $('zEdge').disabled = $('zQ').disabled = !r.img.shrink;
-      const notIn = (active.length - items.length ? ` · ${active.length - items.length} ohne Beschreibung nicht enthalten; Bildnummern wie in der Liste (mit Lücken)` : '') + (S.view.length - active.length ? ' · Aussortierte nicht enthalten' : '');
+      const ohneBeschr = active.length - withDesc;
+      const notIn = (active.length - items.length ? ` · ${active.length - items.length} ohne Beschreibung nicht enthalten; Bildnummern wie in der Liste (mit Lücken)` : '')
+        + (ohneBeschr && items.length === active.length ? ` · ${ohneBeschr} ohne Beschreibung (kommen ohne Beschriftung mit)` : '')
+        + (S.view.length - active.length ? ' · Aussortierte nicht enthalten' : '');
       if (forZip){
         html += `Inhalt: <b>${items.length}</b> Bilder (${r.img.shrink ? `Original ${fmtSize(bytes)} → ca. <b>${fmtSize(est)}</b> geschätzt` : fmtSize(bytes)}) + <b>${TXT_NAME}</b>` +
           (nRot ? ` · ${nRot} gedrehte(s) Bild(er) werden ausgerichtet` : '') + ` + <b>${SUM_NAME}</b>` + notIn +
@@ -3550,7 +3557,7 @@ async function buildAnnex(meta, items, progress){
       if(hl.length>4)hl=[...hl.slice(0,3),...wrapWords(words('… (vollständig im Inhalt)','R'),9,PDF_CW-12)];
       const caps=wrapWords(words(it.desc.trim(),'R'),9.8,PDF_CW-58);
       const probe=probes.length?wrapWords(words(`Probenahmestelle${probes.length>1?'n':''} ${probes.join(', ')}`,'B'),8.6,PDF_CW-58):[];
-      const details=wrapWords(words([it.final,dateLine(it)].filter(Boolean).join(' · '),'R'),7.8,PDF_CW-58);
+      const details=wrapWords(words([it.name,dateLine(it)].filter(Boolean).join(' · '),'R'),7.8,PDF_CW-58);
       return{sl,it,hl,caps,probe,details};
     });
     const headH=Math.max(0,...prepared.map(p=>p.hl.length?15*p.hl.length+12:0));
@@ -3676,7 +3683,7 @@ async function buildAnnex(meta, items, progress){
   for (const p of imgPages) frameBoxes(p, contOf(p), boxes);
   for (let i = 0; i < items.length; i++){
     const it = items[i], b = boxes.get(i), px = v => Math.round(v / 72 * Q.dpi);
-    progress(`Bereite Bild ${i + 1} von ${items.length} auf: ${it.final}`, i, items.length);
+    progress(`Bereite Bild ${i + 1} von ${items.length} auf: ${it.name}`, i, items.length);
     const r = await renderJpeg(await it.handle.getFile(), canRotate(it) ? rotOf(it) : 0, null, Q.q, b ? { w: px(b.w), h: px(b.h) } : null);
     if (r) enc.set(i, r); else failed.push(it);
   }

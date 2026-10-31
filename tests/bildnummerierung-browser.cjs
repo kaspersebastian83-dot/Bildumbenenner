@@ -114,7 +114,7 @@ function zipFiles(bytes) {
       const pdf = async (onlyDesc = false, perPage = 2) => {
         const expected = (await snapshot()).filter(x => !x.gone && (!onlyDesc || x.desc));
         const before = new Set((await generated('.pdf')).map(f => f.name));
-        await page.locator('#btnPdf').click(); await page.locator('#zOnly').setChecked(onlyDesc);
+        await page.locator('#btnPdf').click(); assert.equal(await page.locator('#zOnly').isChecked(), false, 'jeder Export beginnt mit allen Bildern (auch nach einem früheren Export mit Filter)'); await page.locator('#zOnly').setChecked(onlyDesc);
         await page.locator('#pPer').selectOption(String(perPage));
         if (onlyDesc) assert.match(await page.locator('#zInfo').textContent(), /Bildnummern wie in der Liste/);
         await page.locator('#zOk').click();
