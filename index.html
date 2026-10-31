@@ -533,11 +533,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.32.0';
+const APP_VERSION = '1.33.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:6b56e9092b6e7016e6acfb9872331e48eca1278bfa677fe1be502fa0ae07586d';
+const APP_BUILD = 'sha256:eae9d491b0bc2990b1e151e07264d9705a75164c9bd8b081c89b17da20d9b95b';
 const APP_DATE = '2026-10-31';
 const CHANGELOG = [
+  ['1.33.0', '31.10.2026', 'Umbenennen ist gegen Abbrüche abgesichert: FotoKit schreibt vor dem ersten Foto ein kleines Journal („_Umbenennen-Journal_…“) in den FotoKit-Datenordner. Bricht das Umbenennen mitten im Lauf ab (Browser oder Remote-Sitzung beendet, Rechner aus), blieben bisher Fotos unter ausgeblendeten Hilfsnamen („umb-tmp_…“) liegen und fehlten in der Liste, ihre Beschreibungen hingen an Namen, die es nicht mehr gibt. Jetzt setzt FotoKit beim nächsten Öffnen des Projekts alle Fotos auf ihre alten Namen zurück – Beschreibungen, Abschnitte und Proben stehen ja noch unter diesen Namen – und sagt es in einem Hinweis; führe das Umbenennen dann einfach noch einmal aus. Das Journal wird erst gelöscht, wenn die Projektdaten zu den neuen Namen gespeichert sind (gilt auch für „Rückgängig“). Gibt es schon Fotos mit „umb-tmp_…“ ohne Journal (Abbruch vor dieser Version), weist FotoKit beim Öffnen darauf hin, statt sie still auszublenden. Außerdem: Liegen beim Umbenennen noch Fotos bei einer in LabelKit stornierten Probe, steht im Bestätigungsfenster ein Hinweis – das Umbenennen wird dadurch nicht aufgehalten und ändert die Zuordnung nicht.'],
   ['1.32.0', '31.10.2026', 'Bilddokumentation und ZIP: „nur Bilder mit Beschreibung“ ist nicht mehr vorgehakt – jeder Export nimmt zuerst alle Bilder mit (vorher fielen Bilder ohne Beschreibung still weg, und die Bildnummern hatten Lücken). Der Haken gilt nur für den einen Export und wird nicht mehr im Projekt gemerkt; hast du ihn früher gesetzt, fängt der nächste Export trotzdem ohne ihn an. Gibt es Bilder ohne Beschreibung, steht im Dialog, wie viele ohne Beschriftung mitkommen. Im PDF steht unter jedem Bild der Dateiname, den das Foto jetzt wirklich hat – nicht mehr der Name, den „Umbenennen“ erst noch vergeben würde. Das ZIP behält die neuen Namen wie bisher.'],
   ['1.31.1', '31.10.2026', 'Behoben: Eine veraltete Bilddokumentation konnte in seltenen Fällen als aktuell gelten (für BerichtKit-Anlagen) – wenn das Zusammenführen mit einem anderen Fenster in dieselbe Millisekunde fiel wie das Erstellen der PDF oder die Uhr des Rechners, der die PDF erstellt hat, vorging. „Doku geändert“ liegt jetzt immer nach der vermerkten PDF und eine neu erstellte PDF immer nach der letzten Änderung – auch wenn die Uhren der Rechner nicht gleich gehen. Sonst keine sichtbare Änderung.'],
   ['1.31.0', '31.10.2026', 'Nachzug zu LabelKit 4.49.0 „Proben stornieren“: In LabelKit stornierte Proben sind keine Proben mehr – FotoKit schlägt sie nicht mehr vor (P7 + Enter, Ergänzung beim Tippen) und ordnet ihnen keine Bohrkern-Fotos mehr zu. Ihre Nummer bleibt vergeben. Ist ein Foto noch einer stornierten Probe zugeordnet oder tippst du die Nummer von Hand ein, steht in der Zeile ein Hinweis (oben mitgezählt) – ordne das Foto dann einer anderen Probe zu oder sortiere es mit ✕ aus. Vor PDF und ZIP fragt FotoKit nach, solange noch ein nicht aussortiertes Foto einer stornierten Probe zugeordnet ist („Abbrechen“ springt zum ersten betroffenen Foto, „Trotzdem exportieren“ exportiert unverändert). FotoKit ändert dabei nichts von selbst: keine Zuordnung, kein Dateiname, kein Ordner. „Fotos neu einlesen“ liest jetzt auch die LabelKit-Datei neu – ist das Storno aufgehoben, wird die Probe wieder vorgeschlagen.'],
@@ -1811,6 +1812,8 @@ async function openDir(dir, proj = null){
       S.dir = dir; S.proj = proj; S.lastRun = null;
       S.data = await spektronOrteSetzen(dir, proj);   // Ordner der FotoKit-Datei (_Bildumbenenner.json, _FotoKit_Fassungen)
       let note = await loadProject(S.data);
+      const umbNote = await umbenennenPruefen().catch(e => '⚠ Ein unterbrochenes Umbenennen konnte nicht geprüft werden: ' + esc(e.message));   // vor dem Einlesen: Fotos zurück unter ihre Namen
+      if (umbNote) note = note ? note + '<br>' + umbNote : umbNote;
       const pjNote = await loadPJ();
       SKALEN_STAND = await skalenAbgleich();   // gemeinsame Bewertungsskalen des Büros (Archivordner)
       if (pjNote) note = note ? note + '<br>' + pjNote : pjNote;
@@ -2542,23 +2545,31 @@ async function transferLocked(src, dst, from, to){
   }
 }
 const renameFile = (dir, from, to) => transfer(dir, dir, from, to);
-function runPairs(pairs, onStep){ return originaleSperre(() => runPairsLocked(pairs, onStep)); }
-async function runPairsLocked(pairs, onStep){
+/* `journal` (optional, { dir, ordner, art }): Protokoll des Laufs im FotoKit-Datenordner – siehe „Journal für Umbenennen“.
+   Gibt das Journal zurück (oder null); wer es bekommt, löscht es erst, wenn die Projektdaten zu den neuen Namen gespeichert sind. */
+function runPairs(pairs, onStep, journal){ return originaleSperre(() => runPairsLocked(pairs, onStep, journal)); }
+async function runPairsLocked(pairs, onStep, journal){
   const renameFile = (d, from, to) => transferLocked(d, d, from, to);   // the whole run already holds the lock
   assertOriginalsWritable();
   const dir = S.dir, stamp = Date.now().toString(36);
   const P = pairs.map((p, i) => ({ ...p, tmp: `${TMP_PREFIX}${stamp}_${i}${extOf(p.from)}` }));
   // pre-flight: let the browser vet every name BEFORE any file is touched
   for (const p of P){ await assertNameOk(dir, p.tmp); await assertNameOk(dir, p.to); }
+  // Journal first: if it cannot be written, nothing has been touched yet and the run stops here.
+  const jr = journal && P.length ? await journalAnlegen(journal.dir, { stempel: stamp, art: journal.art || 'umbenennen', ordner: journal.ordner || dir.name, pairs: P }) : null;
   const phase1 = [], stuck = [];
   const rolledBack = e => {      // a failed rollback must not stay silent: the file keeps a temporary (hidden) name
     if (!stuck.length) return e;
     return new Error(`${e && e.message} – ${stuck.length} Datei(en) konnten nicht zurückbenannt werden, z. B. „${stuck[0]}“; bitte den Ordner prüfen`);
   };
+  // Clean rollback → the journal has done its job. Stuck files → it stays (marked „hängt“) so that opening the folder again retries.
+  const journalNachRollback = async () => { if (!jr) return; if (!stuck.length) await journalWeg(jr).catch(() => {}); else await journalMarke(jr, JOURNAL_HAENGT).catch(() => {}); };
   try{
     for (const p of P){ await renameFile(dir, p.from, p.tmp); phase1.push(p); onStep(); }
+    if (jr) await journalMarke(jr, JOURNAL_PHASE2);   // no file moves on to its final name before this marker exists
   }catch(e){
     for (const p of phase1.reverse()){ try{ await renameFile(dir, p.tmp, p.from); }catch(_){ stuck.push(p.tmp); } }
+    await journalNachRollback();
     throw rolledBack(e);
   }
   const phase2 = [];
@@ -2570,8 +2581,136 @@ async function runPairsLocked(pairs, onStep){
     const back = [];
     for (const p of phase2.slice().reverse()){ try{ await renameFile(dir, p.to, p.tmp); back.push(p); }catch(_){ stuck.push(p.to); } }
     for (const p of P) if (!phase2.includes(p) || back.includes(p)){ try{ await renameFile(dir, p.tmp, p.from); }catch(_){ stuck.push(p.tmp); } }
+    await journalNachRollback();
     throw rolledBack(e);
   }
+  return jr;
+}
+
+/* ---------- Journal für Umbenennen (1.33) ----------
+   Umbenannt wird in zwei Schritten über vorläufige Namen („umb-tmp_…“, in der Liste ausgeblendet). Bricht FotoKit mitten
+   im Lauf ab (Browser/RDP beendet, Rechner aus), blieben Fotos unter solchen Namen liegen und ihre Beschreibungen hingen
+   an Namen, die es nicht mehr gibt. Darum steht vor dem ersten verschobenen Foto ein Journal im Datenordner:
+     _Umbenennen-Journal_<Stempel>.json   die Paare { von, vorläufig, nach }, geprüft zurückgelesen
+     …<Stempel>.phase2                    Marke: alle Fotos tragen ihren vorläufigen Namen, ab jetzt darf jedes den Endnamen bekommen
+     …<Stempel>.haengt                    Marke: das Zurücksetzen im Lauf ist an einer gesperrten Datei gescheitert
+   Gelöscht wird es erst, wenn die Projektdaten (Beschreibungen usw.) zu den neuen Namen gespeichert sind; dieselbe Speicherung
+   trägt „umbenennenFertig“ = Stempel, damit ein späteres Öffnen weiß, dass die Daten schon umgestellt sind.
+   Beim Öffnen eines Ordners mit Journal gilt: Daten schon umgestellt → Journal löschen; sonst alle Fotos auf ihre alten Namen
+   zurück (die Projektdaten stehen ja noch unter den alten Namen). Nie nach vorn fortsetzen – das wären Namen und Daten raten. */
+const JOURNAL_PREFIX = '_Umbenennen-Journal_', JOURNAL_PHASE2 = '.phase2', JOURNAL_HAENGT = '.haengt';
+const JOURNAL_RE = /^_Umbenennen-Journal_([0-9a-z]+)\.json$/;
+const journalDatei = stempel => `${JOURNAL_PREFIX}${stempel}.json`;
+async function journalSchreiben(dir, name, text){
+  const h = await dir.getFileHandle(name, { create: true });
+  const w = await h.createWritable(); await w.write(text); await w.close();
+  const zurueck = new TextDecoder().decode(await (await h.getFile()).arrayBuffer());
+  if (zurueck !== text) throw new Error('Das Journal für das Umbenennen konnte nicht geprüft zurückgelesen werden – es wurde noch nichts verändert.');
+}
+async function journalAnlegen(dir, j){
+  const name = journalDatei(j.stempel);
+  if (await exists(dir, name)) throw new Error('Das Journal für das Umbenennen gibt es schon (zweites Fenster oder anderer Rechner?) – es wurde noch nichts verändert, bitte erneut ausführen.');
+  const text = JSON.stringify({ app: 'FotoKit', art: 'umbenennen-journal', format: 1, version: typeof APP_VERSION === 'string' ? APP_VERSION : '', lauf: j.art, stempel: j.stempel,
+    am: new Date().toISOString(), ordner: j.ordner, paare: j.pairs.map(p => ({ von: p.from, vorlaeufig: p.tmp, nach: p.to })) }, null, 2) + '\n';
+  try{ await journalSchreiben(dir, name, text); }
+  catch(e){ try{ await dir.removeEntry(name); }catch(_){} throw e; }
+  return { dir, name, stempel: j.stempel };
+}
+async function journalMarke(jr, endung){
+  const name = jr.name.replace(/\.json$/, endung);
+  await journalSchreiben(jr.dir, name, '');
+  if (endung === JOURNAL_HAENGT) try{ await jr.dir.removeEntry(jr.name.replace(/\.json$/, JOURNAL_PHASE2)); }catch(_){}
+}
+/** Marken zuerst, das Journal zuletzt: bricht das Löschen ab, bleibt ein Journal ohne Marke – das Öffnen behandelt es als „Phase 1“,
+    findet keine vorläufigen Namen und räumt es dann einfach weg. */
+async function journalWeg(jr){
+  for (const e of [JOURNAL_PHASE2, JOURNAL_HAENGT]){ try{ await jr.dir.removeEntry(jr.name.replace(/\.json$/, e)); }catch(x){ if (!x || x.name !== 'NotFoundError') throw x; } }
+  try{ await jr.dir.removeEntry(jr.name); }catch(x){ if (!x || x.name !== 'NotFoundError') throw x; }
+}
+/** Alle Fotos eines unterbrochenen Laufs auf ihre alten Namen zurück. Gibt { zurueck, probleme } zurück; wirft nie wegen einzelner Fotos.
+    phase: 'phase1' (kein Foto hat einen Endnamen), 'phase2' (jedes Foto liegt unter vorläufigem oder Endnamen), 'haengt' (gemischt –
+    nur vorläufige Namen zurücknehmen, Endnamen nicht anfassen, weil sie dann auch alte Namen eines anderen Fotos sein können). */
+async function umbenennenZuruecksetzen(foto, paare, phase){
+  const verschiebe = (a, b) => transferLocked(foto, foto, a, b);
+  const probleme = [], imTmp = new Set(); let zurueck = 0;
+  for (const p of paare) if (await exists(foto, p.vorlaeufig)) imTmp.add(p);
+  if (phase === 'phase2'){
+    // Foto ohne vorläufigen Namen liegt schon unter seinem Endnamen: erst wieder auf den (freien) vorläufigen Namen
+    for (const p of paare.slice().reverse()) if (!imTmp.has(p)){
+      try{
+        if (await exists(foto, p.nach)){ await verschiebe(p.nach, p.vorlaeufig); imTmp.add(p); }
+        else probleme.push(`„${p.nach}“ fehlt im Ordner`);
+      }catch(e){ probleme.push(`„${p.nach}“ → „${p.vorlaeufig}“: ${e.message}`); }
+    }
+  }
+  const gemeldet = new Set();
+  for (const p of paare) if (imTmp.has(p)){
+    try{ await verschiebe(p.vorlaeufig, p.von); zurueck++; }
+    catch(e){ probleme.push(`„${p.vorlaeufig}“ → „${p.von}“: ${e.message}`); gemeldet.add(p); }
+  }
+  // Probe aufs Ganze: jedes Foto muss danach wieder unter seinem alten Namen liegen – sonst bleibt das Journal (z. B. „hängt“-Zustand)
+  for (const p of paare) if (!gemeldet.has(p) && !probleme.some(t => t.startsWith(`„${p.nach}“ fehlt`)) && !(await exists(foto, p.von)))
+    probleme.push(`„${p.von}“ liegt nicht im Ordner (vielleicht noch unter „${p.nach}“ oder „${p.vorlaeufig}“)`);
+  return { zurueck, probleme };
+}
+
+/** Journal-Angabe für runPairs: im FotoKit-Datenordner (_Spektron/FotoKit oder – vor Spektron – der Fotoordner selbst) */
+const journalFuer = art => ({ dir: S.data || S.dir, ordner: S.dir.name, art });
+/** Die Speicherung der umgestellten Projektdaten trägt den Stempel des Laufs mit (siehe Journal-Beschreibung). */
+function umbenennenFertigSetzen(jr){
+  if (!jr || !P.data) return;
+  const ext = P.data.extensions || {};
+  if (ext.umbenennenFertig === jr.stempel) return;
+  P.data.extensions = { ...ext, umbenennenFertig: jr.stempel }; scheduleProjSave();
+}
+/** Projektdaten sind gespeichert → das Journal wird nicht mehr gebraucht. Ein Fehler beim Löschen ist harmlos: das nächste Öffnen räumt auf. */
+async function journalAbschliessen(jr){ if (jr) try{ await journalWeg(jr); }catch(_){} }
+/** Journal lesen und prüfen: gültige Paare { von, vorlaeufig, nach } oder null (nie unsichere Namen anfassen). */
+function journalPaare(j, stempel){
+  const name = n => typeof n === 'string' && n && n === n.trim() && !/[\\/]/.test(n) && n !== '.' && n !== '..';
+  if (!j || typeof j !== 'object' || j.app !== 'FotoKit' || j.art !== 'umbenennen-journal' || j.format !== 1 || j.stempel !== stempel || !Array.isArray(j.paare) || !j.paare.length) return null;
+  for (const p of j.paare) if (!p || !name(p.von) || !name(p.nach) || !name(p.vorlaeufig) || !p.vorlaeufig.startsWith(TMP_PREFIX)) return null;
+  return j.paare.map(p => ({ von: p.von, vorlaeufig: p.vorlaeufig, nach: p.nach }));
+}
+/** Beim Öffnen eines Ordners (vor dem Einlesen der Fotos): unterbrochenes Umbenennen zurücksetzen. Gibt einen Hinweis (HTML) zurück, sonst ''. */
+async function umbenennenPruefen(){
+  const daten = S.data || S.dir, foto = S.dir;
+  if (!daten || !foto) return '';
+  const journale = [], marken = [];
+  try{
+    for await (const h of daten.values()){
+      if (h.kind !== 'file') continue;
+      const m = JOURNAL_RE.exec(h.name); if (m) journale.push({ name: h.name, stempel: m[1] });
+      else if (/^_Umbenennen-Journal_[0-9a-z]+\.(phase2|haengt)$/.test(h.name)) marken.push(h.name);
+    }
+  }catch(e){ return ''; }
+  for (const n of marken) if (!journale.some(jn => n.startsWith(JOURNAL_PREFIX + jn.stempel + '.'))){ try{ await daten.removeEntry(n); }catch(_){} }   // Marke ohne Journal: Rest eines abgebrochenen Aufräumens
+  const hinweise = [], lesen = async (dir, name) => new TextDecoder().decode(await (await dir.getFileHandle(name)).getFile().then(f => f.arrayBuffer()));
+  for (const jn of journale.sort((a, b) => a.name.localeCompare(b.name))){
+    const jr = { dir: daten, name: jn.name, stempel: jn.stempel };
+    let j, paare;
+    try{ j = JSON.parse(await lesen(daten, jn.name)); paare = journalPaare(j, jn.stempel); }catch(e){ paare = null; }
+    if (!paare){ hinweise.push(`⚠ Die Datei „${esc(jn.name)}“ (Protokoll eines unterbrochenen Umbenennens) ist nicht lesbar oder nicht gültig und bleibt liegen. Prüfe im Fotoordner, ob Dateien mit dem Anfang „${TMP_PREFIX}“ liegen.`); continue; }
+    const fertig = P.data && P.data.extensions && P.data.extensions.umbenennenFertig === jn.stempel;
+    if (fertig){ await journalAbschliessen(jr); continue; }   // Projektdaten sind schon zu den neuen Namen gespeichert – nichts zurückzusetzen
+    const d = new Date(j.am), wann = Number.isFinite(d.getTime()) ? ` vom ${fmtDate(d)} ${fmtTime(d)}` : '';
+    if (P.readOnly){ hinweise.push(`⚠ Ein Umbenennen${wann} wurde unterbrochen. Im geschützten Projektmodus setzt FotoKit die Dateinamen nicht zurück.`); continue; }
+    const phase = await exists(daten, jn.name.replace(/\.json$/, JOURNAL_HAENGT)) ? 'haengt' : await exists(daten, jn.name.replace(/\.json$/, JOURNAL_PHASE2)) ? 'phase2' : 'phase1';
+    const res = await originaleSperre(() => umbenennenZuruecksetzen(foto, paare, phase));
+    if (!res.probleme.length){
+      await journalAbschliessen(jr);
+      if (res.zurueck) hinweise.push(`Ein Umbenennen${wann} war unterbrochen. FotoKit hat es zurückgesetzt: ${res.zurueck} Foto${res.zurueck === 1 ? ' hat' : 's haben'} wieder den alten Namen. Beschreibungen, Abschnitte und Proben sind unverändert – führe das Umbenennen bei Bedarf noch einmal aus.`);
+    }else{
+      if (phase === 'phase2') await journalMarke(jr, JOURNAL_HAENGT).catch(() => {});   // gemischter Zustand – nächstes Mal nur noch vorläufige Namen zurücknehmen
+      hinweise.push(`⚠ Ein Umbenennen${wann} war unterbrochen; FotoKit konnte es nicht vollständig zurücksetzen (${res.zurueck} zurück, ${res.probleme.length} Probleme, z. B. ${esc(res.probleme[0])}). Das Protokoll bleibt liegen, beim nächsten Öffnen versucht FotoKit es erneut. Fotos mit dem Namensanfang „${TMP_PREFIX}“ fehlen so lange in der Liste.`);
+    }
+  }
+  // vorläufige Namen ohne Protokoll (Umbenennen unterbrochen vor FotoKit 1.33): die Fotos fehlen in der Liste – das nicht verschweigen
+  const lose = [];
+  try{ for await (const h of foto.values()) if (h.kind === 'file' && (h.name.startsWith(TMP_PREFIX) || h.name.startsWith('~umb_'))) lose.push(h.name); }catch(e){}
+  if (lose.length) hinweise.push(`⚠ Im Fotoordner liegen ${lose.length} Datei${lose.length === 1 ? '' : 'en'} mit vorläufigem Namen (z. B. „${esc(lose[0])}“) – ein früheres Umbenennen wurde unterbrochen. ` +
+    `Diese Fotos fehlen in der Liste, ihre Beschreibungen hängen noch an den alten Namen. Bitte im Ordner ansehen und von Hand zurückbenennen; „Fotos neu einlesen“ findet sie danach wieder.`);
+  return hinweise.join('<br>');
 }
 
 const moveBetween = (src, dst, from, to) => transfer(src, dst, from, to);
@@ -2621,7 +2760,11 @@ $('btnRename').onclick = guardPicks(() => {
   let list = '';
   if (pairs.length) list += `<div class="sec">Umbenennen (${pairs.length})</div>` + pairs.map(p => `<div><span class="from">${esc(p.from)}</span> → ${esc(p.to)}</div>`).join('');
   if (moves.length) list += `<div class="sec">Nach ${DISCARD_DIR}/ verschieben (${moves.length})</div>` + moves.map(m => `<div class="mv">${esc(m.from)}</div>`).join('');
+  // Nur ein Hinweis (1.33): das Umbenennen ändert an der Probenzuordnung nichts und wird nie blockiert.
+  const st = stornoFotos();
+  const stornoNote = st.fotos.length ? `<p class="hint warn" id="dStornoNote">⚠ ${esc(stornoFrage(st.fotos.length, st.proben).replace(/ In der Bilddokumentation .*$/, ''))} Das Umbenennen ändert daran nichts – ordne ${st.fotos.length === 1 ? 'das Foto' : 'die Fotos'} gelegentlich einer anderen Probe zu oder sortiere ${st.fotos.length === 1 ? 'es' : 'sie'} mit ✕ aus.</p>` : '';
   showDialog(`<h3>Änderungen ausführen?</h3>
+    ${stornoNote}
     <div class="list">${list}</div>
     <div class="btns"><button id="dCancel">Abbrechen</button><button class="primary" id="dOk">Jetzt ausführen</button></div>`);
   $('dCancel').onclick = closeDialog;
@@ -2641,13 +2784,13 @@ async function doRename(pairs, moves){
     nr: it.docNr, from: it.name, to: it.final, desc: it.desc.trim(), date: fmtD(it), sec: it.secEff, probe: it.probe.trim(), orig: it.orig || it.name
   }));
   const discardRows = S.view.filter(it => it.discard).map(it => ({ from: it.name, date: fmtD(it) }));
-  let movesDone = false;
+  let movesDone = false, jr = null;
   try{
     // pre-flight: vet all names before anything moves
     await assertNameOk(S.dir, `${TMP_PREFIX}check.jpg`);
     for (const p of pairs) await assertNameOk(S.dir, p.to);
     if (moves.length){ await runMoves(moves, step); movesDone = true; }
-    await runPairs(pairs, step);
+    jr = await runPairs(pairs, step, journalFuer('umbenennen'));
     // final check against the real folder – never report success on trust
     const missing = [];
     for (const p of pairs) if (!(await exists(S.dir, p.to))) missing.push(p.to);
@@ -2684,6 +2827,7 @@ async function doRename(pairs, moves){
       const moved = new Set(moves.map(m => m.from));
       projSet('discard', projGet('discard', []).filter(n => !moved.has(n)));
     }
+    umbenennenFertigSetzen(jr);        // dieselbe Speicherung wie die umgestellten Namen: Journal weiß dann, dass die Daten stimmen
     const saved = await flushProject();
     // Physical file changes have already happened. Rebuild from the remapped
     // in-memory metadata so retries and new edits use the current file names.
@@ -2701,9 +2845,11 @@ async function doRename(pairs, moves){
       $('bUndo').onclick = undo;
     };
     if (saved === false || P.failed){
-      saveError('Die Dateien wurden bereits umbenannt oder verschoben, ihre Projektdaten konnten aber noch nicht gespeichert werden.', complete);
+      // Das Journal bleibt, bis die Projektdaten gespeichert sind: wird FotoKit vorher beendet, setzt das nächste Öffnen die Namen zurück.
+      saveError('Die Dateien wurden bereits umbenannt oder verschoben, ihre Projektdaten konnten aber noch nicht gespeichert werden.', () => journalAbschliessen(jr).then(complete));
       return false;
     }
+    await journalAbschliessen(jr);
     complete();
   }catch(e){
     if (movesDone){ try{ await undoMoves(moves); }catch(_){} }
@@ -2719,10 +2865,10 @@ async function undo(){
   const rev = run.pairs.map(p => ({ from:p.to, to:p.from }));
   S.busy = true;
   showDialog(`<h3>Mache rückgängig …</h3><progress id="prog" max="${rev.length*2 || 1}" value="0"></progress>`);
-  let done = 0;
+  let done = 0, jr = null;
   try{
     // renames first, so moved-back files can't collide with new names
-    await runPairs(rev, () => { $('prog').value = ++done; });
+    jr = await runPairs(rev, () => { $('prog').value = ++done; }, journalFuer('rueckgaengig'));
     if (run.moves.length) await undoMoves(run.moves);
     closeDialog();
     const back = run.pairs.map(p => ({ from: p.to, to: p.from }));
@@ -2746,6 +2892,7 @@ async function undo(){
     run.moves.forEach(m => disc.add(m.from));
     projSet('discard', [...disc]);
     saveOrder(run.rows.map(r => r.from).concat(run.discardRows.map(r => r.from)));
+    umbenennenFertigSetzen(jr);
     const saved = await flushProject();
     // The reverse file operation must not run again when only its save failed.
     S.lastRun = null;
@@ -2753,9 +2900,10 @@ async function undo(){
     S.busy = false; recompute();
     const complete = () => banner('ok', '↺ Rückgängig gemacht. Beschreibungen und Aussortierung sind wieder eingetragen.');
     if (saved === false || P.failed){
-      saveError('Die Dateinamen wurden bereits zurückgesetzt, ihre Projektdaten konnten aber noch nicht gespeichert werden.', complete);
+      saveError('Die Dateinamen wurden bereits zurückgesetzt, ihre Projektdaten konnten aber noch nicht gespeichert werden.', () => journalAbschliessen(jr).then(complete));
       return false;
     }
+    await journalAbschliessen(jr);
     complete();
   }catch(e){
     closeDialog(); S.busy = false; await loadItems();

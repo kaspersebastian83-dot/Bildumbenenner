@@ -244,7 +244,12 @@ let browser, server;
             assert.deepEqual(data.reihenfolge, action === 'rename' ? [renamed] : ['IMG_0001.jpg', 'IMG_0002.jpg']);
             if (action === 'rename') assert.equal(data.bilder['IMG_0001.jpg'], undefined);
             else {assert.equal(data.bilder[renamed], undefined);assert.equal(data.bilder['IMG_0002.jpg'].aussortiert, true);}
-            for (const [n, bytes] of Object.entries(failed)) if (!n.endsWith('_Bildumbenenner.json')) assert.deepEqual(after[n], bytes, n);
+            // FotoKit 1.33.0: Das Umbenennen-Journal bleibt bei fehlgeschlagenem Speichern bewusst liegen
+            // (Rückabwicklung beim nächsten Öffnen) und verschwindet erst, wenn die Metadaten gespeichert sind.
+            const isJournal = n => /\/_Umbenennen-Journal_[0-9a-z]+\.(json|phase2|haengt)$/.test(n);
+            assert.ok(Object.keys(failed).some(n => isJournal(n) && n.endsWith('.json')), 'Journal liegt nach dem Speicherfehler noch im Ordner');
+            assert.deepEqual(Object.keys(after).filter(isJournal), [], 'Journal und Marken sind nach dem erfolgreichen Speichern weg');
+            for (const [n, bytes] of Object.entries(failed)) if (!n.endsWith('_Bildumbenenner.json') && !isJournal(n)) assert.deepEqual(after[n], bytes, n);
             for (const [n, bytes] of Object.entries(before)) if (n.startsWith(projects.B + '/') || n.endsWith('_Projekt.json')) assert.deepEqual(after[n], bytes, n);
             const fresh = await page.context().newPage();
             await fresh.goto(base + '?projekt=' + encodeURIComponent(projects.A));

@@ -47,6 +47,7 @@ jobs:
       - run: node tests/n3-writer-conflict.cjs
       - run: node tests/ordnername.cjs
       - run: node tests/umbenennen-rollback.cjs
+      - run: node tests/umbenennen-journal.cjs
       - run: node tests/bilddoku-stand.cjs
       - run: node tests/bilddoku-deckblatt.cjs
       - run: node tests/storno-proben.cjs
@@ -98,6 +99,8 @@ jobs:
         run: node tests/ci-wiederholen.cjs tests/sicherer-projektwechsel-browser.cjs ${{ matrix.browser }}
       - name: Protected projects preserve originals and metadata, including direct file actions
         run: node tests/ci-wiederholen.cjs tests/geschuetzter-projektmodus-browser.cjs ${{ matrix.browser }}
+      - name: Interrupted rename is rolled back on open (journal, real browser)
+        run: node tests/ci-wiederholen.cjs tests/umbenennen-journal-browser.cjs ${{ matrix.browser }}
       - name: Settings disclosure and unchanged workflows at desktop and narrow widths
         run: node tests/ci-wiederholen.cjs tests/oberflaeche-browser.cjs ${{ matrix.browser }}
       - name: Series labelling with 5, 50 and 150 images, keyboard and preview races
