@@ -533,11 +533,12 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '1.31.0';
+const APP_VERSION = '1.31.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:4f94b523bf97e4c7524085b5ff7e27c5aaaf9f845d9c88b68417296daa836225';
+const APP_BUILD = 'sha256:5db34a6fd29632642615111cc6520f8a6707817f14ec11503882ce405f40a66c';
 const APP_DATE = '2026-10-31';
 const CHANGELOG = [
+  ['1.31.1', '31.10.2026', 'Behoben: Eine veraltete Bilddokumentation konnte in seltenen Fällen als aktuell gelten (für BerichtKit-Anlagen) – wenn das Zusammenführen mit einem anderen Fenster in dieselbe Millisekunde fiel wie das Erstellen der PDF oder die Uhr des Rechners, der die PDF erstellt hat, vorging. „Doku geändert“ liegt jetzt immer nach der vermerkten PDF. Sonst keine sichtbare Änderung.'],
   ['1.31.0', '31.10.2026', 'Nachzug zu LabelKit 4.49.0 „Proben stornieren“: In LabelKit stornierte Proben sind keine Proben mehr – FotoKit schlägt sie nicht mehr vor (P7 + Enter, Ergänzung beim Tippen) und ordnet ihnen keine Bohrkern-Fotos mehr zu. Ihre Nummer bleibt vergeben. Ist ein Foto noch einer stornierten Probe zugeordnet oder tippst du die Nummer von Hand ein, steht in der Zeile ein Hinweis (oben mitgezählt) – ordne das Foto dann einer anderen Probe zu oder sortiere es mit ✕ aus. Vor PDF und ZIP fragt FotoKit nach, solange noch ein nicht aussortiertes Foto einer stornierten Probe zugeordnet ist („Abbrechen“ springt zum ersten betroffenen Foto, „Trotzdem exportieren“ exportiert unverändert). FotoKit ändert dabei nichts von selbst: keine Zuordnung, kein Dateiname, kein Ordner. „Fotos neu einlesen“ liest jetzt auch die LabelKit-Datei neu – ist das Storno aufgehoben, wird die Probe wieder vorgeschlagen.'],
   ['1.30.0', '30.10.2026', 'Bilddokumentation nach dem ersten Testlauf mit BerichtKit: Auf dem Deckblatt steht „zum Untersuchungsbericht …“ statt „zum Gutachten …“. Ist das Schadendatum leer oder „nicht bekannt“, fehlt die Zeile ganz. Die Person unter „Sachverständiger“ steht auf dem Deckblatt jetzt unter „Bearbeitung“ – passt auch, wenn sie im Bericht als Messtechniker unterschreibt (Eingabefeld und Name bleiben). Die Übersicht der Probenahmestellen zeigt die Spalte „Abschnitt“ nur, wenn mindestens eine Probe einen Abschnitt hat; sonst bekommt die Beschreibung den Platz. Die KI-Anweisung im ZIP ist genauso angepasst (gespeicherte eigene Anweisungen bleiben unverändert).'],
   ['1.29.0', '30.10.2026', 'Für BerichtKit (Anlagen): „Anlagen-Nr.“ ist ohne Eintrag „Anlage 2“ – feste Hausreihenfolge im Bericht: Anlage 1 Prüfbericht(e), 2 Bilddokumentation, 3 Probenplan (änderbar, z. B. „Anlage 3“ bei zwei Prüfberichten). FotoKit vermerkt in _Bildumbenenner.json, welche Bilddokumentation zuletzt erstellt wurde (Dateien, Zeit, Anlagen-Nr.) und wann sich danach etwas geändert hat, was in der Doku steht (Beschreibungen, Abschnitte, Proben, Drehung, Auswahl, Reihenfolge, Dateinamen, Projektdaten, neue oder entfernte Fotos – auch über „Fotos übernehmen“ und Änderungen eines Kollegen, die beim Zusammenführen hereinkommen). So erkennt BerichtKit eine veraltete Bilddoku und nimmt sie nicht ungefragt als Anlage. Sonst keine sichtbare Änderung.'],
@@ -645,7 +646,13 @@ function projSet(kind, v){
    Beides liegt oben in _Bildumbenenner.json (bei den übrigen Feldern ohne eigene Bearbeitung, „extensions“) und wird beim
    Zusammenführen nicht als Widerspruch gewertet: es gilt der jeweils neuere Stand (doku­StandMischen). */
 const DOKU_KINDS = ['drafts', 'discard', 'rot', 'extra', 'orig', 'order', 'meta'];
-function dokuGeaendert(){ P.data.extensions = { ...(P.data.extensions || {}), dokuGeaendert: new Date().toISOString() }; }
+/** Zeitpunkt für „Doku geändert“: jetzt – aber immer nach der vermerkten PDF. Sonst gälte eine veraltete PDF als aktuell, wenn
+    beides in dieselbe Millisekunde fällt oder die Uhr des Rechners, der die PDF erstellt hat, vorging (1.31.1). */
+function dokuZeit(ext){
+  const jetzt = Date.now(), pdf = Date.parse((ext && ext.bilddoku && ext.bilddoku.erstellt) || '');
+  return new Date(Number.isFinite(pdf) && pdf >= jetzt ? pdf + 1 : jetzt).toISOString();
+}
+function dokuGeaendert(){ const ext = P.data.extensions || {}; P.data.extensions = { ...ext, dokuGeaendert: dokuZeit(ext) }; }
 /** Fotos neu eingelesen (neue/entfernte Dateien, Fotos übernommen): Bestand anders als bei der PDF → Doku geändert (einmal) */
 function dokuBestandPruefen(){
   const ext = P.data && P.data.extensions, b = ext && ext.bilddoku;
@@ -921,7 +928,7 @@ function mergeExternal(theirs){
      nicht mehr aktuell; bleibt eigener Doku-Inhalt übrig, den die andere Seite nicht hatte, fehlt er in deren neuer PDF.
      In beiden Fällen gilt die Doku jetzt als geändert – Zeitstempel allein sagen nichts darüber, woraus eine PDF gebaut wurde. */
   if (dokuInhalt(m) !== dokuInhalt(o) || (dokuInhalt(m) !== dokuInhalt(theirs) && !same(theirs.extensions && theirs.extensions.bilddoku, b.extensions && b.extensions.bilddoku)))
-    m.extensions.dokuGeaendert = new Date().toISOString();
+    m.extensions.dokuGeaendert = dokuZeit(m.extensions);
   P.data = m;
   applyMergedToItems(orderChanged);
   out.theirs.delete('');

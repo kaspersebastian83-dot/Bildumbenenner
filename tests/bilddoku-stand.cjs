@@ -1,6 +1,7 @@
 // Stand der Bilddokumentation für BerichtKit: bilddoku (erstellte PDF) und dokuGeaendert in _Bildumbenenner.json.
 // Echte FotoKit-Speicher- und Zusammenführfunktionen (Harness aus n2-speichersicherheit.cjs), synthetisches Dateisystem.
 const assert = require('node:assert/strict');
+const vm = require('node:vm');
 const { disk, session, fixture } = require('./n2-speichersicherheit.cjs');
 const tick = () => new Promise(r => setTimeout(r, 5));
 
@@ -86,6 +87,31 @@ async function run() {
     s.ctx.dokuBestandPruefen(); const t1 = s.P.data.extensions.dokuGeaendert;
     assert.ok(t1 > s.P.data.extensions.bilddoku.erstellt, 'neues Foto');
     await tick(); s.ctx.dokuBestandPruefen(); assert.equal(s.P.data.extensions.dokuGeaendert, t1, 'nicht bei jedem Einlesen neu');
+  });
+
+  // Uhr einer Sitzung festhalten (eigener vm-Kontext je Fenster): new Date() und Date.now() liefern `ms`.
+  const uhr = (s, ms) => vm.runInContext(`if (!globalThis.__EchtDate) globalThis.__EchtDate = Date; globalThis.__jetzt = ${ms};
+    Date = class extends __EchtDate { constructor(...a){ a.length ? super(...a) : super(globalThis.__jetzt); } static now(){ return globalThis.__jetzt; } };`, s.ctx);
+  const T = Date.parse('2026-10-31T09:00:00.000Z');
+
+  await test('Gleiche Millisekunde: PDF erstellen und Zusammenführen → trotzdem veraltet (1.31.1, war zufällig rot in CI)', async () => {
+    const d = disk(), a = session(d), b = session(d); await a.open(); await b.open();
+    uhr(b, T - 10); b.edit('b.jpg', 'Kollege'); assert.equal(await b.flushProject(), true);
+    uhr(a, T); a.ctx.bilddokuVermerken(['Bilddokumentation_A.pdf'], 'Anlage 2');   // PDF und Zusammenführen in derselben Millisekunde
+    assert.equal(await a.flushProject(), true);
+    const j = d.json(); assert.equal(j.bilddoku.erstellt, new Date(T).toISOString());
+    assert.ok(j.dokuGeaendert > j.bilddoku.erstellt, `veraltet trotz gleicher Uhrzeit (${j.dokuGeaendert} / ${j.bilddoku.erstellt})`);
+  });
+
+  await test('Uhr des PDF-Rechners geht vor: spätere Änderung auf dem anderen Rechner → veraltet', async () => {
+    const d = disk(), a = session(d); await a.open();
+    uhr(a, T + 60000); a.ctx.bilddokuVermerken(['Bilddokumentation_A.pdf'], 'Anlage 2'); assert.equal(await a.flushProject(), true);
+    const b = session(d); await b.open(); uhr(b, T);   // Rechner B: Uhr eine Minute zurück
+    b.edit('b.jpg', 'danach geändert'); assert.equal(await b.flushProject(), true);
+    const j = d.json(); assert.ok(j.dokuGeaendert > j.bilddoku.erstellt, `veraltet trotz nachgehender Uhr (${j.dokuGeaendert} / ${j.bilddoku.erstellt})`);
+    // ohne PDF bleibt es die echte Zeit
+    const e = disk(), c = session(e); await c.open(); uhr(c, T); c.edit('a.jpg', 'x');
+    assert.equal(c.P.data.extensions.dokuGeaendert, new Date(T).toISOString());
   });
 
   console.log(`${n} Fälle bestanden.`);
