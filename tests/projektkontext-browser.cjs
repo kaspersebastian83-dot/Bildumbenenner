@@ -145,7 +145,7 @@ let browser, server;
       assert.deepEqual(errors, [], 'Keine JavaScript-Fehler');assert.deepEqual(dialogs, [], 'Keine unerwarteten Dialoge');
       console.log(`OK (${name}): ${title}`);
       return true;
-    } finally {await ctx.close();if (profil) fs.rmSync(profil, {recursive: true, force: true});}
+    } finally {await ctx.close();if (profil) (() => { try { fs.rmSync(profil, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (_) {} })();}
   }
 
   const supported = await scenario('Zentrale A → manueller Wechsel B → Navigation und Reload', async ({page, start, open, contextIs, disk}) => {

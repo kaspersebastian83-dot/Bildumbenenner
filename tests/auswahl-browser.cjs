@@ -104,13 +104,15 @@ const root = path.join(__dirname, '..');
   assert.match(await page.locator('#zInfo').textContent(), /Deckblatt \+ 3 Bilder/);
   await page.click('#zCancel');
 
-  // Reihenfolge ohne ▲▼: „Später ▸“ in der Fotokarte, Alt+← auf der Kachel
+  // Reihenfolge ohne ▲▼: „Später ▸“ in der Fotokarte, Alt+← auf der Kachel – über Weg-Fotos hinweg, damit die Bildnummer sich ändert
   await ui.foto(page, 0);
   const name0 = await rows.nth(0).getAttribute('aria-label');
+  const bildVon = n => page.locator(`#list .row[aria-label="${n}"] .bildnr`).textContent();
+  assert.equal(await bildVon(name0), 'Bild 1');
   await page.click('#pvLater');
-  assert.equal(await rows.nth(1).getAttribute('aria-label'), name0, 'Später ▸ schiebt eine Stelle nach hinten');
-  await rows.nth(1).focus(); await page.keyboard.press('Alt+ArrowLeft');
-  assert.equal(await rows.nth(0).getAttribute('aria-label'), name0, 'Alt+← schiebt zurück');
+  assert.equal(await bildVon(name0), 'Bild 2', 'Später ▸ – hinter das nächste Foto in der Doku (Weg-Fotos übersprungen)');
+  await page.locator(`#list .row[aria-label="${name0}"]`).focus(); await page.keyboard.press('Alt+ArrowLeft');
+  assert.equal(await bildVon(name0), 'Bild 1', 'Alt+← schiebt zurück');
 
   assert.deepEqual(errors, []);
   await browser.close(); server.close();

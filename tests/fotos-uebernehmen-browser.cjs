@@ -24,7 +24,7 @@ let browser, server;
   const profil = browserName === 'chromium' ? fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'fk-profil-')) : null;
   const ctx = profil ? await playwright.chromium.launchPersistentContext(profil, { viewport: { width: 1280, height: 900 } })
     : await (await playwright[browserName].launch()).newContext({ viewport: { width: 1280, height: 900 } });
-  browser = profil ? { close: async () => { await ctx.close(); fs.rmSync(profil, { recursive: true, force: true }); } } : ctx.browser();
+  browser = profil ? { close: async () => { await ctx.close(); (() => { try { fs.rmSync(profil, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (_) {} })(); } } : ctx.browser();
   const page = ctx.pages()[0] || await ctx.newPage(), errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('dialog', d => d.accept());

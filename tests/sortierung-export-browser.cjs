@@ -33,7 +33,7 @@ const PROJ = '26.0177 Bad Teststadt';
   const profil = name === 'chromium' ? fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'fk-profil-')) : null;
   const ctx = profil ? await playwright.chromium.launchPersistentContext(profil, { viewport: { width: 1300, height: 900 } })
     : await (await playwright[name].launch()).newContext({ viewport: { width: 1300, height: 900 } });
-  const browser = profil ? { close: async () => { await ctx.close(); fs.rmSync(profil, { recursive: true, force: true }); } } : ctx.browser();
+  const browser = profil ? { close: async () => { await ctx.close(); (() => { try { fs.rmSync(profil, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (_) {} })(); } } : ctx.browser();
   const page = ctx.pages()[0] || await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));

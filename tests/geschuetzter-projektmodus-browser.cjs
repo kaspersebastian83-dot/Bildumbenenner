@@ -36,7 +36,7 @@ let browser, server;
     if (!persistent) return browser.newContext(opts);
     const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'fk-profil-'));
     const ctx = await playwright.chromium.launchPersistentContext(dir, opts);
-    ctx.on('close', () => fs.rmSync(dir, { recursive: true, force: true }));
+    ctx.on('close', () => (() => { try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (_) {} })());
     return ctx;
   };
 

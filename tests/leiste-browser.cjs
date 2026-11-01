@@ -30,7 +30,7 @@ const A = '26.0142 Teststadt', B = '26.0150 Köln & Süd + 50% #Hof';
   const url = `http://127.0.0.1:${server.address().port}/index.html`;
   const profil = fs.mkdtempSync(path.join(os.tmpdir(), 'leiste-'));
   const ctx = await playwright[name].launchPersistentContext(profil, {viewport: {width: 1400, height: 900}});
-  const browser = {close: async () => { await ctx.close(); fs.rmSync(profil, {recursive: true, force: true}); }};
+  const browser = {close: async () => { await ctx.close(); (() => { try { fs.rmSync(profil, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (_) {} })(); }};
   await ctx.addInitScript(() => { try { localStorage.setItem('willkommen-gelesen', '1'); } catch (e) {} });
   const page = ctx.pages()[0] || await ctx.newPage();
   const errors = [];
