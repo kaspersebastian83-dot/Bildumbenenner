@@ -202,7 +202,8 @@ const A = '26.0142 Teststadt', B = '26.0150 Köln & Süd + 50% #Hof';
   const projektAnfragen = [];
   page.on('request', req => { if (req.isNavigationRequest()) projektAnfragen.push(req.url()); });
   await Promise.all([page.waitForEvent('load'), page.waitForURL(/projekt=26\.0150/), (async () => { await leiste.locator('.ml-proj').click(); await pop.locator('a', {hasText: B}).click(); })()]);
-  await page.waitForSelector('#mosaikLeiste .ml-proj strong');
+  // nach dem Neustart zeigt das Kopfband kurz „Anderes Projekt“, bis das Projekt gelesen ist – darauf warten
+  await page.waitForFunction(t => { const s = document.querySelector('#mosaikLeiste .ml-proj strong'); return s && s.textContent === t; }, anzeige(B), {timeout: 10000});
   assert.equal(await leiste.locator('.ml-proj strong').textContent(), anzeige(B));
   await page.waitForFunction(() => document.querySelectorAll('#mosaikLeiste .ml-step.done').length === 0);   // Projekt B ist leer: keine Haken
   assert.equal(await leiste.locator('.ml-z2').count(), 0, 'Projekt B: kein Objekt, keine Person');
