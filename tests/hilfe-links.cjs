@@ -11,6 +11,6 @@ for (const [tag, id] of links){
   assert.match(tag, /target="aidkit"/); assert.match(tag, /rel="noopener"/);
 }
 const ids = links.map(l => l[1]).sort();
-assert.deepEqual(ids, ['app-fotokit', 'app-fotokit', 'bohrkern'], 'Kopfzeile + Kurzanleitung: FotoKit; Kurzanleitung: Bohrkerne');
-assert.match(html, /id="lnkHandbuch"[^>]*href="\.\.\/aidkit\/#app-fotokit"/, 'Knopf „📘 Handbuch“ in der Kopfzeile');
+assert.deepEqual(ids, ['app-fotokit', 'bohrkern'], 'Kurzanleitung: FotoKit und Bohrkerne (das Handbuch der App steht ab 2.0 unter „Mehr …“ – die Leiste hängt es an)');
+assert.match(html, /HANDBUCH = \{[^}]*fotos: 'app-fotokit'/, '„📘 Handbuch ↗“ unter „Mehr …“ führt ins FotoKit-Kapitel');
 console.log(`OK Hilfe-Links: ${links.length} Links auf feste Handbuch-Adressen${fs.existsSync(neben) ? ' (mit AidKit-Liste geprüft)' : ''}`);
