@@ -1,6 +1,17 @@
 // Advisory update validation. Real SW/offline lifecycle is covered separately.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),crypto=require('node:crypto'),pw=require('playwright');
 const {waitForAsync}=require('./await-condition.cjs');
+const ui=require('./fk-ui.cjs');
+// FotoKit 2.0: „Version und Build“ und „Programmstand prüfen“ stehen unter „Mehr …“ › „Sicherungen und Programmstand …“ (#dlgSicher);
+// „Mehr …“ sitzt in der Fußleiste, die erst mit geöffnetem Ordner erscheint – dafür ein synthetischer OPFS-Projektordner.
+// „Update … neu laden“ (#btnUpd) steht in #fkMeldung unter dem Kopfband.
+const picker=()=>{window.showDirectoryPicker=async()=>{const r=await navigator.storage.getDirectory(),p=await r.getDirectoryHandle('26.0302 N3 Update',{create:true}),f=await p.getDirectoryHandle('Fotos',{create:true});
+ const png=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0));
+ try{await f.getFileHandle('IMG_0001.png');}catch(e){const w=await (await f.getFileHandle('IMG_0001.png',{create:true})).createWritable();await w.write(png);await w.close();}return p;};};
+async function sicherung(p){
+ if(!(await p.locator('#btnMehr').isVisible())){await ui.oeffnen(p);await p.waitForFunction(()=>!document.body.inert&&document.querySelectorAll('#list .row').length===1);}
+ if(!(await p.locator('#dlgSicher').isVisible()))await ui.sicher(p);
+}
 const root=path.resolve(__dirname,'..'),engine=process.argv[2]||'chromium',html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const VER=html.match(/const APP_VERSION = '([^']+)'/)[1];   // aktuelle Version aus index.html, damit der Test eine Versionserhöhung übersteht
 const build=/const APP_BUILD = '(sha256:[a-f0-9]{64})'/.exec(html)[1];
@@ -26,11 +37,11 @@ server=http.createServer((req,res)=>{
  if(mode==='newer')return res.end(stamped(html.replace("const APP_VERSION = '"+VER+"'","const APP_VERSION = '99.0.0'")));
  res.end(mode==='different'?different:html);
 });
-await new Promise(r=>server.listen(0,'127.0.0.1',r));browser=await pw[engine].launch();const context=await browser.newContext({serviceWorkers:'block',viewport:{width:1400,height:1000}}),p=await context.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
+await new Promise(r=>server.listen(0,'127.0.0.1',r));browser=await pw[engine].launch();const context=await browser.newContext({serviceWorkers:'block',viewport:{width:1400,height:1000}});await context.addInitScript(picker);const p=await context.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
 try{
  await p.goto('http://localhost:'+server.address().port+'/index.html');
- assert.ok((await p.locator('#btnInfo').textContent()).includes(build.slice(7,19)));(await p.locator('#morePanel').isHidden()&&await p.locator('#btnMore').click());await p.locator('#btnInfo').click();assert.ok((await p.locator('#dialog').textContent()).includes(build));await p.locator('#iClose').click();
- const check=async expected=>{(await p.locator('#morePanel').isHidden()&&await p.locator('#btnMore').click());await p.locator('#btnCheckUpdate').click();await p.locator('#buildStatus').filter({hasText:expected}).waitFor();};
+ assert.ok((await p.locator('#btnInfo').textContent()).includes(build.slice(7,19)));await sicherung(p);await p.locator('#btnInfo').click();assert.ok((await p.locator('#dialog').textContent()).includes(build));await p.locator('#iClose').click();
+ const check=async expected=>{await sicherung(p);await p.locator('#btnCheckUpdate').click();await p.locator('#buildStatus').filter({hasText:expected}).waitFor();};
  await check(/stimmt mit der Online-Antwort/);assert.equal(await p.locator('#btnUpd').isVisible(),false);
  console.log('PASS N3 UPDATE: complete current HTML digest matches; actual loaded identity visible');
  for(mode of ['different','rollback','newer']){
@@ -45,7 +56,7 @@ try{
  mode='same';await check(/stimmt mit der Online-Antwort/);assert.equal(await p.locator('#btnUpd').isVisible(),false);
  await p.evaluate(()=>window.dispatchEvent(new Event('offline')));assert.match(await p.locator('#buildStatus').textContent(),/Offline.*nicht bestätigt/);
  const protectedHTML=html.replace('/* ---------- wiring ---------- */',"window.n3Protected = () => { S.dir = {}; P.readOnly = true; };\n/* ---------- wiring ---------- */");
- await p.route('**/index.html',r=>r.fulfill({contentType:'text/html',body:protectedHTML}));await p.reload();await p.evaluate(()=>{window.n3Protected();document.getElementById('btnUpd').hidden=false;});let navigations=0;p.on('framenavigated',()=>navigations++);await p.locator('#btnUpd').click();await p.locator('#banner').filter({hasText:/Neuladen abgebrochen/}).waitFor();assert.equal(navigations,0);
+ await p.route('**/index.html',r=>r.fulfill({contentType:'text/html',body:protectedHTML}));await p.reload();await p.evaluate(()=>{window.n3Protected();document.getElementById('btnUpd').hidden=false;document.getElementById('fkMeldung').hidden=false;});let navigations=0;p.on('framenavigated',()=>navigations++);await p.locator('#btnUpd').click();await p.locator('#banner').filter({hasText:/Neuladen abgebrochen/}).waitFor();assert.equal(navigations,0);
  console.log('PASS N3 UPDATE: protected mode blocks app update; real input recovery tested separately');
  await assert.rejects(waitForAsync(p,async()=>false,undefined,{timeout:100}),/without a positive result/);
  await assert.rejects(waitForAsync(p,async()=>new Promise(()=>{}),undefined,{timeout:100}),/without a positive result/);

@@ -1,11 +1,14 @@
 const { waitForAsync } = require('./await-condition.cjs');
 // Real keyboard/clicks on synthetic OPFS projects. Only pickers and filesystem
 // latency/failures are controlled; no production test API or synthetic key events.
+// FotoKit 2.0: Kacheln ohne Eingabefelder – Beschreibung/Probe/Abschnitt stehen in der Fotokarte (#fDesc/#fProbe/#fSec) für das
+// gewählte Foto, Abschnittsstatus in #fSecStatus, Projekt im Kopfband, Öffnen/Neu einlesen/Sortierung über „Mehr …“.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const playwright = require('playwright');
+const ui = require('./fk-ui.cjs');
 const browserName = process.argv[2] || 'chromium';
 const root = path.join(__dirname, '..');
 const counts = process.argv[3] ? [Number(process.argv[3])] : [5, 50, 150];
@@ -55,11 +58,17 @@ let browser, server;
         window.nextProject = 'A';
         window.showDirectoryPicker = () => root.getDirectoryHandle(`26.080${window.nextProject === 'A' ? 1 : 2} Serie ${window.nextProject}`);
       }, count);
-      const rows = page.locator('#list .row'), desc = page.locator('#list .desc');
+      const rows = page.locator('#list .row'), fDesc = page.locator('#fDesc');
+      // Projekt im Kopfband (früher #projBadge)
       const open = async key => {
-        await page.evaluate(key => { window.nextProject = key; }, key); await page.locator('#btnOpen').click();
-        await page.waitForFunction(([n, key]) => !document.body.inert && document.querySelectorAll('#list .row').length === n && document.querySelector('#projBadge').textContent.includes(key === 'A' ? '26.0801' : '26.0802'), [key === 'A' ? count : 5, key]);
+        await page.evaluate(key => { window.nextProject = key; }, key); await ui.oeffnen(page);
+        await page.waitForFunction(([n, nr]) => { const b = document.querySelector('#mosaikLeiste .ml-kopf .ml-proj strong');
+          return !document.body.inert && document.querySelectorAll('#list .row').length === n && !!b && b.textContent.includes(nr); }, [key === 'A' ? count : 5, key === 'A' ? '26.0801' : '26.0802']);
       };
+      // Beschreibungen aller Fotos aus den Kacheln (keine Eingabefelder mehr je Zeile)
+      const descs = () => rows.evaluateAll(es => es.map(e => e.querySelector('.tdesc').textContent));
+      // Abschnittsstatus eines Fotos (früher .section-status je Zeile, jetzt in der Fotokarte)
+      const secStatus = async i => { await ui.foto(page, i); return page.locator('#fSecStatus').textContent(); };
       const json = async () => {
         const h = await waitForAsync(page, async () => {
           try { const p = await (await navigator.storage.getDirectory()).getDirectoryHandle('26.0801 Serie A'), d = await p.getDirectoryHandle('Fotos');
@@ -68,8 +77,8 @@ let browser, server;
         });
         try { return await h.jsonValue(); } finally { await h.dispose(); }
       };
-      const focused = async (i, image = i) => {
-        assert.equal(await desc.nth(i).evaluate(e => e === document.activeElement), true, `Fokus bei Bild ${i + 1}`);
+      const focused = async (i, image = i, imFeld = true) => {
+        if (imFeld) assert.equal(await fDesc.evaluate(e => e === document.activeElement), true, `Fokus in der Beschreibung bei Bild ${i + 1}`);
         assert.equal(await rows.nth(i).evaluate(e => e.classList.contains('active')), true);
         assert.equal(await page.locator('#pvName').textContent(), filename(image));
         assert.ok(await rows.nth(i).evaluate(e => { const a = e.getBoundingClientRect(), b = document.getElementById('listWrap').getBoundingClientRect(); return a.top >= b.top - 1 && a.bottom <= b.bottom + 1; }), 'Aktive Zeile vollständig sichtbar');
@@ -77,46 +86,54 @@ let browser, server;
       const preview = async i => {
         await page.waitForFunction(([name, width]) => { const img = document.getElementById('pvImg'); return img.alt === name && img.complete && img.naturalWidth === width && document.getElementById('pvImgWrap').getAttribute('aria-busy') === 'false'; }, [filename(i), 64 + i]);
       };
-      await open('A'); await desc.first().click(); await preview(0);
+      await open('A'); await ui.feld(page, 'desc', 0).click(); await preview(0);
       await page.keyboard.press('Shift+Enter'); await focused(0);
       await page.keyboard.press('ArrowDown'); await focused(1);
       await page.keyboard.press('ArrowUp'); await focused(0);
       await page.keyboard.press('Control+Enter'); await focused(0);
       await page.keyboard.press('Enter'); await focused(1);
-      await page.keyboard.press('Control+d'); assert.equal(await desc.nth(1).inputValue(), 'Alt 1');
-      await rows.nth(1).locator('.probe').click(); await page.keyboard.press('Control+d');
-      assert.equal(await rows.nth(1).locator('.probe').inputValue(), 'P1');
-      await rows.nth(1).locator('.sec').click(); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Escape');
-      assert.equal(await rows.nth(1).locator('.sec').evaluate(e => e === document.activeElement), true, 'Abschnittspfeile navigieren nicht durch Bilder');
-      await page.keyboard.press('Control+d'); assert.equal(await rows.nth(1).locator('.sec').inputValue(), 'Küche');
-      await rows.nth(1).locator('.sec').fill('');
-      await rows.first().locator('.sec').fill('Bad');
-      assert.equal(await rows.nth(2).locator('.sec').inputValue(), '', 'Vererbung schreibt keine Raumwerte');
-      assert.equal(await rows.nth(2).locator('.section-status').textContent(), 'Abschnitt: Bad · von vorherigem Bild übernommen');
-      assert.equal(await rows.first().locator('.section-status').textContent(), 'Abschnitt: Bad · eingetragen');
-      assert.equal(await rows.nth(4).locator('.section-status').textContent(), 'Abschnitt: Wohnzimmer · von vorherigem Bild übernommen');
-      await rows.nth(2).locator('.sec').press('Enter'); await focused(3);
-      await rows.nth(3).locator('.probe').press('Shift+Enter'); await focused(2);
-      const beforeDialog = await desc.evaluateAll(es => es.map(e => e.value));
+      await page.keyboard.press('Control+d'); assert.equal(await fDesc.inputValue(), 'Alt 1'); await focused(1);
+      await ui.feld(page, 'probe', 1).click(); await page.keyboard.press('Control+d');
+      assert.equal(await ui.feld(page, 'probe', 1).inputValue(), 'P1');
+      await ui.feld(page, 'sec', 1).click(); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Escape');
+      assert.equal(await page.locator('#fSec').evaluate(e => e === document.activeElement), true, 'Abschnittspfeile navigieren nicht durch Bilder');
+      assert.equal(await rows.nth(1).evaluate(e => e.classList.contains('active')), true);
+      await page.keyboard.press('Control+d'); assert.equal(await ui.feld(page, 'sec', 1).inputValue(), 'Küche');
+      await ui.feld(page, 'sec', 1).fill('');
+      await ui.feld(page, 'sec', 0).fill('Bad');
+      assert.equal(await ui.feld(page, 'sec', 2).inputValue(), '', 'Vererbung schreibt keine Raumwerte');
+      assert.equal(await page.locator('#fSec').getAttribute('placeholder'), '↳ Bad', 'geerbter Abschnitt als Platzhalter');
+      assert.equal(await secStatus(2), 'Abschnitt: Bad · vom vorherigen Foto übernommen');
+      assert.equal(await secStatus(0), 'Abschnitt: Bad · eingetragen');
+      assert.equal(await secStatus(4), 'Abschnitt: Wohnzimmer · vom vorherigen Foto übernommen');
+      await ui.feld(page, 'sec', 2).press('Enter'); await focused(3);
+      await ui.feld(page, 'probe', 3).press('Shift+Enter'); await focused(2);
+      const beforeDialog = await descs();
       await page.keyboard.press('F1');
       for (const key of ['Enter', 'Shift+Enter', 'ArrowDown', 'Control+d', 'Alt+x', 'Alt+r']) await page.keyboard.press(key);
       assert.equal(await page.locator('#pvName').textContent(), filename(2), 'Dialog verhindert Aktionen im Hintergrund');
       assert.equal(await page.locator('#list .discarded, #list .rotated').count(), 0);
-      assert.deepEqual(await desc.evaluateAll(es => es.map(e => e.value)), beforeDialog);
+      assert.deepEqual(await descs(), beforeDialog);
       await page.locator('#hClose').click();
-      await desc.nth(2).click(); await preview(2); await page.locator('#pvImgWrap').click();
+      await ui.feld(page, 'desc', 2).click(); await preview(2); await page.locator('#pvImgWrap').click();
       await page.keyboard.press('Enter'); await page.keyboard.press('Alt+x');
       assert.equal(await page.locator('#pvName').textContent(), filename(2), 'Vollbild verhindert Zeilenaktionen');
       await page.keyboard.press('Escape');
       assert.equal(await page.locator('#lightbox').isVisible(), false);
-      const metadata = () => rows.evaluateAll(es => Object.fromEntries(es.map(e => [e.querySelector('.orig').textContent.split(' · ')[0], { sec: e.querySelector('.sec').value, probe: e.querySelector('.probe').value }])));
+      // eingetragene Räume/Proben je Dateiname: jedes Foto wählen und die Fotokarte lesen
+      const metadata = async () => { const out = {}, n = await rows.count();
+        for (let i = 0; i < n; i++){ await ui.foto(page, i); out[await rows.nth(i).getAttribute('aria-label')] = { sec: await page.locator('#fSec').inputValue(), probe: await page.locator('#fProbe').inputValue() }; }
+        return out; };
       const beforeMove = await metadata();
-      await rows.first().locator('.down').click(); await focused(1, 0);
-      assert.equal(await rows.first().locator('.section-status').textContent(), 'Abschnitt: nicht zugeordnet');
-      assert.equal(await rows.nth(2).locator('.section-status').textContent(), 'Abschnitt: Bad · von vorherigem Bild übernommen');
+      // „Später ▸“ in der Fotokarte (früher ▼): Foto 1 rückt eine Stelle nach hinten und bleibt gewählt (Fokus auf dem Knopf)
+      await ui.foto(page, 0); await page.locator('#pvLater').click(); await focused(1, 0, false);
+      assert.equal(await secStatus(0), 'Abschnitt: nicht zugeordnet');
+      assert.equal(await secStatus(2), 'Abschnitt: Bad · vom vorherigen Foto übernommen');
       assert.deepEqual(await metadata(), beforeMove, 'Manuelles Verschieben verändert keine eingetragenen Räume/Proben');
-      await rows.nth(1).locator('.up').click(); await focused(0);
-      await page.locator('#sort').selectOption('name'); await page.locator('#sort').selectOption('manual');
+      // zurück mit Alt+← aus der Beschreibung (früher ▲) – der Fokus bleibt im Feld
+      await ui.feld(page, 'desc', 1).click(); await page.keyboard.press('Alt+ArrowLeft'); await focused(0);
+      assert.equal(await page.locator('#sort').inputValue(), 'manual');
+      await ui.sortieren(page, 'name'); assert.equal(await page.locator('#sort').inputValue(), 'name');
       assert.deepEqual(await metadata(), beforeMove);
 
       if (count === 5) {
@@ -137,7 +154,7 @@ let browser, server;
           };
         });
         for (const fail of [true, false]) {
-          await desc.first().click(); await preview(0);
+          await ui.feld(page, 'desc', 0).click(); await preview(0);
           await page.evaluate(fail => { window.previewIO.hold = 'IMG_0002.jpg'; window.previewIO.fail = fail; window.previewIO.release = null; window.previewIO.reads = {}; }, fail);
           await page.keyboard.press('Enter'); await page.waitForFunction(() => !!window.previewIO.release);
           await page.keyboard.press('Enter'); await preview(2);
@@ -149,14 +166,14 @@ let browser, server;
           assert.deepEqual(await page.evaluate(() => window.previewIO.reads), { 'IMG_0002.jpg': 1, 'IMG_0003.jpg': 1 }, 'Ein Lesevorgang pro Auswahl, auch beim Fokussieren');
         }
       }
-      await desc.first().click();
+      await ui.feld(page, 'desc', 0).click();
       const start = Date.now();
       for (let i = 0; i < count; i++) {
         await focused(i);
         await page.keyboard.press(process.platform === 'darwin' ? 'Meta+a' : 'Control+a'); await page.keyboard.insertText(`Serie ${i + 1}`); await page.keyboard.press('Enter');
       }
       await focused(count - 1); await page.keyboard.press('Enter'); await focused(count - 1); await preview(count - 1);
-      assert.deepEqual(await desc.evaluateAll(es => es.map(e => e.value)), Array.from({ length: count }, (_, i) => `Serie ${i + 1}`));
+      assert.deepEqual(await descs(), Array.from({ length: count }, (_, i) => `Serie ${i + 1}`));
       console.log(`INFO (${browserName}, ${count} Bilder): reale Eingabe/Navigationsserie ${Date.now() - start} ms`);
       // Hold one native write completion, keep typing, then request a project change.
       await page.evaluate(() => {
@@ -171,13 +188,13 @@ let browser, server;
           return w;
         };
       });
-      await desc.first().fill('Weiter während Autosave'); await page.waitForFunction(() => window.writeStarted);
-      await desc.nth(1).fill('Letzte Eingabe vor Projektwechsel');
-      await page.evaluate(() => { window.nextProject = 'B'; }); await page.locator('#btnOpen').click();
+      await ui.feld(page, 'desc', 0).fill('Weiter während Autosave'); await page.waitForFunction(() => window.writeStarted);
+      await ui.feld(page, 'desc', 1).fill('Letzte Eingabe vor Projektwechsel');
+      await page.evaluate(() => { window.nextProject = 'B'; }); await ui.oeffnen(page);
       await page.waitForFunction(() => document.body.inert);
-      assert.match(await page.locator('#projBadge').textContent(), /26\.0801/);
+      assert.match(await ui.projekt(page), /26\.0801/);
       await page.evaluate(() => window.releaseWrite());
-      await page.waitForFunction(() => !document.body.inert && document.querySelector('#projBadge').textContent.includes('26.0802'));
+      await page.waitForFunction(() => { const b = document.querySelector('#mosaikLeiste .ml-kopf .ml-proj strong'); return !document.body.inert && !!b && b.textContent.includes('26.0802'); });
       const saved = await json();
       assert.equal(saved.format, 1); assert.equal(saved.bilder[filename(0)].beschreibung, 'Weiter während Autosave');
       assert.equal(saved.bilder[filename(1)].beschreibung, 'Letzte Eingabe vor Projektwechsel');
@@ -185,16 +202,16 @@ let browser, server;
       assert.equal(saved.bilder[filename(0)].abschnitt, 'Bad'); assert.ok(!saved.bilder[filename(1)].abschnitt);
       assert.equal(saved.bilder[filename(1)].probe, 'P1');
       await open('A');
-      await desc.last().fill('Klickwechsel ohne Enter'); await desc.first().click();
-      await page.locator('#btnReload').click(); await page.waitForFunction(() => !document.body.inert);
+      await ui.feld(page, 'desc', count - 1).fill('Klickwechsel ohne Enter'); await ui.foto(page, 0);
+      await ui.mehr(page, 'mehrReload'); await page.waitForFunction(() => !document.body.inert);
       assert.equal((await json()).bilder[filename(count - 1)].beschreibung, 'Klickwechsel ohne Enter');
       await page.reload();
       await page.evaluate(async () => { const r = await navigator.storage.getDirectory(); window.showDirectoryPicker = () => r.getDirectoryHandle('26.0801 Serie A'); });
-      await page.locator('#btnOpen').click(); await page.waitForFunction(n => !document.body.inert && document.querySelectorAll('#list .row').length === n, count);
-      assert.equal(await desc.first().inputValue(), 'Weiter während Autosave');
-      assert.equal(await desc.nth(1).inputValue(), 'Letzte Eingabe vor Projektwechsel');
-      assert.equal(await desc.last().inputValue(), 'Klickwechsel ohne Enter');
-      assert.equal(await rows.nth(2).locator('.section-status').textContent(), 'Abschnitt: Bad · von vorherigem Bild übernommen');
+      await page.waitForSelector('#btnOpen2'); await ui.oeffnen(page); await page.waitForFunction(n => !document.body.inert && document.querySelectorAll('#list .row').length === n, count);
+      assert.equal(await ui.feld(page, 'desc', 0).inputValue(), 'Weiter während Autosave');
+      assert.equal(await ui.feld(page, 'desc', 1).inputValue(), 'Letzte Eingabe vor Projektwechsel');
+      assert.equal(await ui.feld(page, 'desc', count - 1).inputValue(), 'Klickwechsel ohne Enter');
+      assert.equal(await secStatus(2), 'Abschnitt: Bad · vom vorherigen Foto übernommen');
       assert.deepEqual(errors, []);
       console.log(`OK (${browserName}, ${count} Bilder): Tastatur, Fokus, Vorschau, Vererbung, Sortierung, Autosave und erneutes Öffnen`);
     } finally { await ctx.close(); }

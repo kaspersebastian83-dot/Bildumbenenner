@@ -10,6 +10,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const playwright = require('playwright');
+const ui = require('./fk-ui.cjs');
 const name = process.argv[2] || 'chromium';
 const root = path.join(__dirname, '..');
 const archiveName = 'Journal-Testarchiv';
@@ -69,8 +70,8 @@ let browser, server;
         }, { archiveName, projNr });
         try { return await h.jsonValue(); } finally { await h.dispose(); }
       };
-      await page.locator('#btnOpen').click();
-      await page.waitForFunction(nr => !document.body.inert && document.querySelector('#projBadge') && document.querySelector('#projBadge').textContent.includes(nr), projNr.split(' ')[0]);
+      await ui.oeffnen(page);
+      await page.waitForFunction(nr => { const p = document.querySelector('#mosaikLeiste .ml-proj strong'); return !document.body.inert && p && p.textContent.includes(nr); }, projNr.split(' ')[0]);
       await check({ page, snapshot });
       assert.deepEqual(errors, [], 'Keine JavaScript-/Konsolenfehler');
       console.log(`OK (${name}): ${title}`);
@@ -78,7 +79,15 @@ let browser, server;
   }
 
   const SIZE = { A: null, B: null };   // Bildgrößen werden beim ersten Szenario ermittelt (Canvas-JPEG je Browser verschieden)
-  const rows = page => page.evaluate(() => [...document.querySelectorAll('#list .row')].map(r => ({ desc: r.querySelector('.desc').value, name: (r.querySelector('.nm') || r.querySelector('.name') || { textContent: '' }).textContent })));
+  // Beschreibung je Foto steht in der Kachel (.tdesc, „Beschreibung fehlt“ bei leer) und in der Fotokarte (#fDesc); Dateiname = aria-label
+  const rows = async page => {
+    const out = [], n = await page.locator('#list .row').count();
+    for (let i = 0; i < n; i++){
+      const t = await ui.foto(page, i);
+      out.push({ desc: await page.locator('#fDesc').inputValue(), kachel: await t.locator('.tdesc').textContent(), name: await t.getAttribute('aria-label') });
+    }
+    return out;
+  };
   const JOURNAL = (stempel, paare) => JSON.stringify({ app: 'FotoKit', art: 'umbenennen-journal', format: 1, version: '1.33.0', lauf: 'umbenennen', stempel, am: '2026-10-31T10:00:00.000Z', ordner: 'Fotos',
     paare: paare.map(([von, nach], i) => ({ von, vorlaeufig: `umb-tmp_${stempel}_${i}.png`, nach })) }, null, 2) + '\n';
 
@@ -95,6 +104,7 @@ let browser, server;
     assert.deepEqual(Object.keys(files).filter(n => n !== '_Bildumbenenner.json').sort(), ['IMG_0001.png', 'IMG_0002.png'], 'alte Namen, kein Journal, keine Marke, kein Hilfsname');
     assert.ok(files['IMG_0001.png'] < files['IMG_0002.png'], 'Foto A (kleinere Datei) liegt wieder unter IMG_0001, Foto B unter IMG_0002');
     const r = await rows(page); assert.deepEqual(r.map(x => x.desc), ['Decke', 'Wand'], 'Beschreibungen stehen am richtigen Foto');
+    assert.deepEqual(r.map(x => [x.name, x.kachel]), [['IMG_0001.png', 'Decke'], ['IMG_0002.png', 'Wand']], 'Kacheln: alter Dateiname, richtige Beschreibung');
   });
 
   // 2) Datenstand schon gespeichert (umbenennenFertig) → neue Namen bleiben, Journal wird nur aufgeräumt
@@ -128,7 +138,7 @@ let browser, server;
     fotos: { 'IMG_0001.png': 'A', 'IMG_0002.png': 'B' }
   }, async ({ page, snapshot }) => {
     await page.waitForFunction(() => document.querySelectorAll('#list .row').length === 2);
-    await page.locator('#btnRename').click(); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor();
+    await ui.mehr(page, 'mehrUmbenennen'); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor();
     let files = await snapshot();
     assert.deepEqual(Object.keys(files).filter(n => n !== '_Bildumbenenner.json' && !n.startsWith('_FotoKit')).sort(), ['01_P1_Decke.png', '02_Wand.png'], 'neue Namen, kein Journal, keine Marke');
     await page.locator('#bUndo').click(); await page.waitForFunction(() => document.querySelector('#banner').textContent.includes('Rückgängig gemacht'));

@@ -3,11 +3,13 @@
 // Prüft: „P2“ + Enter → Beschreibung aus LabelKit, P2 ins Feld Probe-Nr.; Ergänzung aus vorherigen Beschreibungen;
 // Weitertippen ersetzt; Esc verwirft; Tab übernimmt und man tippt weiter; Verlassen ohne Übernahme behält nur das Getippte;
 // abschaltbar; LabelKit-Datei unverändert. Nur erfundene Namen.
+// FotoKit 2.0: eine Fotokarte (#fDesc/#fProbe) für das gewählte Foto statt Eingabefeldern je Zeile; „Dateinamen …“ unter „Mehr …“.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const playwright = require('playwright');
+const ui = require('./fk-ui.cjs');
 const browserName = process.argv[2] || 'chromium';
 const root = path.join(__dirname, '..');
 const LABELKIT = { version: '4.39.1', projekt: { nr: '26.0901' }, probenStartNr: 1,
@@ -50,24 +52,27 @@ let browser, server;
     await put(await p.getDirectoryHandle('Laboraufträge', { create: true }), '26.0901_25.10.2026_Daten.json', lk);
     window.showDirectoryPicker = async () => p;
   }, labelkitText);
-  await page.locator('#btnOpen').click();
+  await ui.oeffnen(page);
   await page.waitForFunction(() => !document.body.inert && document.querySelectorAll('#list .row').length === 6);
-  const rows = page.locator('#list .row'), desc = page.locator('#list .desc');
-  const zustand = i => desc.nth(i).evaluate(e => ({ wert: e.value, markiert: e.value.slice(e.selectionStart, e.selectionEnd) }));
+  const rows = page.locator('#list .row'), fDesc = page.locator('#fDesc');
+  // Foto i ist gewählt (Kachel .active) – die Fotokarte zeigt also seine Felder
+  const gewaehlt = async i => assert.equal(await rows.nth(i).evaluate(e => e.classList.contains('active')), true, `Foto ${i + 1} gewählt`);
+  const zustand = async i => { await gewaehlt(i); return fDesc.evaluate(e => ({ wert: e.value, markiert: e.value.slice(e.selectionStart, e.selectionEnd) })); };
+  const imFeld = async i => { await gewaehlt(i); return fDesc.evaluate(e => e === document.activeElement); };
   const tippe = async t => { for (const ch of t) await page.keyboard.type(ch); };
 
   // 1) „P2“ → Beschreibung aus LabelKit, markiert; Enter übernimmt, P2 wandert ins Feld Probe-Nr.
   // LabelKit-Datei wird beim Öffnen im Hintergrund gelesen: bis zu 5 s erneut versuchen
   for (const ende = Date.now() + 5000; ;){
-    await desc.nth(0).click(); await desc.nth(0).fill(''); await tippe('P2');
+    await ui.feld(page, 'desc', 0).click(); await ui.feld(page, 'desc', 0).fill(''); await tippe('P2');
     if ((await zustand(0)).wert !== 'P2' || Date.now() > ende) break;
     await page.waitForTimeout(200);
   }
   assert.deepEqual(await zustand(0), { wert: 'P2 Flur mit Ruß Ansicht', markiert: ' Flur mit Ruß Ansicht' });
   await page.keyboard.press('Enter');
-  assert.equal(await desc.nth(0).inputValue(), 'Flur mit Ruß Ansicht');
-  assert.equal(await rows.nth(0).locator('.probe').inputValue(), 'P2');
-  assert.equal(await desc.nth(1).evaluate(e => e === document.activeElement), true, 'Enter geht zum nächsten Bild');
+  assert.equal(await imFeld(1), true, 'Enter geht zum nächsten Bild');
+  assert.equal(await rows.nth(0).locator('.tdesc').textContent(), 'Flur mit Ruß Ansicht');
+  assert.match(await rows.nth(0).locator('.tsub').textContent(), /^Probe 2 · /, 'P2 in der Kachel');
 
   // 2) Ergänzung aus der vorherigen Beschreibung; Weitertippen ersetzt den Vorschlag
   await tippe('Fl');
@@ -75,8 +80,9 @@ let browser, server;
   await tippe('ur Decke');
   assert.deepEqual(await zustand(1), { wert: 'Flur Decke', markiert: '' });
   await page.keyboard.press('Enter');
-  assert.equal(await desc.nth(1).inputValue(), 'Flur Decke');
-  assert.equal(await rows.nth(1).locator('.probe').inputValue(), '', 'ohne bekannte Probennummer bleibt Probe-Nr. leer');
+  assert.equal(await imFeld(2), true);
+  assert.equal(await rows.nth(1).locator('.tdesc').textContent(), 'Flur Decke');
+  assert.equal(await rows.nth(1).locator('.tsub').textContent(), 'IMG_0002.jpg', 'ohne bekannte Probennummer bleibt Probe-Nr. leer');
 
   // 3) Esc verwirft; Tab übernimmt und man tippt weiter (Vorschlag aus LabelKit)
   await tippe('Kü');
@@ -86,30 +92,31 @@ let browser, server;
   await tippe('che');
   assert.equal((await zustand(2)).wert, 'Küche verrußt Untersicht');
   await page.keyboard.press('Tab');
-  assert.equal(await desc.nth(2).evaluate(e => e === document.activeElement), true, 'Tab bleibt im Feld, solange ein Vorschlag offen war');
+  assert.equal(await imFeld(2), true, 'Tab bleibt im Feld, solange ein Vorschlag offen war');
   await tippe(' Detail');
-  assert.equal(await desc.nth(2).inputValue(), 'Küche verrußt Untersicht Detail');
+  assert.equal((await zustand(2)).wert, 'Küche verrußt Untersicht Detail');
   await page.keyboard.press('Enter');
 
   // 4) Verlassen ohne Übernahme (Klick woandershin) → nur das Getippte bleibt
   await tippe('Ke');
   assert.equal((await zustand(3)).wert, 'Keller Floor-Flex-Platte');
-  await desc.nth(5).click();
-  assert.equal(await desc.nth(3).inputValue(), 'Ke');
+  await ui.foto(page, 5);
+  assert.equal(await rows.nth(3).locator('.tdesc').textContent(), 'Ke');
+  assert.equal(await ui.feld(page, 'desc', 3).inputValue(), 'Ke');
 
   // 5) Probe mit eigener Nummer aus „Sonstige“ (P9); „p9“ klein geschrieben
-  await desc.nth(4).click(); await tippe('p9');
+  await ui.feld(page, 'desc', 4).click(); await tippe('p9');
   assert.equal((await zustand(4)).wert, 'p9 Bad Aufsicht');
   await page.keyboard.press('Enter');
-  assert.equal(await rows.nth(4).locator('.probe').inputValue(), 'P9');
-  assert.equal(await desc.nth(4).inputValue(), 'Bad Aufsicht');
-  assert.match(await rows.nth(4).locator('.res').textContent(), /05_P9_Bad_Aufsicht\.jpg/, 'Dateiname mit Probe-Nr. und Beschreibung');
+  assert.equal(await ui.feld(page, 'probe', 4).inputValue(), 'P9');
+  assert.equal(await page.locator('#fDesc').inputValue(), 'Bad Aufsicht');
+  assert.match(await page.locator('#pvNew').textContent(), /05_P9_Bad_Aufsicht\.jpg/, 'Dateiname mit Probe-Nr. und Beschreibung');
 
   // 6) Abschaltbar
-  await page.locator('#btnNaming').click(); await page.locator('#oVorschlag').uncheck();
-  await desc.nth(5).click(); await tippe('Kü');
+  await ui.namen(page); await page.locator('#oVorschlag').uncheck(); await ui.namenZu(page);
+  await ui.feld(page, 'desc', 5).click(); await tippe('Kü');
   assert.deepEqual(await zustand(5), { wert: 'Kü', markiert: '' }, 'ohne Vorschläge keine Ergänzung');
-  await page.locator('#oVorschlag').check();
+  await ui.namen(page); await page.locator('#oVorschlag').check(); await ui.namenZu(page);
 
   // LabelKit-Datei wird nur gelesen
   const nachher = await page.evaluate(async () => { const p = await (await navigator.storage.getDirectory()).getDirectoryHandle('26.0901 Vorschlag');

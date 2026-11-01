@@ -1,11 +1,16 @@
 // Real UI actions and saved PDF/CSV/ZIP bytes, synthetic OPFS projects only.
 // PDF assertions resolve the saved cross-reference table, page content and image
 // objects. They do not call the app's pagination/numbering functions.
+// FotoKit 2.0: Kacheln ohne Eingabefelder. Die Liste wird aus den Kacheln gelesen (.bildnr, .tdesc, .tsub, Abschnitts-Trennzeilen
+// .fk-abschnitt); eingetragener Abschnitt, Probe und geplanter Dateiname (#pvNew) kommen aus der Fotokarte des gewählten Fotos.
+// Weg (Haken der Kachel, früher ✕) lässt das Foto an seinem Platz – es springt nicht mehr ans Ende; Bildnummern überspringen es.
+// Verschieben über „◂ Früher / Später ▸“ der Fotokarte (früher ▲▼), Umbenennen/ZIP/Ergebnistabelle/Ordner über „Mehr …“.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const playwright = require('playwright');
+const ui = require('./fk-ui.cjs');
 const browserName = process.argv[2] || 'chromium';
 const root = path.join(__dirname, '..');
 let browser, server;
@@ -92,21 +97,54 @@ function zipFiles(bytes) {
       }, count);
       const rows = page.locator('#list .row'), active = page.locator('#list .row:not(.discarded)');
       const idle = () => page.waitForFunction(() => !document.body.inert && !document.querySelector('#overlay').classList.contains('show'));
-      const open = async () => { await page.locator('#btnOpen').click(); await page.waitForFunction(n => !document.body.inert && document.querySelectorAll('#list .row').length === n, count); };
-      const snapshot = (target = page) => target.locator('#list .row').evaluateAll(es => es.map(e => ({ name: e.querySelector('.orig').textContent.split(' · ')[0], nr: e.querySelector('.n').textContent, desc: e.querySelector('.desc').value, sec: e.querySelector('.sec').value, section: e.querySelector('.section-status').textContent, probe: e.querySelector('.probe').value, gone: e.classList.contains('discarded'), planned: e.querySelector('.res').title })));
+      const open = async () => { await ui.oeffnen(page); await page.waitForFunction(n => !document.body.inert && document.querySelectorAll('#list .row').length === n, count); };
+      // Liste aus den Kacheln: Dateiname (Ende von .tsub), Bildnummer („–“ bei Weg), Beschreibung, Abschnitt (Trennzeilen), Probe (.tsub), Weg
+      const kacheln = target => target.locator('#list').evaluate(list => {
+        let sec = ''; const out = [];
+        for (const el of list.children) {
+          if (el.classList.contains('fk-abschnitt')) { const t = el.textContent.replace(/ · \d+ Fotos?$/, ''); sec = t === 'ohne Abschnitt' ? '' : t; continue; }
+          if (!el.classList.contains('row')) continue;
+          const gone = el.classList.contains('discarded'), sub = el.querySelector('.tsub').textContent.split(' · '), name = sub.pop();
+          const td = el.querySelector('.tdesc').textContent, nr = el.querySelector('.bildnr').textContent;
+          out.push({ name, nr: nr ? nr.replace(/^Bild /, '') : '–', desc: el.classList.contains('leer') ? '' : gone ? td.replace(/^Weg( · )?/, '') : td,
+            section: gone ? '' : sec, probe: sub.length ? sub[0].replace(/^Probe (\d+[a-z]?)$/i, 'P$1') : '', gone });
+        }
+        return out;
+      });
+      // geplanter Dateiname des gewählten Fotos aus der Fotokarte („Nach „Dateien umbenennen“: …“, leer = bleibt)
+      const geplant = (txt, name) => { const m = /^Nach „Dateien umbenennen“: (.*)$/.exec(txt) || /^⚠ (.*) \(Name doppelt \/ existiert\)$/.exec(txt); return m ? m[1] : name; };
+      const planned = async i => { await ui.foto(page, i); return geplant(await page.locator('#pvNew').textContent(), await rows.nth(i).getAttribute('aria-label')); };
+      // full: zusätzlich je Foto die Fotokarte lesen (eingetragener Abschnitt, Probe, Beschreibung, geplanter Name)
+      const snapshot = async (target = page, full = false) => {
+        const list = await kacheln(target);
+        if (!full) return list;
+        // Foto 1 wählen, dann mit → auf der fokussierten Kachel von Foto zu Foto (echte Tasten, schneller als je ein Klick)
+        await ui.foto(target, 0); await target.locator('#list .row').first().focus();
+        for (let i = 0; i < list.length; i++) {
+          if (i) await target.keyboard.press('ArrowRight');
+          const k = await target.evaluate(() => ({ desc: document.getElementById('fDesc').value, sec: document.getElementById('fSec').value, probe: document.getElementById('fProbe').value,
+            neu: document.getElementById('pvNew').textContent, name: document.getElementById('pvName').textContent }));
+          assert.equal(k.name, list[i].name); assert.equal(k.desc.trim(), list[i].desc); assert.equal(k.probe, list[i].probe);
+          Object.assign(list[i], { desc: k.desc, sec: k.sec, probe: k.probe, planned: geplant(k.neu, k.name) });
+        }
+        return list;
+      };
+      const later = async i => { await ui.foto(page, i); await page.locator('#pvLater').click(); };
+      const earlier = async i => { await ui.foto(page, i); await page.locator('#pvEarlier').click(); };
+      const mehrText = async id => { await page.click('#btnMehr'); const t = await page.locator('#mosaikMehrPop #' + id).textContent(); await page.keyboard.press('Escape'); return t; };
       const readFiles = () => page.evaluate(async () => {
         const out = {}; for await (const [n, h] of window.testFotos.entries()) if (/\.jpg$/i.test(n)) out[n] = Array.from(new Uint8Array(await (await h.getFile()).arrayBuffer())); return out;
       });
       const generated = ext => page.evaluate(async ext => {
         const out = []; for await (const [n, h] of window.testFotos.entries()) if (n.endsWith(ext)) out.push({ name: n, bytes: Array.from(new Uint8Array(await (await h.getFile()).arrayBuffer())) }); return out;
       }, ext);
-      const checkNumbers = async () => {
-        const all = await snapshot(), used = all.filter(x => !x.gone);
+      const checkNumbers = async (full = false) => {
+        const all = await snapshot(page, full), used = all.filter(x => !x.gone);
         assert.deepEqual(used.map(x => x.nr), used.map((_, i) => String(i + 1)));
         assert.ok(all.filter(x => x.gone).every(x => x.nr === '–'));
         for (const i of [0, Math.floor(used.length / 2), used.length - 1]) {
-          await active.nth(i).locator('.desc').click();
-          assert.match(await page.locator('#pvInfo').textContent(), new RegExp(`^Bild ${i + 1} von ${used.length} ·`));
+          await active.nth(i).locator('.tinfo').click();
+          assert.match(await page.locator('#pvPos').textContent(), new RegExp(`^Bild ${i + 1} von ${used.length} ·`));
           assert.equal(await page.locator('#pvName').textContent(), used[i].name);
         }
         return used;
@@ -114,7 +152,7 @@ function zipFiles(bytes) {
       const pdf = async (onlyDesc = false, perPage = 2) => {
         const expected = (await snapshot()).filter(x => !x.gone && (!onlyDesc || x.desc));
         const before = new Set((await generated('.pdf')).map(f => f.name));
-        await page.locator('#btnPdf').click(); assert.equal(await page.locator('#zOnly').isChecked(), false, 'jeder Export beginnt mit allen Bildern (auch nach einem früheren Export mit Filter)'); await page.locator('#zOnly').setChecked(onlyDesc);
+        await page.locator('#btnPdf').click(); await page.locator('#pEinst summary').click(); assert.equal(await page.locator('#zOnly').isChecked(), false, 'jeder Export beginnt mit allen Bildern (auch nach einem früheren Export mit Filter)'); await page.locator('#zOnly').setChecked(onlyDesc);
         await page.locator('#pPer').selectOption(String(perPage));
         if (onlyDesc) assert.match(await page.locator('#zInfo').textContent(), /Bildnummern wie in der Liste/);
         await page.locator('#zOk').click();
@@ -131,8 +169,7 @@ function zipFiles(bytes) {
         for (const t of imagePages.flatMap(p => p.text)) {
           if (/^Raum [AB]( \(Fortsetzung\))?$/.test(t)) currentSection = t.replace(' (Fortsetzung)', '');
           if (/^Bild \d+:?\s*$/.test(t)) {
-            const section = /^Abschnitt: (.*?) ·/.exec(expected[at++].section);
-            assert.equal(currentSection, section ? section[1] : '', 'Abschnittswechsel im gespeicherten PDF');
+            assert.equal(currentSection, expected[at++].section, 'Abschnittswechsel im gespeicherten PDF');
           }
         }
         console.log(`PDF OK (${count}): ${expected.length} Bilder, ${perPage}/Seite, Auswahl=${onlyDesc}`);
@@ -140,13 +177,17 @@ function zipFiles(bytes) {
       await open(); const originals = await readFiles();
       await checkNumbers(); await pdf();
       // Undescribed image 2 keeps its physical name, image 3 uses position 3 + start 7 - 1.
-      assert.equal((await snapshot())[2].planned, 'Test_009_P3_Motiv_003.jpg');
+      assert.equal(await planned(2), 'Test_009_P3_Motiv_003.jpg');
       const middle = Math.floor(count / 2); const discarded = (await snapshot())[middle];
-      await active.nth(middle).locator('.x').click(); await checkNumbers(); await pdf();
+      await rows.nth(middle).locator('.pick input').uncheck(); await checkNumbers(); await pdf();
+      // 2.0: das Weg-Foto bleibt an seinem Platz (früher ans Ende), seine Nummer entfällt, die folgenden rücken nach
+      { const nach = await snapshot(); assert.equal(nach[middle].gone, true, 'Weg-Foto bleibt an seinem Platz'); assert.equal(nach[middle].probe, discarded.probe);
+        assert.equal(nach.filter(x => x.gone).length, 1); if (middle + 1 < count) assert.equal(nach[middle + 1].nr, String(middle + 1), 'Bildnummer überspringt das Weg-Foto'); }
       assert.deepEqual(await readFiles(), originals, 'Aussortieren allein verändert keine Originaldatei');
-      await page.locator('#list .discarded .x').click(); await checkNumbers(); await pdf();
+      await page.locator('#list .discarded .pick input').check(); await checkNumbers(); await pdf();
       assert.equal((await snapshot())[middle].probe, discarded.probe);
-      await active.first().locator('.down').click(); await active.nth(1).locator('.down').click(); await active.nth(2).locator('.up').click();
+      // früher ▼ ▼ ▲ auf den Zeilen 1, 2, 3 – jetzt „Später ▸“ / „◂ Früher“ in der Fotokarte des jeweiligen Fotos
+      await later(0); await later(1); await earlier(2);
       await checkNumbers(); await pdf(true); await pdf(false, 1);
       // Real XML input: laboratory references keep the filtered PDF's list numbers.
       await pdf(true);
@@ -156,14 +197,14 @@ function zipFiles(bytes) {
         berichte: [{ id: 'b1', bericht: 'TEST-995', labor: 'Testlabor', auftragsreferenz: '26.0995', sources: { xml: 'Fiktiver-Bericht.xml' }, proben: [{ label: 'P1', ref: 'P1', desc: '', werte: [{ p: 'PAK', r: '2', u: 'mg/kg', loq: '0.1' }] }] }] });
       await page.evaluate(async text => { const p = await (await navigator.storage.getDirectory()).getDirectoryHandle('26.0995 Nummerierung'); const d = await p.getDirectoryHandle('Laborergebnisse', { create: true });
         const w = await (await d.getFileHandle('_Ergebnisse.json', { create: true })).createWritable(); await w.write(text); await w.close(); }, ergebnisse);
-      await page.locator('#btnLab').click();
+      await ui.mehr(page, 'mehrLab');
       assert.equal(await page.locator('#lFile').count(), 0, 'im Projekt keine XML direkt');
       await page.locator('#lPrev tbody tr').waitFor();
       assert.equal((await page.locator('#lPrev tbody tr td').last().textContent()).replace(/\s/g, ' '), `Bild ${labExpected.find(x => x.probe === 'P1').nr}`);
       await page.locator('#lClose').click();
       assert.deepEqual(await readFiles(), originals, 'Verschieben verändert keine Originaldatei');
-      const beforeRename = await snapshot();
-      await page.locator('#btnRename').click();
+      const beforeRename = await snapshot(page, true);
+      await ui.mehr(page, 'mehrUmbenennen');
       for (const x of beforeRename.filter(x => x.name !== x.planned)) assert.ok((await page.locator('#dialog .list').textContent()).includes(`${x.name} → ${x.planned}`));
       await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor({ timeout: 60000 }); await idle();
       const afterRename = await checkNumbers(), disk = await readFiles();
@@ -175,58 +216,63 @@ function zipFiles(bytes) {
       const csv = Buffer.from((await generated('.csv'))[0].bytes).toString('utf8').trim().split('\r\n').slice(1);
       assert.deepEqual(csv.map(s => s.split(';')[0]), afterRename.map(x => x.nr));
       // ZIP's real saved archive includes the same numbers and image bytes.
-      await page.locator('#btnZip').click(); await page.locator('#zOnly').uncheck(); await page.locator('#zShrink').uncheck(); await page.locator('#zRecord').uncheck();
+      await ui.mehr(page, 'mehrZip'); await page.locator('#zOnly').uncheck(); await page.locator('#zShrink').uncheck(); await page.locator('#zRecord').uncheck();
       await page.locator('#zOk').click(); await page.waitForFunction(() => !document.querySelector('#overlay').classList.contains('show') && /ZIP/.test(document.querySelector('#banner').textContent), null, { timeout: 60000 });
       const zip = zipFiles((await generated('.zip'))[0].bytes), text = [...zip].find(([n]) => n.endsWith('.txt'))[1].toString('utf8');
       assert.deepEqual([...text.matchAll(/^Bild (\d+)\r?$/gm)].map(m => m[1]), afterRename.map(x => x.nr));
       for (const x of afterRename) assert.deepEqual(zip.get(x.name), Buffer.from(disk[x.name]));
-      await active.first().locator('.down').click();
-      assert.match(await page.locator('#stats').getAttribute('title'), /Dateinamen passen noch nicht zum Plan/);assert.match(await page.locator('#btnRename').textContent(), /Ausführen: \d+ umbenennen/);
+      await later(0);
+      // früher Hinweis im Titel von #stats – jetzt steht die Zahl im Menüeintrag „Dateien umbenennen … (n umbenennen)“
+      assert.match(await mehrText('mehrUmbenennen'), /^Dateien umbenennen … \(\d+ umbenennen\)$/); assert.match(await page.locator('#btnRename').textContent(), /Ausführen: \d+ umbenennen/);
       assert.deepEqual(await readFiles(), disk, 'Nach Umbenennen erneut sortieren ändert keine Dateien');
       await checkNumbers(); await pdf();
-      const reordered = await snapshot();
+      const reordered = await snapshot(page, true);
       // Opening another window must read the saved order; Undo remains available
       // only in the original session, as before. Flush through the real export.
       const fresh = await ctx.newPage(); await fresh.goto(url);
       await fresh.evaluate(async () => { window.showDirectoryPicker = async () => (await navigator.storage.getDirectory()).getDirectoryHandle('26.0995 Nummerierung'); });
-      await fresh.locator('#btnOpen').click();
+      await ui.oeffnen(fresh);
       await fresh.waitForFunction(n => !document.body.inert && document.querySelectorAll('#list .row').length === n, count);
-      assert.deepEqual(await snapshot(fresh), reordered, 'Wiederöffnen erhält Reihenfolge, Nummern und Metadaten');
+      assert.deepEqual(await snapshot(fresh, true), reordered, 'Wiederöffnen erhält Reihenfolge, Nummern und Metadaten');
       await fresh.close();
       await page.locator('#bUndo').click(); await idle();
       await page.waitForFunction(() => /Rückgängig gemacht/.test(document.querySelector('#banner').textContent));
       assert.deepEqual(await readFiles(), originals, 'Rückgängig erhält alle Originalbytes und Dateinamen');
-      const undone = await checkNumbers();
+      const undone = await checkNumbers(true);
       assert.deepEqual(undone.map(x => [x.desc, x.sec, x.probe]), beforeRename.map(x => [x.desc, x.sec, x.probe]));
       // Name sort with numbering disabled used to reorder renamed descriptions on reload.
-      await page.locator('#btnNaming').click(); await page.locator('#oNum').uncheck(); await page.locator('#sort').selectOption('name');
+      await ui.namen(page); await page.locator('#oNum').uncheck(); await ui.namenZu(page); await ui.sortieren(page, 'name');
       const nameOrder = (await snapshot()).map(x => x.probe);
-      await page.locator('#btnRename').click(); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor({ timeout: 60000 });
+      await ui.mehr(page, 'mehrUmbenennen'); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor({ timeout: 60000 });
       assert.deepEqual((await snapshot()).map(x => x.probe), nameOrder);
       await open(); assert.deepEqual((await snapshot()).map(x => x.probe), nameOrder);
       if (count === 5) {
         // Repeated descriptions cause real filename swaps, not just fresh targets.
-        await page.locator('#oNum').check(); await page.locator('#oProbe').uncheck();
-        for (let i = 0; i < count; i++) await active.nth(i).locator('.desc').fill('Serie');
+        await ui.namen(page); await page.locator('#oNum').check(); await page.locator('#oProbe').uncheck(); await ui.namenZu(page);
+        for (let i = 0; i < count; i++) await ui.feld(page, 'desc', i).fill('Serie');
         const rename = async () => {
-          await page.locator('#btnRename').click(); await page.locator('#dOk').click();
+          await ui.mehr(page, 'mehrUmbenennen'); await page.locator('#dOk').click();
           await page.waitForFunction(() => !document.querySelector('#overlay').classList.contains('show') && document.querySelector('#bUndo'), null, { timeout: 60000 });
         };
         await rename(); const diskBeforeSwap = await readFiles();
-        const originalLabels = await active.evaluateAll(es => Object.fromEntries(es.map(e => [e.querySelector('.probe').value, e.querySelector('.orig').textContent])));
-        await active.first().locator('.down').click(); const swapped = await snapshot();
+        // Dateiname + „Original: …“ + Datum je Probe aus der Fotokarte (früher .orig der Zeile)
+        const labels = async () => { const out = {};
+          for (let i = 0; i < count; i++) { await ui.foto(page, i); out[await page.locator('#fProbe').inputValue()] = [await page.locator('#pvName').textContent(), ...(await page.locator('#pvInfo').textContent()).split(' · ').slice(0, 2)].join(' · '); }   // Name · Original · Datum (Abmessungen kommen erst mit der Vorschau)
+          return out; };
+        const originalLabels = await labels();
+        await later(0); const swapped = await snapshot();
         await rename(); await pdf();
         // Eine nach dem Lauf geänderte Beschreibung überlebt das Rückgängigmachen
-        const edited = await active.first().locator('.probe').inputValue();
-        await active.first().locator('.desc').fill('Serie nach dem Lauf');
+        const edited = await ui.feld(page, 'probe', 0).inputValue();
+        await ui.feld(page, 'desc', 0).fill('Serie nach dem Lauf');
         await page.locator('#bUndo').click();
         await page.waitForFunction(() => /Rückgängig gemacht/.test(document.querySelector('#banner').textContent));
-        const descsAfter = await active.evaluateAll(es => Object.fromEntries(es.map(e => [e.querySelector('.probe').value, e.querySelector('.desc').value])));
+        const descsAfter = Object.fromEntries((await snapshot(page, true)).map(x => [x.probe, x.desc]));
         assert.equal(descsAfter[edited], 'Serie nach dem Lauf', 'Undo überschreibt keine nach dem Lauf geänderte Beschreibung');
         assert.ok(Object.entries(descsAfter).every(([pr, d]) => pr === edited || d === 'Serie'), 'übrige Beschreibungen wie vor dem Lauf');
         assert.deepEqual(await readFiles(), diskBeforeSwap, 'Namenskreislauf und Undo erhalten Bildbytes');
         assert.deepEqual((await snapshot()).map(x => [x.name, x.probe]), swapped.map(x => [x.name, x.probe]));
-        const labelsAfter = await active.evaluateAll(es => Object.fromEntries(es.map(e => [e.querySelector('.probe').value, e.querySelector('.orig').textContent])));
+        const labelsAfter = await labels();
         assert.deepEqual(labelsAfter, originalLabels, 'Originalreferenzen überleben Namenskreislauf und Undo');
       }
       assert.deepEqual(errors, []);

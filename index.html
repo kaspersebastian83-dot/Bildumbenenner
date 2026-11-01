@@ -130,7 +130,7 @@ main#app{flex:1;flex-direction:column;gap:12px;min-height:0;padding:20px 32px 0}
 .pv-neu:empty{display:none}
 .pv-pos{font-size:13px;color:var(--muted)}
 /* ---------- Fußleiste: Mehr … · Status · eine Hauptaktion ---------- */
-footer{flex-shrink:0;display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;padding:14px 32px;background:var(--panel);border-top:1px solid var(--line)}
+footer{flex-shrink:0;position:relative;z-index:5;display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;padding:14px 32px;background:var(--panel);border-top:1px solid var(--line)}
 #btnMehr{height:48px;padding:0 18px;font-size:16px;display:inline-flex;align-items:center;gap:6px}
 #stats{display:flex;align-items:center;flex-wrap:wrap;justify-content:flex-end;gap:6px 12px;font-size:14px;color:var(--muted);min-width:0}
 #stats b{color:var(--text)}
@@ -164,10 +164,9 @@ footer{flex-shrink:0;display:flex;align-items:center;flex-wrap:wrap;gap:10px 16p
   #fkMeldung{padding:8px 12px 0}
   .fk-frage h1{font-size:22px}
 }
-@media (max-width:560px){ #btnPdf{flex:1 1 100%;font-size:17px} #list{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))} }
+@media (max-width:560px){ #btnPdf{flex:1 1 100%;font-size:17px;padding:0 14px;white-space:normal;line-height:1.2} #list{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))} }
 /* übernommen: Dialoge, Pflichtfelder, Hilfe, Meldungen, Ergebnistabelle */
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
 button,input,select,textarea{font:inherit;color:inherit}
 button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
 input[type=checkbox]{accent-color:var(--accent)}
@@ -505,7 +504,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.0.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:83f5e08be7f79564f7ae0abc2fefd7253930d39d5eb28b6950690e11472ff0fd';
+const APP_BUILD = 'sha256:758d60ab51d72275180a853a776fc0f9022b849e49c6ededf96ae7807de79e58';
 const APP_DATE = '2026-10-31';
 const CHANGELOG = [
   ['2.0.0', '01.11.2026', 'Neue, einfache Oberfläche (Spektron „einfache Oberfläche“): Oben das Kopfband wie in BerichtKit – Projekt groß, sechs Schritt-Kacheln, „Weiter: … →“. In der Mitte eine Frage: „Welche Fotos gehören in die Doku?“ – Fotos als große Kacheln (gelb = Beschreibung fehlt, abgeblendet = Weg), rechts die Karte des gewählten Fotos mit „Was ist zu sehen?“, „Gehört zu Probe“ (Vorschläge aus LabelKit), „Raum / Abschnitt“, Drehen, Weg und „◂ Früher / Später ▸“. Ein Zustand statt zwei: Haken „in der Doku“ auf der Kachel = dasselbe wie „Weg“ in der Karte, gespeichert wie früher das ✕; Weg-Fotos bleiben an ihrem Platz; Alle/Keine/Umkehren wirken sofort und lassen sich rückgängig machen (die Nachfrage „nicht angehakt“ vor dem Export entfällt). Die ▲▼✕-Knöpfe sind weg – Reihenfolge per Ziehen, Früher/Später oder Alt+←/→. Unten „Mehr …“ (Dateinamen, Sortierung, Dateien umbenennen, ZIP, Ergebnistabelle, Fotos neu einlesen, Sicherungen und Programmstand, Kurzanleitung, Handbuch, Rückmeldung), daneben der Stand („n Fotos ohne Beschreibung“ springt zum nächsten) und eine Hauptaktion „Bilddokumentation erstellen →“. Der Dialog dazu zeigt zuerst das Deckblatt (Pflichtangaben gelb), Bildqualität usw. unter „Einstellungen“; der eigene Knopf „Projektdaten …“ entfällt. Nach der ersten Bilddoku eines Projekts bietet FotoKit einmal an, die Dateien passend umzubenennen. Farben aus der Spektron-Leiste (FotoKit-Blau), Schrift Segoe UI. An Projektdatei, PDF, ZIP und der Verbindung zu den anderen Apps ändert sich nichts.'],

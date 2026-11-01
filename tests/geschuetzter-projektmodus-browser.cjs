@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const playwright = require('playwright');
+const ui = require('./fk-ui.cjs');
 const name = process.argv[2] || 'chromium';
 const root = path.join(__dirname, '..');
 const archiveName = 'Schutzmodus-Testarchiv';
@@ -26,12 +27,23 @@ let browser, server;
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}/index.html`;
-  browser = await playwright[name].launch();
+  // Chromium: eigenes (persistentes) Profil je Szenario – im Inkognito-Kontext stürzt Chromium 1243 (Playwright 1.63) beim Lesen eines
+  // in IndexedDB abgelegten Ordner-Handles ab (SIGTRAP, z. B. bei ?projekt=… und der Projektnavigation); echte Nutzer haben ein normales Profil.
+  const persistent = name === 'chromium';
+  if (!persistent) browser = await playwright[name].launch();
+  const newContext = async () => {
+    const opts = { viewport: { width: 1280, height: 900 } };
+    if (!persistent) return browser.newContext(opts);
+    const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'fk-profil-'));
+    const ctx = await playwright.chromium.launchPersistentContext(dir, opts);
+    ctx.on('close', () => fs.rmSync(dir, { recursive: true, force: true }));
+    return ctx;
+  };
 
   async function scenario(title, mode, run) {
-    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const ctx = await newContext();
     try {
-      const page = await ctx.newPage(), errors = [];
+      const page = ctx.pages()[0] || await ctx.newPage(), errors = [];
       page.on('pageerror', e => errors.push(e.message));
       page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
       await page.goto(base);
@@ -111,8 +123,8 @@ let browser, server;
         try { return await h.jsonValue(); } finally { await h.dispose(); }
       };
       const open = async key => {
-        await page.evaluate(key => { window.testNext = key; }, key); await page.locator('#btnOpen').click();
-        await page.waitForFunction(nr => !document.body.inert && document.querySelectorAll('#list .row').length === 2 && document.querySelector('#projBadge').textContent.includes(nr), projects[key].split(' ')[0]);
+        await page.evaluate(key => { window.testNext = key; }, key); await ui.oeffnen(page);
+        await page.waitForFunction(nr => !document.body.inert && document.querySelectorAll('#list .row').length === 2 && document.querySelector('#mosaikLeiste .ml-proj strong')?.textContent.includes(nr), projects[key].split(' ')[0]);
       };
       const before = await snapshot();
       await run({ page, open, snapshot, before, base });
@@ -140,10 +152,11 @@ let browser, server;
   }
 
   if (!(await scenario('Unterstütztes Projekt: Umbenennen, Aussortieren und Rückgängig', 'normal', async ({ page, open, snapshot, before }) => {
-    await open('A'); await page.locator('#list .desc').first().fill('Neu beschrieben');
-    await page.locator('#list .row').nth(1).locator('.x').click();
+    await open('A'); await ui.feld(page, 'desc', 0).fill('Neu beschrieben');
+    await ui.inDoku(page, 1, false);   // Haken weg = „Weg“ (früher ✕)
     assert.equal(await page.locator('#btnRename').isEnabled(), true);
-    await page.locator('#btnRename').click(); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor();
+    assert.equal(await ui.mehrAus(page, 'mehrUmbenennen'), false);
+    await ui.mehr(page, 'mehrUmbenennen'); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor();
     let files = await snapshot();
     const prefix = projects.A + '/Fotos/';
     assert.deepEqual(files[prefix + '01_P1_Neu_beschrieben.jpg'], before[prefix + 'IMG_0001.jpg']);
@@ -160,7 +173,7 @@ let browser, server;
   await scenario('Unterstütztes Projekt: Kopierfallback und Rückgängig', 'normal', async ({ page, open, snapshot, before }) => {
     await open('A');
     await page.evaluate(() => { FileSystemFileHandle.prototype.move = async () => { throw new DOMException('Synthetisch kein natives Umbenennen', 'NotSupportedError'); }; });
-    await page.locator('#btnRename').click(); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor();
+    await ui.mehr(page, 'mehrUmbenennen'); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor();
     assert.match(await page.locator('#banner').textContent(), /Kopiermodus/);
     await page.locator('#bUndo').click(); await page.waitForFunction(() => document.querySelector('#banner').textContent.includes('Rückgängig gemacht'));
     const after = await snapshot();
@@ -174,18 +187,18 @@ let browser, server;
         for (const recovery of ['retry', 'autosave']) {
           await scenario(`Metadatenfehler ${action}/${stage}, Kopiermodus=${copyFallback}, Erholung=${recovery}: Dateizuordnung bleibt erhalten`, 'normal', async ({page, open, snapshot, before, base}) => {
             await open('A');
-            await page.locator('#list .desc').first().fill('Neue Eingabe');
-            await page.locator('#list .row').nth(1).locator('.x').click();
+            await ui.feld(page, 'desc', 0).fill('Neue Eingabe');
+            await ui.inDoku(page, 1, false);
             // Änderungen vor der Dateiaktion sicher abschließen. Der injizierte
             // Fehler betrifft damit die Metadaten nach der physischen Aktion.
-            await page.locator('#btnReload').click();
-            await page.waitForFunction(() => !document.body.inert && document.querySelector('#list .desc')?.value === 'Neue Eingabe');
+            await ui.mehr(page, 'mehrReload');
+            await page.waitForFunction(() => !document.body.inert && document.querySelector('#list .row .tdesc')?.textContent === 'Neue Eingabe');
             if (copyFallback) await page.evaluate(() => {
               FileSystemFileHandle.prototype.move = async () => { throw new DOMException('Synthetischer Kopierfallback', 'NotSupportedError'); };
             });
             const renamed = '01_P1_Neue_Eingabe.jpg', prefix = projects.A + '/Fotos/';
             if (action === 'undo') {
-              await page.locator('#btnRename').click();await page.locator('#dOk').click();await page.locator('#bUndo').waitFor();
+              await ui.mehr(page, 'mehrUmbenennen');await page.locator('#dOk').click();await page.locator('#bUndo').waitFor();
             }
             const savedBefore = await snapshot();
             await page.evaluate(stage => {
@@ -206,14 +219,14 @@ let browser, server;
                 return w;
               };
             }, stage);
-            if (action === 'rename') {await page.locator('#btnRename').click();await page.locator('#dOk').click();}
+            if (action === 'rename') {await ui.mehr(page, 'mehrUmbenennen');await page.locator('#dOk').click();}
             else await page.locator('#bUndo').click();
             await page.locator('#bSaveRetry').waitFor({timeout: 10000});
             assert.match(await page.locator('#banner').getAttribute('class'), /err/);
             assert.doesNotMatch(await page.locator('#banner').textContent(), /✓|Rückgängig gemacht/);
-            assert.equal(await page.locator('#list .desc').first().inputValue(), 'Neue Eingabe');
-            assert.equal(await page.locator('#list .sec').first().inputValue(), 'Küche');
-            assert.equal(await page.locator('#list .probe').first().inputValue(), 'P1');
+            assert.equal(await ui.feld(page, 'desc', 0).inputValue(), 'Neue Eingabe');
+            assert.equal(await ui.feld(page, 'sec', 0).inputValue(), 'Küche');
+            assert.equal(await ui.feld(page, 'probe', 0).inputValue(), 'P1');
             const failed = await snapshot();
             assert.deepEqual(failed[prefix + '_Bildumbenenner.json'], savedBefore[prefix + '_Bildumbenenner.json'], 'Fehlerhafte Speicherung verändert die bisherige JSON nicht');
             const currentName = action === 'rename' ? renamed : 'IMG_0001.jpg';
@@ -228,7 +241,7 @@ let browser, server;
             assertInventoryWithVersions(retried, failed, prefix);
             for (const [n, bytes] of Object.entries(failed)) assert.deepEqual(retried[n], bytes, 'Retry preserves every existing byte: ' + n);
             await page.evaluate(() => window.failMetadataSave = false);
-            await page.locator('#list .desc').first().fill('Neu nach Speicherfehler');
+            await ui.feld(page, 'desc', 0).fill('Neu nach Speicherfehler');
             if (recovery === 'retry') await page.locator('#bSaveRetry').click();
             await page.waitForFunction(() => !document.body.inert && !document.querySelector('#bSaveRetry') && document.querySelector('#banner').classList.contains('ok'), null, {timeout: 10000});
             assert.match(await page.locator('#banner').textContent(), action === 'rename' ? /umbenannt/ : /Rückgängig gemacht/);
@@ -253,9 +266,10 @@ let browser, server;
             for (const [n, bytes] of Object.entries(before)) if (n.startsWith(projects.B + '/') || n.endsWith('_Projekt.json')) assert.deepEqual(after[n], bytes, n);
             const fresh = await page.context().newPage();
             await fresh.goto(base + '?projekt=' + encodeURIComponent(projects.A));
-            await fresh.waitForFunction(() => !document.body.inert && document.querySelector('#list .desc')?.value === 'Neu nach Speicherfehler');
-            assert.equal(await fresh.locator('#list .sec').first().inputValue(), 'Küche');
-            assert.equal(await fresh.locator('#list .probe').first().inputValue(), 'P1');
+            await fresh.waitForFunction(() => !document.body.inert && document.querySelector('#list .row .tdesc')?.textContent === 'Neu nach Speicherfehler');
+            assert.equal(await ui.feld(fresh, 'desc', 0).inputValue(), 'Neu nach Speicherfehler');
+            assert.equal(await ui.feld(fresh, 'sec', 0).inputValue(), 'Küche');
+            assert.equal(await ui.feld(fresh, 'probe', 0).inputValue(), 'P1');
             await fresh.close();
             if (action === 'rename') {
               // Rückgängig bleibt auch nach wiederholtem Speicher-Retry erreichbar.
@@ -281,10 +295,10 @@ let browser, server;
         return create.apply(this, args);
       };
     });
-    await page.locator('#btnRename').click();await page.locator('#dOk').click();await page.locator('#bSaveRetry').waitFor();
+    await ui.mehr(page, 'mehrUmbenennen');await page.locator('#dOk').click();await page.locator('#bSaveRetry').waitFor();
     await page.evaluate(() => window.failMetadataSave = false);
     await open('B');
-    await page.locator('#list .desc').first().fill('B nach Projektwechsel');
+    await ui.feld(page, 'desc', 0).fill('B nach Projektwechsel');
     await waitForAsync(page, async () => {
       const r = await navigator.storage.getDirectory(), a = await r.getDirectoryHandle('Schutzmodus-Testarchiv');
       const h = await (await (await a.getDirectoryHandle('26.0802 Test B')).getDirectoryHandle('Fotos')).getFileHandle('_Bildumbenenner.json');
@@ -304,11 +318,14 @@ let browser, server;
       await open('A');
       assert.equal(await page.evaluate(() => window.fotoTest.readOnly()), true);
       assert.equal(await page.locator('#btnRename').isDisabled(), true);
+      assert.equal(await ui.mehrAus(page, 'mehrUmbenennen'), true, '„Dateien umbenennen …“ im Menü gesperrt');
       assert.match(await page.locator('#banner').textContent(), /Originalfotos.*geschützt.*kompatible FotoKit-Version/);
       assert.deepEqual(await snapshot(), before, 'Öffnen erhält alle Bytes');
-      await page.locator('#list .desc').first().fill('Nur Sitzung');
-      await page.locator('#list .desc').first().press('Alt+x');
+      await ui.feld(page, 'desc', 0).fill('Nur Sitzung');
+      await ui.feld(page, 'desc', 0).press('Alt+x');
+      assert.equal(await page.locator('#list .row').first().evaluate(e => e.classList.contains('discarded')), true, 'Alt+X legt das Foto auf „Weg“');
       assert.equal(await page.locator('#btnRename').isDisabled(), true);
+      assert.equal(await ui.mehrAus(page, 'mehrUmbenennen'), true);
       assert.match(await page.locator('#stats').textContent(), /geschützter Modus/);
       assert.deepEqual(await snapshot(), before, 'Tastaturweg verändert keine Dateien');
       const actions = ['button-handler', 'doRename', 'undo', 'runPairs', 'runMoves', 'undoMoves', 'transfer', 'renameFile', 'moveBetween'];
@@ -339,23 +356,29 @@ let browser, server;
       }
       assert.equal(await page.locator('#bUndo').count(), 0, 'Kein erfolgreicher Änderungsabschluss');
       await open('B'); assert.equal(await page.evaluate(() => window.fotoTest.readOnly()), false);
-      await page.locator('#list .desc').first().fill('B regulär'); assert.equal(await page.locator('#btnRename').isEnabled(), true);
-      await page.locator('#btnRename').click(); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor();
+      // Manche Chromium-Builds (z. B. 1243 in der lokalen Sandbox) können im Origin Private File System keine Dateinamen mit Umlaut
+      // anlegen (TypeMismatchError) – dann ohne Umlaut, sonst wie bisher „regulär“.
+      const umlautOk = await page.evaluate(async () => { const r = await navigator.storage.getDirectory();
+        try { await r.getFileHandle('umlaut-probe-ä.tmp', { create: true }); await r.removeEntry('umlaut-probe-ä.tmp'); return true; } catch (e) { return false; } });
+      if (!umlautOk) console.log(`HINWEIS (${name}): OPFS ohne Umlaut-Dateinamen – „B regulaer“ statt „B regulär“`);
+      const wort = umlautOk ? 'regulär' : 'regulaer';
+      await ui.feld(page, 'desc', 0).fill('B ' + wort); assert.equal(await page.locator('#btnRename').isEnabled(), true);
+      await ui.mehr(page, 'mehrUmbenennen'); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor();
       const after = await snapshot();
       for (const [n, bytes] of Object.entries(before)) if (n.startsWith(projects.A + '/')) assert.deepEqual(after[n], bytes, `A bleibt nach Wechsel geschützt: ${n}`);
-      assert.ok(after[projects.B + '/Fotos/01_P1_B_regulär.jpg'], 'Reguläre Dateiumbenennung nach Projektwechsel wieder möglich');
+      assert.ok(after[projects.B + `/Fotos/01_P1_B_${wort}.jpg`], 'Reguläre Dateiumbenennung nach Projektwechsel wieder möglich');
     });
   }
 
   await scenario('Älteres Projekt ohne Formatkennzeichen bleibt bearbeitbar', 'legacy', async ({ page, open }) => {
     await open('A'); assert.equal(await page.evaluate(() => window.fotoTest.readOnly()), false);
-    await page.locator('#btnRename').click(); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor();
+    await ui.mehr(page, 'mehrUmbenennen'); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor();
   });
 
   await scenario('Neues Projekt ohne Projektdatei bleibt bearbeitbar', 'missing', async ({ page, open, snapshot }) => {
     await open('A'); assert.equal(await page.evaluate(() => window.fotoTest.readOnly()), false);
-    await page.locator('#list .desc').first().fill('Erstes Bild');
-    await page.locator('#btnRename').click(); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor();
+    await ui.feld(page, 'desc', 0).fill('Erstes Bild');
+    await ui.mehr(page, 'mehrUmbenennen'); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor();
     const after = await snapshot();
     // Projekt ab 26.0560 ohne bisherige Projektdatei: seit der Umstellung liegt sie gleich in „_Spektron/FotoKit“ (spektron-ordner.js); Fotos bleiben in „Fotos“
     assert.ok(after[projects.A + '/_Spektron/FotoKit/_Bildumbenenner.json']);
@@ -370,12 +393,13 @@ let browser, server;
     assert.match(await page.locator('#mosaikLeiste .ml-proj').textContent(), /26\.0801/);
     assert.equal(await page.locator('#btnPdf').isEnabled(), true);
     assert.equal(await page.locator('#btnZip').isEnabled(), true);
+    assert.equal(await ui.mehrAus(page, 'mehrZip'), false, '„ZIP für KI exportieren …“ im Menü verfügbar');
     await page.locator('#pvImgWrap').click(); assert.equal(await page.locator('#lightbox').evaluate(e => e.classList.contains('show')), true);
     await page.keyboard.press('Escape');
     await page.locator('#btnPdf').click(); await page.locator('#m_objekt').fill('Nur für diese Ausgabe'); await page.locator('#zOk').click();
     await page.locator('.pdfOpen').waitFor();
     await page.evaluate(() => { window.showSaveFilePicker = async opts => window.fotoTest.dir().getFileHandle(opts.suggestedName, { create: true }); });
-    await page.locator('#btnZip').click(); await page.locator('#zOk').click();
+    await ui.mehr(page, 'mehrZip'); await page.locator('#zOk').click();
     await page.waitForFunction(() => document.querySelector('#banner').textContent.includes('ZIP gespeichert'));
     let after = await snapshot();
     for (const [n, bytes] of Object.entries(before)) assert.deepEqual(after[n], bytes, `Export erhält Original-/Projektdatei ${n}`);
@@ -389,17 +413,17 @@ let browser, server;
         if (target === '_Projekt.json') { const a = await (await navigator.storage.getDirectory()).getDirectoryHandle('Schutzmodus-Testarchiv'); return (await a.getDirectoryHandle('26.0801 Test A')).getFileHandle(target); }
         return window.fotoTest.dir().getFileHandle(target);
       }; }, target);
-      await page.locator('#btnZip').click(); await page.locator('#zOk').click();
+      await ui.mehr(page, 'mehrZip'); await page.locator('#zOk').click();
       await page.waitForFunction(() => document.querySelector('#banner').textContent.includes('ZIP-Export fehlgeschlagen'));
       assert.deepEqual(await snapshot(), beforeBadTarget, `ZIP darf ${target} nicht ersetzen`);
     }
     await page.locator('#mosaikLeiste .ml-proj').click();
     await Promise.all([page.waitForURL(/projekt=26\.0802/), page.locator('#mosaikLeistePop a', { hasText: projects.B }).click()]);
-    await page.waitForFunction(() => !document.body.inert && document.querySelector('#projBadge').textContent.includes('26.0802'));
+    await page.waitForFunction(() => !document.body.inert && document.querySelector('#mosaikLeiste .ml-proj strong')?.textContent.includes('26.0802'));
     assert.equal(await page.evaluate(() => window.fotoTest.readOnly()), false);
     after = await snapshot(); for (const [n, bytes] of Object.entries(before)) assert.deepEqual(after[n], bytes, `Navigation erhält ${n}`);
   });
 })().catch(e => { console.error(e); process.exitCode = 1; }).finally(async () => {
-  if (browser) await browser.close();
+  if (browser) await browser.close().catch(() => {});
   if (server) await new Promise(resolve => server.close(resolve));
 });

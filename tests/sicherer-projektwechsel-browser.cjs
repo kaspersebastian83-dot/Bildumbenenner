@@ -1,11 +1,13 @@
 const { waitForAsync } = require('./await-condition.cjs');
 // Synthetische Projekte im OPFS; echte UI und echte Dateiinhalte, keine App-Interna.
+// FotoKit 2.0: Öffnen über Startseite/„Mehr …“, Beschreibung in der Fotokarte, Projekt im Kopfband, Projektdaten im Deckblatt des PDF-Dialogs.
 // node tests/sicherer-projektwechsel-browser.cjs [chromium|webkit]
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const playwright = require('playwright');
+const ui = require('./fk-ui.cjs');
 const name = process.argv[2] || 'chromium';
 const root = path.join(__dirname, '..');
 const projects = { A: '26.0901 Test A', B: '26.0902 Test B', C: '26.0903 Test C' };
@@ -91,25 +93,28 @@ let browser, server;
       };
       const idle = () => page.waitForFunction(() => !document.body.inert && document.querySelectorAll('#list .row').length === 2);
       const open = async key => {
-        await page.evaluate(key => { window.testNext = key; }, key); await page.locator('#btnOpen').click();
-        await page.waitForFunction(nr => !document.body.inert && document.querySelectorAll('#list .row').length === 2 && document.querySelector('#projBadge').textContent.includes(nr), projects[key].split(' ')[0]);
+        await page.evaluate(key => { window.testNext = key; }, key); await ui.oeffnen(page);
+        await page.waitForFunction(nr => !document.body.inert && document.querySelectorAll('#list .row').length === 2 && (document.querySelector('#mosaikLeiste .ml-proj strong')?.textContent || '').includes(nr), projects[key].split(' ')[0]);
       };
-      const description = page.locator('#list .desc').first();
-      const assertA = async value => { await idle(); assert.match(await page.locator('#projBadge').textContent(), /26\.0901/); assert.equal(await description.inputValue(), value); };
+      // Beschreibung des ersten Fotos – FotoKit 2.0: Fotokarte #fDesc für das gewählte Foto (ui.feld wählt es vorher)
+      const description = ui.feld(page, 'desc', 0);
+      // Projekt steht im Kopfband (früher #projBadge)
+      const badge = () => page.locator('#mosaikLeiste .ml-proj strong').first();
+      const assertA = async value => { await idle(); assert.match(await badge().textContent(), /26\.0901/); assert.equal(await description.inputValue(), value); };
       const fail = async (file = '_Bildumbenenner.json', stage = 'create', error = 'Error') => page.evaluate(([file, stage, error]) => Object.assign(window.io, { fail: file, stage, error }), [file, stage, error]);
       const recover = () => page.evaluate(() => { window.io.fail = ''; });
       const hold = file => page.evaluate(file => { window.io.hold = file; window.releaseWrite = null; }, file);
       const started = () => page.waitForFunction(() => typeof window.releaseWrite === 'function');
       const release = () => page.evaluate(() => window.releaseWrite());
       const nextWithoutWaiting = async key => {
-        await page.evaluate(key => { window.testNext = key; }, key); await page.locator('#btnOpen').click();
+        await page.evaluate(key => { window.testNext = key; }, key); await ui.oeffnen(page);
       };
       const rejected = async text => {
         await page.waitForFunction(text => !document.body.inert && document.querySelector('#banner').textContent.includes(text), text);
         assert.equal(await page.locator('#bSaveRetry').isVisible(), true);
       };
       const before = { A: await read('A'), B: await read('B'), C: await read('C') };
-      await run({ page, open, read, description, idle, assertA, fail, recover, hold, started, release, nextWithoutWaiting, rejected, before });
+      await run({ page, open, read, description, badge, idle, assertA, fail, recover, hold, started, release, nextWithoutWaiting, rejected, before });
       assert.deepEqual((await read('A')).images, before.A.images, 'Originalbilder A unverändert');
       assert.deepEqual(await read('C'), before.C, 'Unbeteiligtes Projekt C vollständig unverändert');
       assert.deepEqual(errors, [], 'Keine JavaScript-/Konsolenfehler');
@@ -162,7 +167,7 @@ let browser, server;
     assert.equal((await read('A')).json.bilder['IMG_0002.jpg'].beschreibung, 'A nach Streamfehler');
   });
 
-  await scenario('Laufender Autosave, schnelle Änderungen und konkurrierende Wechsel', async ({ page, open, read, description, hold, started, release, nextWithoutWaiting, before }) => {
+  await scenario('Laufender Autosave, schnelle Änderungen und konkurrierende Wechsel', async ({ page, open, read, description, badge, hold, started, release, nextWithoutWaiting, before }) => {
     await open('A'); await hold('_Bildumbenenner.json');
     await description.fill('A erster Stand'); await started();
     // Der erste Schreibvorgang ist begonnen, aber noch nicht abgeschlossen.
@@ -170,30 +175,30 @@ let browser, server;
     await nextWithoutWaiting('B');
     await page.waitForFunction(() => document.body.inert);
     assert.equal(await page.locator('body').evaluate(e => e.inert), true);
-    assert.match(await page.locator('#projBadge').textContent(), /26\.0901/);
+    assert.match(await badge().textContent(), /26\.0901/);
     assert.deepEqual(await read('B'), before.B);
     // Ein weiterer programmatischer Klick darf den laufenden Wechsel nicht überholen.
     await page.evaluate(() => document.querySelector('#btnReload').click());
     await release();
-    await page.waitForFunction(() => !document.body.inert && document.querySelector('#projBadge').textContent.includes('26.0902'));
+    await page.waitForFunction(() => !document.body.inert && (document.querySelector('#mosaikLeiste .ml-proj strong')?.textContent || '').includes('26.0902'));
     assert.equal((await read('A')).json.bilder['IMG_0002.jpg'].beschreibung, 'A letzter Stand');
     assert.deepEqual(await read('B'), before.B);
   });
 
   await scenario('Neu einlesen verwirft bei Speicherfehler keine Eingaben', async ({ page, open, description, fail, rejected, assertA, recover, idle, read }) => {
     await open('A'); await fail(); await description.fill('A vor Neu einlesen');
-    await page.locator('#btnReload').click(); await rejected('erneute Einlesen wurde deshalb abgebrochen');
+    await ui.mehr(page, 'mehrReload'); await rejected('erneute Einlesen wurde deshalb abgebrochen');
     await assertA('A vor Neu einlesen');
-    await recover(); await page.locator('#btnReload').click(); await idle();
+    await recover(); await ui.mehr(page, 'mehrReload'); await idle();
     assert.equal(await description.inputValue(), 'A vor Neu einlesen');
     assert.equal((await read('A')).json.bilder['IMG_0002.jpg'].beschreibung, 'A vor Neu einlesen');
   });
 
-  await scenario('Gemeinsame Projektdaten: fehlgeschlagenen Patch erhalten und erneut speichern', async ({ page, open, fail, read, before, recover, nextWithoutWaiting, rejected }) => {
+  await scenario('Gemeinsame Projektdaten: fehlgeschlagenen Patch erhalten und erneut speichern', async ({ page, open, fail, read, before, badge, recover, nextWithoutWaiting, rejected }) => {
     await open('A'); await fail('_Projekt.json', 'close');
-    await page.locator('#btnMeta').click(); await page.locator('#m_objekt').fill('A gemeinsamer neuer Stand'); await page.locator('#zCancel').click();
+    await page.locator('#btnPdf').click(); await page.locator('#m_objekt').fill('A gemeinsamer neuer Stand'); await page.locator('#zCancel').click();
     await nextWithoutWaiting('B'); await rejected('Projektwechsel wurde deshalb abgebrochen');
-    assert.match(await page.locator('#projBadge').textContent(), /26\.0901/);
+    assert.match(await badge().textContent(), /26\.0901/);
     assert.equal((await read('A')).pj.objekt, 'Objekt A');
     assert.deepEqual(await read('B'), before.B);
     await recover(); await open('B');
@@ -203,7 +208,7 @@ let browser, server;
 
   await scenario('Neuere gemeinsame Eingaben überleben Fehler eines laufenden Schreibvorgangs', async ({ page, open, fail, hold, started, release, recover, read }) => {
     await open('A'); await hold('_Projekt.json'); await fail('_Projekt.json', 'close');
-    await page.locator('#btnMeta').click(); await page.locator('#m_objekt').fill('A älterer Patch'); await started();
+    await page.locator('#btnPdf').click(); await page.locator('#m_objekt').fill('A älterer Patch'); await started();
     await page.locator('#m_objekt').fill('A neuester Patch');
     await release();
     await page.waitForFunction(() => document.querySelector('#banner').textContent.includes('nicht gespeichert'));
@@ -211,23 +216,23 @@ let browser, server;
     assert.equal((await read('A')).pj.objekt, 'A neuester Patch');
   });
 
-  await scenario('Gemeinsamen laufenden Schreibvorgang vor dem Wechsel abwarten', async ({ page, open, hold, started, release, nextWithoutWaiting, read, before }) => {
+  await scenario('Gemeinsamen laufenden Schreibvorgang vor dem Wechsel abwarten', async ({ page, open, hold, started, release, nextWithoutWaiting, read, before, badge }) => {
     await open('A'); await hold('_Projekt.json');
-    await page.locator('#btnMeta').click(); await page.locator('#m_objekt').fill('A verzögerte Projektdaten'); await page.locator('#zCancel').click(); await started();
+    await page.locator('#btnPdf').click(); await page.locator('#m_objekt').fill('A verzögerte Projektdaten'); await page.locator('#zCancel').click(); await started();
     await nextWithoutWaiting('B');
-    assert.match(await page.locator('#projBadge').textContent(), /26\.0901/); assert.deepEqual(await read('B'), before.B);
-    await release(); await page.waitForFunction(() => !document.body.inert && document.querySelector('#projBadge').textContent.includes('26.0902'));
+    assert.match(await badge().textContent(), /26\.0901/); assert.deepEqual(await read('B'), before.B);
+    await release(); await page.waitForFunction(() => !document.body.inert && (document.querySelector('#mosaikLeiste .ml-proj strong')?.textContent || '').includes('26.0902'));
     assert.equal((await read('A')).pj.objekt, 'A verzögerte Projektdaten');
   });
 
   for (const file of ['_Bildumbenenner.json', '_Projekt.json']) {
     await scenario(`App-Update schützt ${file} und lädt erst nach erfolgreichem Retry neu`, async ({ page, open, fail, recover, description, rejected, read, assertA }) => {
       await open('A');
-      // Nur den vorhandenen Updateknopf sichtbar machen; sein echter Handler bleibt unverändert.
-      await page.evaluate(() => { document.querySelector('#btnUpd').hidden = false; });
+      // Nur den vorhandenen Updateknopf (jetzt in #fkMeldung unter dem Kopfband) sichtbar machen; sein echter Handler bleibt unverändert.
+      await page.evaluate(() => { document.querySelector('#fkMeldung').hidden = false; document.querySelector('#btnUpd').hidden = false; });
       await fail(file);
       if (file === '_Projekt.json') {
-        await page.locator('#btnMeta').click(); await page.locator('#m_objekt').fill('A vor Update'); await page.locator('#zCancel').click();
+        await page.locator('#btnPdf').click(); await page.locator('#m_objekt').fill('A vor Update'); await page.locator('#zCancel').click();
       }
       await description.fill('A Bild vor Update');
       let navigations = 0; page.on('framenavigated', f => { if (f === page.mainFrame()) navigations++; });
@@ -242,10 +247,10 @@ let browser, server;
   }
 
   for (const file of ['_Bildumbenenner.json', '_Projekt.json']) {
-    await scenario(`Browser-Reload warnt auch während ${file} noch geschrieben wird`, async ({ page, open, hold, started, release, description, read }) => {
+    await scenario(`Browser-Reload warnt auch während ${file} noch geschrieben wird`, async ({ page, open, hold, started, release, description, read, badge }) => {
       await open('A'); await hold(file);
       if (file === '_Projekt.json') {
-        await page.locator('#btnMeta').click(); await page.locator('#m_objekt').fill('A vor Browser-Reload'); await page.locator('#zCancel').click();
+        await page.locator('#btnPdf').click(); await page.locator('#m_objekt').fill('A vor Browser-Reload'); await page.locator('#zCancel').click();
       } else await description.fill('A vor Browser-Reload');
       await started();
       const dialog = page.waitForEvent('dialog');
@@ -253,7 +258,7 @@ let browser, server;
       // browser's reload call lets us verify that cancellation without a timeout.
       const reload = page.evaluate(() => location.reload());
       const d = await dialog; assert.equal(d.type(), 'beforeunload'); await d.dismiss(); await reload;
-      assert.match(await page.locator('#projBadge').textContent(), /26\.0901/);
+      assert.match(await badge().textContent(), /26\.0901/);
       await release();
       await page.waitForFunction(file => window.io.ends.includes(file), file);
       if (file === '_Projekt.json') assert.equal((await read('A')).pj.objekt, 'A vor Browser-Reload');
