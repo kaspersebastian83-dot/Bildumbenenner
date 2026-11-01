@@ -535,7 +535,7 @@ footer{box-shadow:0 -1px 3px rgba(40,72,116,.06);padding:10px 20px}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '1.34.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:b0483826697329926775065c6a73667268573b93f0902981f25c03bbf43b30f2';
+const APP_BUILD = 'sha256:8ef0840f72be51a2d9f4185ed93a744ee91062ef28e5914e5a7eb1bf1e40ee7c';
 const APP_DATE = '2026-10-31';
 const CHANGELOG = [
   ['1.34.0', '01.11.2026', 'Spektron-Leiste v2: Schritt „BerichtKit · Brandbericht“ bzw. „· Asbestbericht“, wenn BerichtKit sich die Berichtsart des Projekts gemerkt hat (der Link öffnet genau diese); Haken bei BerichtKit nur für einen gespeicherten Bericht dieser Art, dessen Datei noch in „Mitteilungen“ liegt (Projekte ohne BerichtKit-Angaben wie bisher nach dem Dateinamen). Nach dem gespeicherten Bericht heißt der Knopf „Weiter: Ans Büro übergeben →“ (Projektzentrale, eigenes Fenster). „Weiter“ nennt im Tooltip Ziel und Grund. Keine Nummern mehr an den Schritten (✓ reicht), die eigene App ist deutlicher markiert, „Aktuelles Projekt“ im Projektmenü lädt nicht mehr neu.'],
@@ -5250,8 +5250,14 @@ updateExample();
       if (pl) for await (var g of pl.values()) if (g.kind === 'file' && /\.probenplan$/i.test(g.name) && !/ \((vorher|Wiederherstellung|Speicherkandidat|Kopie)\b[^)]*\)\.probenplan$/i.test(g.name)){ s.plan = true; break; }
     }catch(e6){}
     try{   // Bericht in „Mitteilungen“ (bleibt dort, auch in Spektron-Projekten): „1._Mitteilung_26.0528.docx“ (BerichtKit) wie „1__Mitteilung.docx“
-      var mi = await unterordner(proj, 'Mitteilungen'), da = {}, mitteilung = false;
-      if (mi) for await (var m of mi.values()) if (m.kind === 'file'){ da[nfc(m.name).toLowerCase()] = true; if (/^\d+[._\s]*Mitteilung(?![a-zäöüß]).*\.docx$/i.test(nfc(m.name))) mitteilung = true; }
+      var mi = await unterordner(proj, 'Mitteilungen'), da = {}, mitteilung = null;
+      if (mi) for await (var m of mi.values()) if (m.kind === 'file'){
+        da[nfc(m.name).toLowerCase()] = true;
+        if (/^\d+[._\s]*Mitteilung(?![a-zäöüß]).*\.docx$/i.test(nfc(m.name))){   // neueste Mitteilung merken (für „Ans Büro übergeben“ ohne _BerichtKit.json)
+          var mt = 0; try{ mt = (await m.getFile()).lastModified; }catch(eM){}
+          if (!mitteilung || mt > mitteilung.t) mitteilung = { name: m.name, t: mt };
+        }
+      }
       var bj = await berichtDatei(proj, mi), art = gemerkteArt(bj);
       s.berichtArt = art;
       if (art){   // Haken nur für einen gespeicherten Bericht der gemerkten Art, dessen Datei noch da ist
@@ -5259,7 +5265,7 @@ updateExample();
         var gs = gb.filter(function(b){ return da[nfc(b.datei).toLowerCase()]; });
         if (gs.length){ s.bericht = true; s.berichtDatei = gs[gs.length - 1].datei; }
         else if (gb.length) s.berichtWeg = gb[gb.length - 1].datei;   // gespeichert, aber die Datei ist nicht mehr da
-      } else if (!bj) s.bericht = mitteilung;   // ohne _BerichtKit.json: wie v1 nach dem Dateinamen
+      } else if (!bj && mitteilung){ s.bericht = true; s.berichtDatei = mitteilung.name; }   // ohne _BerichtKit.json: wie v1 nach dem Dateinamen
     }catch(e9){}
     try{
       var ab = await bereich('belegkit', 'Abrechnung');
