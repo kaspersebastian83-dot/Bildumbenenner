@@ -1,11 +1,13 @@
-// FotoKit 1.28: Bilder für die Doku auswählen – Haken je Zeile, „Alle“/„Keine“/„Umkehren“, „… nicht angehakte aussortieren“,
-// Nachfrage vor PDF/ZIP/Umbenennen bei nicht angehakten Bildern. node tests/auswahl-browser.cjs [chromium|webkit]
+// FotoKit 2.0: „in der Doku“ / Weg – ein Zustand statt zwei (ersetzt die Haken-Auswahl aus 1.28). Haken auf der Kachel = in der Doku,
+// ohne Haken = Weg (gespeichert wie früher ✕), dasselbe wie „Weg“ in der Fotokarte; Weg-Fotos bleiben an ihrem Platz;
+// Alle/Keine/Umkehren wirken sofort und sind rückgängig zu machen; keine Nachfrage „nicht angehakt“ vor PDF. node tests/auswahl-browser.cjs [chromium|webkit]
 // Ordner im Origin Private File System, showDirectoryPicker wird ersetzt. WebKit kann keine Ordner beschreiben – dort nur Laden.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const playwright = require('playwright');
+const ui = require('./fk-ui.cjs');
 
 const name = process.argv[2] || 'chromium';
 const root = path.join(__dirname, '..');
@@ -27,7 +29,7 @@ const root = path.join(__dirname, '..');
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   page.on('dialog', d => d.accept());
   await page.goto(base);
-  await page.waitForSelector('#btnOpen');
+  await page.waitForSelector('#btnOpen2');
   const kann = await page.evaluate(async () => {
     if (!('showDirectoryPicker' in window) || !navigator.storage || !navigator.storage.getDirectory) return false;
     try{ const r = await navigator.storage.getDirectory(); const h = await r.getFileHandle('probe', { create: true }); if (!h.createWritable) return false; await r.removeEntry('probe'); return true; }catch(e){ return false; }
@@ -43,72 +45,74 @@ const root = path.join(__dirname, '..');
     for (let i = 1; i <= 10; i++){ const w = await (await fotos.getFileHandle(`IMG_${String(i).padStart(4, '0')}.png`, { create: true })).createWritable(); await w.write(png); await w.close(); }
     window.showDirectoryPicker = async () => (await (await navigator.storage.getDirectory()).getDirectoryHandle('26.0999 Teststadt'));
   });
-  await page.click('#btnOpen');
+  await ui.oeffnen(page);
   await page.waitForFunction(() => document.querySelectorAll('#list .row').length === 10, null, { timeout: 15000 });
 
   const count = () => page.locator('#pickCount').textContent();
-  const apply = page.locator('#pickApply');
-  assert.equal(await page.locator('#pickBar').isVisible(), true);
-  assert.match(await count(), /10 von 10 angehakt/);
-  assert.equal(await apply.isDisabled(), true, 'alles angehakt → nichts auszusortieren');
-
-  // 3 von 10 behalten: Keine → drei anhaken
-  await page.evaluate(() => { window.__seitenEingaben = 0; for (const t of ['input', 'change']) document.addEventListener(t, () => window.__seitenEingaben++); });
-  await page.click('#pickNone');
-  assert.match(await count(), /0 von 10/);
-  assert.equal(await page.locator('#list .row.unpicked').count(), 10);
   const rows = page.locator('#list .row');
-  for (const i of [0, 3, 7]) await rows.nth(i).locator('.pick input').check();
-  assert.match(await count(), /3 von 10/);
-  assert.equal(await apply.textContent(), '7 nicht angehakte aussortieren');
-  assert.equal(await page.evaluate(() => window.__seitenEingaben), 0, 'Haken zählen nicht als ungesicherte Eingabe (Wiederherstellung)');
-
-  // Umkehren hin und zurück
-  await page.click('#pickInvert'); assert.match(await count(), /7 von 10/);
-  await page.click('#pickInvert'); assert.match(await count(), /3 von 10/);
-
-  // PDF mit nicht angehakten Bildern → Nachfrage; Abbrechen ändert nichts
-  await page.click('#btnPdf');
-  await page.waitForSelector('#overlay.show #dAll');
-  assert.match(await page.locator('#dialog h3').textContent(), /7 Bilder sind nicht angehakt/);
-  await page.click('#dCancel');
-  assert.equal(await page.locator('#list .row.discarded').count(), 0);
-
-  // Sammelknopf: Rückfrage nennt beide Zahlen, danach 7 aussortiert, 3 aktiv, alle wieder angehakt
-  await apply.click();
-  await page.waitForSelector('#overlay.show #dOk');
-  const txt = await page.locator('#dialog').textContent();
-  assert.match(txt, /7 Bilder aussortieren\?/); assert.match(txt, /3\s*bleiben in der Doku/);
-  await page.click('#dOk');
-  await page.waitForFunction(() => document.querySelectorAll('#list .row.discarded').length === 7);
-  const aktiv = await page.$$eval('#list .row:not(.discarded) .orig', es => es.map(e => e.textContent.split(' ')[0]));
-  assert.deepEqual(aktiv, ['IMG_0001.png', 'IMG_0004.png', 'IMG_0008.png']);
-  assert.match(await count(), /3 von 3 angehakt/);
-  assert.equal(await apply.isDisabled(), true);
-  assert.equal(await page.locator('#list .row.unpicked').count(), 0);
-  // aussortiert ist gespeichert wie mit ✕ (Projektdatei), Dateien liegen noch im Ordner
-  const gespeichert = await page.evaluate(async () => {
+  const weg = () => page.locator('#list .row.discarded').count();
+  const gespeichertWeg = n => page.evaluate(async n => {
     for (let i = 0; i < 40; i++){
-      const such = async d => { for await (const [n, h] of d.entries()){ if (h.kind === 'file' && n === '_Bildumbenenner.json') return h; if (h.kind === 'directory'){ const x = await such(h); if (x) return x; } } return null; };
+      const such = async d => { for await (const [nm, h] of d.entries()){ if (h.kind === 'file' && nm === '_Bildumbenenner.json') return h; if (h.kind === 'directory'){ const x = await such(h); if (x) return x; } } return null; };
       try{ const f = await such(await navigator.storage.getDirectory());
-        if (f){ const t = await (await f.getFile()).text(); const n = (t.match(/"aussortiert":\s*true/g) || []).length; if (n === 7) return n; } }catch(e){}
+        if (f){ const t = await (await f.getFile()).text(); const k = (t.match(/"aussortiert":\s*true/g) || []).length; if (k === n) return k; } }catch(e){}
       await new Promise(r => setTimeout(r, 100));
     }
     return -1;
-  });
-  assert.equal(gespeichert, 7, '7 Bilder in _Bildumbenenner.json als aussortiert');
+  }, n);
+  assert.equal(await page.locator('#pickBar').isVisible(), true);
+  assert.match(await count(), /In der Doku: 10 von 10/);
+  assert.equal(await page.locator('#pickAll').isDisabled(), true, 'alle schon in der Doku');
+  assert.equal(await page.locator('#list .row .x, #list .row .up, #list .row .down').count(), 0, 'keine ▲▼✕-Mikroknöpfe mehr');
 
-  // ↺ holt ein Bild zurück – angehakt
-  await page.locator('#list .row.discarded .x').first().click();
-  assert.match(await count(), /4 von 4 angehakt/);
+  // 3 von 10 behalten: Keine → drei anhaken. Weg wirkt sofort und bleibt an seinem Platz.
+  await page.click('#pickNone');
+  assert.match(await count(), /In der Doku: 0 von 10/);
+  assert.equal(await weg(), 10);
+  assert.match(await page.locator('#banner').textContent(), /Alle auf „Weg“/);
+  for (const i of [0, 3, 7]) await rows.nth(i).locator('.pick input').check();
+  assert.match(await count(), /In der Doku: 3 von 10/);
+  const reihe = await page.$$eval('#list .row', es => es.map(e => (e.classList.contains('discarded') ? '-' : '+') + e.getAttribute('aria-label')));
+  assert.deepEqual(reihe.map(x => x[0]).join(''), '+--+---+--', 'Weg-Fotos bleiben an ihrem Platz');
+  assert.deepEqual(await page.$$eval('#list .row:not(.discarded) .bildnr', es => es.map(e => e.textContent)), ['Bild 1', 'Bild 2', 'Bild 3'], 'Bildnummern ohne Weg-Fotos');
+  assert.equal(await gespeichertWeg(7), 7, '7 Fotos in _Bildumbenenner.json als aussortiert (wie früher ✕)');
 
-  // „Alle mitnehmen“ entfernt nur die Haken-Markierung und öffnet den PDF-Dialog
-  await rows.nth(0).locator('.pick input').uncheck();
+  // Umkehren hin und zurück; Rückgängig stellt den Stand vor dem Klick wieder her
+  await page.click('#pickInvert'); assert.match(await count(), /7 von 10/);
+  await page.click('#bPickUndo'); assert.match(await count(), /3 von 10/);
+
+  // „Weg“ in der Fotokarte = derselbe Zustand; danach geht es mit dem nächsten Foto weiter
+  await ui.foto(page, 0);
+  await page.click('#pvDiscard');
+  assert.equal(await rows.nth(0).locator('.pick input').isChecked(), false, 'Karte „Weg“ nimmt den Haken');
+  assert.equal(await rows.nth(1).evaluate(e => e.classList.contains('active')), true, 'nächstes Foto gewählt');
+  await ui.foto(page, 0);
+  assert.equal(await page.locator('#pvDiscard').textContent(), '↺ Zurückholen');
+  assert.equal(await page.locator('#fDesc').isEditable(), false, 'Weg-Foto: Beschreibung nur lesen');
+  await page.click('#pvDiscard');
+  assert.equal(await rows.nth(0).locator('.pick input').isChecked(), true);
+  // Tastatur auf der Kachel: Leertaste = in der Doku / Weg
+  await rows.nth(1).focus(); await page.keyboard.press('Space');
+  assert.match(await count(), /4 von 10/);
+  await page.keyboard.press('Space');
+  assert.match(await count(), /3 von 10/);
+
+  // PDF: keine Nachfrage „nicht angehakt“ mehr – der Dialog öffnet direkt mit dem Deckblatt
   await page.click('#btnPdf');
-  await page.waitForSelector('#overlay.show #dAll');
-  await page.click('#dAll');
-  assert.match(await count(), /4 von 4 angehakt/);
-  assert.equal(await page.locator('#overlay').evaluate(e => e.classList.contains('show')), true, 'PDF-Dialog offen');
+  await page.waitForSelector('#overlay.show #zOk');
+  assert.match(await page.locator('#dialog h3').textContent(), /Bilddokumentation erstellen/);
+  assert.match(await page.locator('#zInfo').textContent(), /Deckblatt \+ 3 Bilder/);
+  await page.click('#zCancel');
+
+  // Reihenfolge ohne ▲▼: „Später ▸“ in der Fotokarte, Alt+← auf der Kachel – über Weg-Fotos hinweg, damit die Bildnummer sich ändert
+  await ui.foto(page, 0);
+  const name0 = await rows.nth(0).getAttribute('aria-label');
+  const bildVon = n => page.locator(`#list .row[aria-label="${n}"] .bildnr`).textContent();
+  assert.equal(await bildVon(name0), 'Bild 1');
+  await page.click('#pvLater');
+  assert.equal(await bildVon(name0), 'Bild 2', 'Später ▸ – hinter das nächste Foto in der Doku (Weg-Fotos übersprungen)');
+  await page.locator(`#list .row[aria-label="${name0}"]`).focus(); await page.keyboard.press('Alt+ArrowLeft');
+  assert.equal(await bildVon(name0), 'Bild 1', 'Alt+← schiebt zurück');
 
   assert.deepEqual(errors, []);
   await browser.close(); server.close();

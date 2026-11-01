@@ -2,6 +2,7 @@
 // Browser handle semantics here are a test double, not proof of SMB durability.
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),http=require('node:http'),pw=require('playwright');
 const {fixture}=require('./n2-speichersicherheit.cjs');
+const ui=require('./fk-ui.cjs');
 const root=path.resolve(__dirname,'..'),browserName=process.argv[2]||'chromium';
 const PROJECT='26.0202 N2 Synthetisch',FILE=PROJECT+'/Fotos/_Bildumbenenner.json',ARCHIVE=PROJECT+'/Fotos/_FotoKit_Fassungen';
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{promise,resolve};};
@@ -39,7 +40,7 @@ async function page(){
   class DH extends Handle{constructor(rel){super(rel,'directory');}child(n){return(this.rel?this.rel+'/':'')+n;}async getDirectoryHandle(n,o={}){const rel=this.child(n);await io({op:'dir',rel,create:o.create});return new DH(rel);}async getFileHandle(n,o={}){const rel=this.child(n);await io({op:'file',rel,create:o.create});return new FH(rel);}async removeEntry(n,o={}){return io({op:'remove',rel:this.child(n),recursive:o.recursive});}async *entries(){for(const e of await io({op:'list',rel:this.rel}))yield[e.name,e.kind==='directory'?new DH(this.child(e.name)):new FH(this.child(e.name))];}async *values(){for await(const[,h]of this.entries())yield h;}async resolve(h){const prefix=this.rel?this.rel+'/':'';return h.rel.startsWith(prefix)?h.rel.slice(prefix.length).split('/'):null;}}
   window.showDirectoryPicker=async()=>new DH(PROJECT);
  },{PROJECT});
- const p=await context.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(base);await p.locator('#btnOpen').click();await p.waitForFunction(()=>!document.body.inert&&!document.getElementById('btnMeta').disabled);return{p,context,barrier};
+ const p=await context.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(base);await ui.oeffnen(p);await p.waitForFunction(()=>!document.body.inert&&document.querySelectorAll('#list .row').length===2);return{p,context,barrier};
 }
 async function confirmed(description){
  const deadline=Date.now()+15000;
@@ -52,14 +53,14 @@ async function confirmed(description){
  throw Error('No confirmed complete version for '+description);
 }
 const A=await page(),B=await page();A.barrier.hold=B.barrier.hold=true;
-await A.p.locator('#list .desc').nth(0).fill('N2 A bestätigt');await B.p.locator('#list .desc').nth(1).fill('N2 B bestätigt');
+await ui.feld(A.p,'desc',0).fill('N2 A bestätigt');await ui.feld(B.p,'desc',1).fill('N2 B bestätigt');
 await Promise.all([A.barrier.arrived.promise,B.barrier.arrived.promise]);
 A.barrier.release.resolve();const aBytes=await confirmed('N2 A bestätigt');assert.equal(JSON.parse(await fs.readFile(path.join(tmp,FILE))).bilder['a.jpg'].beschreibung,'N2 A bestätigt');
 B.barrier.release.resolve();const bBytes=await confirmed('N2 B bestätigt');assert.equal(JSON.parse(await fs.readFile(path.join(tmp,FILE))).bilder['a.jpg'].beschreibung,'alt A');
 await A.context.close();await B.context.close();
 const restarted=await page();
 async function restore(description,exact){
- (await restarted.p.locator('#morePanel').isHidden()&&await restarted.p.locator('#btnMore').click());await restarted.p.locator('#btnVersions').click();await restarted.p.locator('[data-photo-version]').first().waitFor();
+ if(!(await restarted.p.locator('#dlgSicher').isVisible()))await ui.sicher(restarted.p);await restarted.p.locator('#btnVersions').click();await restarted.p.locator('[data-photo-version]').first().waitFor();
  const total=await restarted.p.locator('[data-photo-version]').count();let selected=false;
  for(let i=0;i<total;i++){
   const row=restarted.p.locator('[data-photo-version]').nth(i).locator('..');
@@ -82,10 +83,10 @@ await restarted.context.close();
 const empty=fixture();empty.projekt.proj='26.0202';empty.bilder['a.jpg'].beschreibung='';empty.bilder['b.jpg'].beschreibung='';
 await fs.writeFile(path.join(tmp,FILE),JSON.stringify(empty));
 const C=await page(),D=await page();C.barrier.hold=D.barrier.hold=true;
-await C.p.locator('#list .desc').nth(0).fill('N2 Umbenennung A');await D.p.locator('#list .desc').nth(1).fill('N2 Umbenennung B');
+await ui.feld(C.p,'desc',0).fill('N2 Umbenennung A');await ui.feld(D.p,'desc',1).fill('N2 Umbenennung B');
 await Promise.all([C.barrier.arrived.promise,D.barrier.arrived.promise]);
-await C.p.locator('#btnRename').click();await C.p.locator('#dOk').click();
-await D.p.locator('#btnRename').click();await D.p.locator('#dOk').click();
+await ui.mehr(C.p,'mehrUmbenennen');await C.p.locator('#dOk').click();
+await ui.mehr(D.p,'mehrUmbenennen');await D.p.locator('#dOk').click();
 async function until(check){const end=Date.now()+15000;while(Date.now()<end){if(await check())return;await new Promise(r=>setTimeout(r,30));}throw Error('Synthetic rename did not finish');}
 const newA='01_N2_Umbenennung_A.jpg',newB='02_N2_Umbenennung_B.jpg';
 await until(async()=>{try{await fs.stat(path.join(tmp,PROJECT,'Fotos',newA));await fs.stat(path.join(tmp,PROJECT,'Fotos',newB));return true;}catch{return false;}});

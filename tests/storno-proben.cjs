@@ -65,8 +65,8 @@ test('Foto mit stornierter Probe-Nr. → Hinweis (eine, mehrere, gemischt, Schre
   assert.deepEqual(P(stornoProben('P1, P5; P2')), ['P5', 'P2']);
   assert.deepEqual(P(stornoProben('')), []);
   assert.equal(stornoHinweis([]), '');
-  assert.equal(stornoHinweis(['P2']), '⚠ P2 ist in LabelKit storniert – dieses Foto ist noch P2 zugeordnet. Ordne es einer anderen Probe zu oder sortiere es mit ✕ aus.');
-  assert.equal(stornoHinweis(['P5', 'P2']), '⚠ P5 und P2 sind in LabelKit storniert – dieses Foto ist noch P5 und P2 zugeordnet. Ordne es einer anderen Probe zu oder sortiere es mit ✕ aus.');
+  assert.equal(stornoHinweis(['P2']), '⚠ P2 ist in LabelKit storniert – dieses Foto ist noch P2 zugeordnet. Ordne es einer anderen Probe zu oder lege es mit „Weg“ beiseite.');
+  assert.equal(stornoHinweis(['P5', 'P2']), '⚠ P5 und P2 sind in LabelKit storniert – dieses Foto ist noch P5 und P2 zugeordnet. Ordne es einer anderen Probe zu oder lege es mit „Weg“ beiseite.');
   assert.ok(!/\bSie\b|\bIhr(e|en)?\b/.test(stornoHinweis(['P2'])), 'du, nicht Sie');
 });
 
@@ -91,8 +91,9 @@ test('Bohrkern: stornierte Segmente bekommen keine Fotos (wie Rückstellproben)'
   assert.deepEqual(P(fotoProben('EG-WZ-B-7-T2', bk)), ['EG-WZ-B-7-T2'], 'stornierte Segment-ID bleibt unaufgelöst');
 });
 
-test('Zeile und Zählung zeigen den Hinweis; FotoKit ändert dabei nichts', () => {
-  assert.ok(/stornoProben\(it\.probe\)/.test(html) && /querySelector\('\.storno'\)/.test(html), 'recompute setzt den Hinweis je Zeile');
+test('Kachel, Fotokarte und Zählung zeigen den Hinweis; FotoKit ändert dabei nichts', () => {
+  assert.ok(/stornoProben\(it\.probe\)/.test(html) && /querySelector\('\.tnote\.storno'\)/.test(html), 'recompute setzt den Hinweis je Kachel');
+  assert.ok(/\$\('fStorno'\)/.test(html), 'Fotokarte zeigt den ganzen Hinweis');
   assert.ok(html.includes('bei stornierter Probe</span>'), 'Zählung oben');
   const f = html.slice(html.indexOf('function stornoHinweis('), html.indexOf('function vorschlagKandidaten('));
   assert.ok(!/it\.probe\s*=|\.discard\s*=|rename|move/i.test(f), 'Hinweis ändert keine Zuordnung, keinen Namen, keinen Ordner');
@@ -112,7 +113,7 @@ test('Rückfrage vor PDF und ZIP: Text, nur nicht aussortierte Fotos, beide Knö
   assert.equal(r.fotos.length, 2, 'aussortierte und gültige zählen nicht'); assert.deepEqual(P(r.proben), ['P2', 'P5']);
   c.S.view = [{ probe: 'P1' }, { probe: 'P5', discard: true }];
   assert.equal(c.stornoFotos().fotos.length, 0, 'nichts betroffen → keine Rückfrage');
-  assert.ok(html.includes("$('btnZip').onclick = guardPicks(guardStorno(openZipDialog));") && html.includes("$('btnPdf').onclick = guardPicks(guardStorno(openPdfDialog));"), 'PDF und ZIP fragen nach');
+  assert.ok(html.includes("$('btnZip').onclick = guardStorno(openZipDialog);") && html.includes("$('btnPdf').onclick = guardStorno(openPdfDialog);"), 'PDF und ZIP fragen nach');
   const g = html.slice(fb, html.indexOf('function clearDropMarks('));
   assert.ok(!/readOnly/.test(g), 'gilt auch im geschützten Modus');
   assert.ok(!/it\.probe\s*=|\.discard\s*=/.test(g), 'Rückfrage ändert keine Zuordnung');

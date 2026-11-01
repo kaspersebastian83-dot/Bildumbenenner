@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const playwright = require('playwright');
+const ui = require('./fk-ui.cjs');
 const browserName = process.argv[2] || 'chromium';
 const root = path.join(__dirname, '..');
 let browser, server;
@@ -18,9 +19,13 @@ let browser, server;
     res.writeHead(200, { 'content-type': file.endsWith('.html') ? 'text/html; charset=utf-8' : 'application/octet-stream' }); res.end(fs.readFileSync(file));
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
-  browser = await playwright[browserName].launch();
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  const page = await ctx.newPage(), errors = [];
+  // Chromium: eigenes (persistentes) Profil je Lauf – im Inkognito-Kontext stürzt Chromium 1243 (Playwright 1.63) beim Lesen eines
+  // in IndexedDB abgelegten Ordner-Handles ab (SIGTRAP); echte Nutzer haben ein normales Profil.
+  const profil = browserName === 'chromium' ? fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'fk-profil-')) : null;
+  const ctx = profil ? await playwright.chromium.launchPersistentContext(profil, { viewport: { width: 1280, height: 900 } })
+    : await (await playwright[browserName].launch()).newContext({ viewport: { width: 1280, height: 900 } });
+  browser = profil ? { close: async () => { await ctx.close(); (() => { try { fs.rmSync(profil, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (_) {} })(); } } : ctx.browser();
+  const page = ctx.pages()[0] || await ctx.newPage(), errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('dialog', d => d.accept());
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
@@ -50,10 +55,11 @@ let browser, server;
   const namen = () => page.evaluate(async () => { const o = {}; for await (const [n, h] of window.testFotos.entries()) o[n] = h.kind; return o; });
 
   // Öffnen: oben liegt nur ein Foto, drei weitere in Unterordnern der Mitarbeiter – Knopf mit Anzahl
-  await page.locator('#btnOpen').click();
+  await ui.oeffnen(page);
   await page.waitForFunction(() => !document.body.inert && document.querySelectorAll('#list .row').length === 1);
-  await page.locator('#btnImport:not([hidden])').waitFor();
+  await page.locator('#importCard:not([hidden]) #btnImport').waitFor();
   assert.match(await page.locator('#btnImport').textContent(), /Fotos übernehmen \(3\)/, '„_aussortiert“ und Ordner ohne Fotos zählen nicht');
+  assert.match(await page.locator('#importText').textContent(), /noch 3 Fotos in 2 Unterordnern/);
 
   // Dialog: zwei Unterordner, Kürzel aus dem Ordnernamen, alle angehakt
   await page.locator('#btnImport').click(); await page.locator('#impOk').waitFor();
@@ -71,9 +77,11 @@ let browser, server;
   assert.deepEqual(leer, { 'Begehung Ben': [], 'Ric': [], '_aussortiert': ['X.jpg'] });
 
   // Abschnitt = Ordnername (das vorhandene Foto bleibt ohne)
-  const abschnitte = await page.locator('#list .row').evaluateAll(es => Object.fromEntries(es.map(e => [e.querySelector('.orig').textContent.split(' · ')[0], e.querySelector('.sec').value])));
+  // eingetragener Abschnitt je Foto steht in der Fotokarte (#fSec; geerbter Abschnitt wäre nur Platzhalter)
+  const abschnitte = {};
+  for (let i = 0; i < 4; i++){ const t = await ui.foto(page, i); abschnitte[await t.getAttribute('aria-label')] = await page.locator('#fSec').inputValue(); }
   assert.deepEqual(abschnitte, { 'A.jpg': 'Ric', 'IMG_0001.jpg': '', 'IMG_0001_Ben.jpg': 'Begehung Ben', 'IMG_0002.jpg': 'Begehung Ben' });
-  await page.locator('#btnImport[hidden]').waitFor({ state: 'attached' });
+  await page.locator('#importCard[hidden]').waitFor({ state: 'attached' });
 
   // Herkunft je Datei in _Bildumbenenner.json
   let gespeichert;
@@ -100,8 +108,8 @@ let browser, server;
     });
     await page.locator('#bZuAktuell').waitFor();
     assert.match(await page.locator('#banner').textContent(), /gerade an 26\.0997 Anders/);
-    await page.locator('#btnReload').click();
-    await page.waitForFunction(() => !document.body.inert && [...document.querySelectorAll('#list .row .orig')].map(e => e.textContent.split(' · ')[0]).join() === 'ANDERS_1.jpg,ANDERS_2.jpg');
+    await ui.mehr(page, 'mehrReload');
+    await page.waitForFunction(() => !document.body.inert && [...document.querySelectorAll('#list .row')].map(e => e.getAttribute('aria-label')).join() === 'ANDERS_1.jpg,ANDERS_2.jpg');
     console.log(`OK ${browserName}: „Fotos neu einlesen“ öffnet die Fotos des aktuellen Spektron-Projekts`);
   }
   assert.deepEqual(errors, []);

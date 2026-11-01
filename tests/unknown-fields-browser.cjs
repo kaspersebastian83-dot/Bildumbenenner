@@ -2,6 +2,7 @@
 // Runs fully in Chromium AND WebKit; does not claim native Windows/SMB coverage.
 const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path'), http = require('node:http');
 const pw = require('playwright'), { fixture } = require('./unknown-fields.cjs');
+const ui = require('./fk-ui.cjs');
 const root = path.resolve(__dirname, '..'), engine = process.argv[2] || 'chromium';
 let server, browser;
 const hook = 'window.f6 = { flush: () => { flushDrafts(); saveExtra(); return flushProject(); }, external: checkExternal, readOnly: () => P.readOnly };';
@@ -80,24 +81,27 @@ const keep = (actual, expected = fixture(), name = 'a.jpg') => {
       page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
       page.on('dialog', d => d.accept());
       await page.goto(url); await page.evaluate(() => window.f6disk.init());
-      await page.locator('#btnOpen').click();
+      await ui.oeffnen(page);
       await page.waitForFunction(() => !document.body.inert && document.querySelectorAll('#list .row').length === 2);
       await run(page); assert.deepEqual(errors, []); console.log(`OK F6 (${engine}): ${title}`); count++;
     } finally { await ctx.close(); }
   }
   const flush = page => page.evaluate(() => window.f6.flush());
   const read = page => page.evaluate(() => window.f6disk.read());
-  const edit = async (page, value = 'Neu') => { await page.locator('#list .desc').first().fill(value); assert.equal(await flush(page), true); };
+  // Beschreibung von Foto 1 – FotoKit 2.0: in der Fotokarte (#fDesc) für das gewählte Foto
+  const desc0 = page => ui.feld(page, 'desc', 0);
+  const edit = async (page, value = 'Neu') => { await desc0(page).fill(value); assert.equal(await flush(page), true); };
   await scenario('Bekanntes Feld ändern, speichern, neu einlesen', fixture(), async page => {
     await edit(page); keep(await read(page)); assert.equal((await read(page)).bilder['a.jpg'].beschreibung, 'Neu');
-    await page.locator('#btnReload').click(); await page.waitForFunction(() => !document.body.inert && document.querySelector('#list .desc').value === 'Neu'); keep(await read(page));
+    await ui.mehr(page, 'mehrReload'); await page.waitForFunction(() => !document.body.inert && document.querySelector('#list .row .tdesc')?.textContent === 'Neu');
+    assert.equal(await desc0(page).inputValue(), 'Neu'); keep(await read(page));
   });
   await scenario('Beschriftung löschen, Nummerierung/Sortierung behalten', fixture(), async page => {
     await edit(page, ''); const out = await read(page); keep(out); assert.equal(out.bilder['a.jpg'].beschreibung, undefined); assert.deepEqual(out.reihenfolge, ['a.jpg', 'b.jpg']);
   });
   await scenario('Umbenennen mit Kopierfallback und Rückgängig', fixture(), async page => {
     const before = await page.evaluate(() => window.f6disk.images());
-    await edit(page, 'Neu'); await page.locator('#btnRename').click(); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor();
+    await edit(page, 'Neu'); await ui.mehr(page, 'mehrUmbenennen'); await page.locator('#dOk').click(); await page.locator('#bUndo').waitFor();
     let out = await read(page); const renamed = out.reihenfolge[0]; assert.notEqual(renamed, 'a.jpg'); keep(out, fixture(), renamed);
     assert.equal(out.bilder['a.jpg'], undefined); assert.deepEqual((await page.evaluate(() => window.f6disk.images()))[renamed], before['a.jpg']);
     await page.locator('#bUndo').click(); await page.waitForFunction(() => document.querySelector('#banner').textContent.includes('Rückgängig gemacht'));
@@ -105,9 +109,9 @@ const keep = (actual, expected = fixture(), name = 'a.jpg') => {
   });
   await scenario('Schreibfehler, weitere Eingabe, Retry', fixture(), async page => {
     const before = await page.evaluate(() => window.f6disk.text()); await page.evaluate(() => window.f6disk.fail = true);
-    await page.locator('#list .desc').first().fill('Fehler'); assert.equal(await flush(page), false);
+    await desc0(page).fill('Fehler'); assert.equal(await flush(page), false);
     assert.equal(await page.evaluate(() => window.f6disk.text()), before); await page.locator('#bSaveRetry').waitFor();
-    await page.locator('#list .desc').first().fill('Nach Fehler'); await page.evaluate(() => window.f6disk.fail = false);
+    await desc0(page).fill('Nach Fehler'); await page.evaluate(() => window.f6disk.fail = false);
     await page.locator('#bSaveRetry').click(); await page.waitForFunction(() => !document.querySelector('#bSaveRetry'));
     keep(await read(page)); assert.equal((await read(page)).bilder['a.jpg'].beschreibung, 'Nach Fehler');
   });
@@ -118,10 +122,11 @@ const keep = (actual, expected = fixture(), name = 'a.jpg') => {
     await page.evaluate(() => window.f6.external()); await edit(page, 'Danach'); keep(await read(page), again);
   });
   await scenario('Projektdialog, Benennung sowie echte PDF-/ZIP-Ausgabe', fixture(), async page => {
-    await page.locator('#btnMeta').click(); await page.locator('#m_objekt').fill('Neues Objekt'); await page.locator('#zCancel').click(); await flush(page);
+    // Projektdaten (früher #btnMeta) stehen jetzt im Deckblatt-Teil des PDF-Dialogs; Abbrechen behält die getippten Eingaben
+    await page.locator('#btnPdf').click(); await page.locator('#m_objekt').fill('Neues Objekt'); await page.locator('#zCancel').click(); await flush(page);
     keep(await read(page)); assert.equal((await read(page)).projekt.objekt, 'Neues Objekt');
     await page.locator('#btnPdf').click(); await page.locator('#zOk').click(); await page.locator('.pdfOpen').waitFor(); await flush(page); keep(await read(page));
-    await page.locator('#btnZip').click(); await page.locator('#zOk').click(); await page.waitForFunction(() => document.querySelector('#banner').textContent.includes('ZIP gespeichert'));
+    await ui.mehr(page, 'mehrZip'); await page.locator('#zOk').click(); await page.waitForFunction(() => document.querySelector('#banner').textContent.includes('ZIP gespeichert'));
     await flush(page); keep(await read(page));
     const outputs = await page.evaluate(async () => {
       const out = {}; for (const [n, f] of window.f6disk.dir.files) if (/\.(pdf|zip)$/.test(n)) out[n] = Array.from(new Uint8Array(await f.value.arrayBuffer()).slice(0, 4)); return out;
@@ -134,7 +139,7 @@ const keep = (actual, expected = fixture(), name = 'a.jpg') => {
   for (const route of ['load', 'save', 'focus']) await scenario('Neuere Version: Schreibschutz bei ' + route, route === 'load' ? { ...fixture(), version: '99.0.0' } : fixture(), async page => {
     if (route !== 'load') { const next = { ...fixture(), version: '99.0.0' }; await page.evaluate(x => window.f6disk.put(x), next); }
     const before = await page.evaluate(() => window.f6disk.text());
-    if (route === 'save') { await page.locator('#list .desc').first().fill('Nicht schreiben'); assert.equal(await flush(page), false); }
+    if (route === 'save') { await desc0(page).fill('Nicht schreiben'); assert.equal(await flush(page), false); }
     if (route === 'focus') await page.evaluate(() => window.f6.external());
     assert.equal(await page.evaluate(() => window.f6.readOnly()), true); assert.equal(await page.locator('#btnRename').isDisabled(), true);
     assert.match(await page.locator('#banner').textContent(), /nicht unterstützt|neuere/); await flush(page);

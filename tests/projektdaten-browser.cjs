@@ -1,5 +1,7 @@
 const { waitForAsync } = require('./await-condition.cjs');
 // FotoKit ↔ Projektzentrale: gemeinsame Projektdaten (_Projekt.json) im echten Browser. node tests/projektdaten-browser.cjs [chromium|webkit]
+// Ab FotoKit 2.0 gibt es keinen eigenen Dialog „Projektdaten …“ mehr: dieselben Felder stehen als „Deckblatt“ im Dialog
+// „Bilddokumentation erstellen →“ (#btnPdf, braucht mindestens ein Foto in der Doku – das Testprojekt hat IMG_0001.png).
 //  • Ändert sich _Projekt.json außerhalb (Projektzentrale, Kollege), liest FotoKit sie beim Zurückkehren ins Fenster neu
 //  • Speichern der Projektdaten läuft unter der Sperre „mosaik:projekt:<Ordner>“ (dieselbe nimmt Projektzentrale) und schreibt den einheitlichen Hinweistext
 // Der Archivordner wird im Origin Private File System nachgebildet und in „mosaik-suite“ hinterlegt. WebKit kann keine Ordner beschreiben – dort wird nur das Laden geprüft.
@@ -22,13 +24,18 @@ const PROJ = '26.0142 Teststadt';
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}/index.html`;
-  const browser = await playwright[name].launch();
-  const page = await (await browser.newContext({ viewport: { width: 1300, height: 900 } })).newPage();
+  // Chromium: eigenes (persistentes) Profil je Lauf – im Inkognito-Kontext stürzt Chromium 1243 (Playwright 1.63) beim Lesen eines
+  // in IndexedDB abgelegten Ordner-Handles ab (SIGTRAP); echte Nutzer haben ein normales Profil.
+  const profil = name === 'chromium' ? fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'fk-profil-')) : null;
+  const ctx = profil ? await playwright.chromium.launchPersistentContext(profil, { viewport: { width: 1300, height: 900 } })
+    : await (await playwright[name].launch()).newContext({ viewport: { width: 1300, height: 900 } });
+  const browser = profil ? { close: async () => { await ctx.close(); (() => { try { fs.rmSync(profil, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (_) {} })(); } } : ctx.browser();
+  const page = ctx.pages()[0] || await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   await page.goto(base);
-  await page.waitForSelector('#btnOpen');
+  await page.waitForSelector('#btnOpen2');
 
   const kann = await page.evaluate(async () => {
     if (!('showDirectoryPicker' in window) || !navigator.storage || !navigator.storage.getDirectory) return false;
@@ -56,10 +63,17 @@ const PROJ = '26.0142 Teststadt';
       q.onsuccess = () => { const t = q.result.transaction('kv', 'readwrite'); t.objectStore('kv').put(archiv, 'archiv'); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }; q.onerror = () => rej(q.error); });
   }, PROJ);
   await page.goto(base + '?projekt=' + encodeURIComponent(PROJ));
-  await page.waitForFunction(() => !document.getElementById('btnMeta').disabled, null, { timeout: 8000 });
-  // Projektdaten-Dialog öffnen, Werte lesen, schließen (die App-Interna sind gekapselt – geprüft wird, was man sieht)
+  const bereit = () => page.waitForFunction(() => !document.body.inert && !document.getElementById('btnPdf').disabled, null, { timeout: 8000 });
+  await bereit();
+  // Projektdaten stehen im PDF-Dialog („Bilddokumentation erstellen“, oben „Deckblatt“)
+  const oeffneDeckblatt = async () => {
+    await page.locator('#btnPdf').click();
+    await page.locator('#overlay.show #m_objekt').waitFor();
+    assert.match(await page.locator('#dialog h3').textContent(), /Bilddokumentation erstellen/);
+  };
+  // Dialog öffnen, Werte lesen, schließen (die App-Interna sind gekapselt – geprüft wird, was man sieht)
   const meta = async () => {
-    await page.locator('#btnMeta').click();
+    await oeffneDeckblatt();
     const m = { objekt: await page.locator('#m_objekt').inputValue(), sv: await page.locator('#m_sv').inputValue() };
     await page.locator('#zCancel').click();
     return m;
@@ -88,7 +102,7 @@ const PROJ = '26.0142 Teststadt';
 
   // 2) Speichern unter der Sperre je Projekt: solange ein anderer Tab sie hält, wird nicht geschrieben; danach mit einheitlichem Hinweistext
   await page.evaluate(proj => new Promise(frei => { window.__freigeben = null; navigator.locks.request('mosaik:projekt:' + proj, () => new Promise(r => { window.__freigeben = r; frei(); })); }), PROJ);
-  await page.locator('#btnMeta').click();
+  await oeffneDeckblatt();
   await page.locator('#m_objekt').fill('EFH, Lokal 3');
   await page.locator('#zCancel').click();
   await page.waitForTimeout(1500);
@@ -134,7 +148,7 @@ const PROJ = '26.0142 Teststadt';
 
   // 3) In der Projektzentrale geleerte Felder: Öffnen des Dialogs schreibt weder den alten Wert aus FotoKits Kopie
   //    noch den persönlichen Vorschlag für „Sachverständiger“ zurück; der Schadenort bleibt, wie er in der Datei steht.
-  await page.reload(); await page.waitForFunction(() => !document.getElementById('btnMeta').disabled, null, { timeout: 8000 });
+  await page.reload(); await bereit();
   await aendereDatei({ objekt: '', sachverstaendiger: '', schadenort: 'Teststadt (Projektzentrale)' });
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.waitForFunction(() => /neu übernommen/.test(document.getElementById('banner').textContent));
@@ -144,7 +158,7 @@ const PROJ = '26.0142 Teststadt';
   assert.equal(geleert.objekt, '', 'geleertes Objekt kommt nicht zurück');
   assert.equal(geleert.sachverstaendiger, '', 'kein still eingetragener Sachverständiger');
   // eine echte Eingabe wird weiterhin gespeichert, der Schadenort aus der Datei bleibt
-  await page.locator('#btnMeta').click(); await page.locator('#m_objekt').fill('EFH, Neu 4'); await page.locator('#zCancel').click();
+  await oeffneDeckblatt(); await page.locator('#m_objekt').fill('EFH, Neu 4'); await page.locator('#zCancel').click();
   await page.waitForTimeout(1500);
   const neu = await datei();
   assert.equal(neu.objekt, 'EFH, Neu 4');
@@ -153,7 +167,12 @@ const PROJ = '26.0142 Teststadt';
 
   // 4) Schadendatum „nicht bekannt“: Datumsfeld gesperrt, Pflicht erledigt, in _Projekt.json „unbekannt“ (wie Projektzentrale);
   //    Schadenereignis ist keine Pflichtangabe mehr
-  await page.locator('#btnMeta').click(); await page.locator('#m_sdatum_nb').click();
+  await oeffneDeckblatt();
+  const pflichtZahl = async () => Number((await page.locator('#pPflicht').textContent()).trim() || 0);
+  const offenVorher = await pflichtZahl();
+  assert.ok(offenVorher > 0, 'gelbe Zahl am „Deckblatt“ zeigt fehlende Pflichtangaben');
+  await page.locator('#m_sdatum_nb').click();
+  assert.equal(await pflichtZahl(), offenVorher - 1, '„nicht bekannt“ zählt als erledigte Pflichtangabe');
   assert.equal(await page.locator('#m_sdatum_nb').getAttribute('aria-pressed'), 'true');
   assert.ok(await page.locator('#m_sdatum').isDisabled(), 'Datumsfeld gesperrt');
   assert.equal(await page.locator('#m_sdatum').evaluate(e => e.closest('label').classList.contains('pflicht-offen')), false, 'nicht bekannt → erledigt');
@@ -161,7 +180,7 @@ const PROJ = '26.0142 Teststadt';
   await page.locator('#zCancel').click();
   await page.waitForTimeout(1500);
   assert.equal((await datei()).schadendatum, 'unbekannt');
-  await page.locator('#btnMeta').click();
+  await oeffneDeckblatt();
   assert.equal(await page.locator('#m_sdatum_nb').getAttribute('aria-pressed'), 'true', 'bleibt beim erneuten Öffnen');
   await page.locator('#zCancel').click();
 

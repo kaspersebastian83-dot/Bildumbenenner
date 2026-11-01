@@ -1,11 +1,18 @@
 const { waitForAsync } = require('./await-condition.cjs');
 let aktuellesSzenario = '';   // für die Fehlermeldung in GitHub Actions (Logs sind dort nicht immer abrufbar)
 // Synthetische OPFS-Projekte; echte App, URL, Leiste und Picker-Bedienung.
+// FotoKit 2.0: Projekt steht nur im Kopfband (.ml-proj: <strong> „Nr · Ort“, voller Ordnername im title; früher #projBadge und
+// .ml-proj b), #folderName nur ohne zugeordnetes Projekt, Eingaben in der Fotokarte, Projektdaten im PDF-Dialog, Fassungen unter „Mehr …“.
+const LEISTE = '#mosaikLeiste .ml-proj[title]';   // nur der Knopf eines geöffneten Projekts trägt einen title
+const leisteName = page => page.evaluate(sel => { const b = document.querySelector(sel); return b ? b.title.replace(/ – anderes Projekt öffnen$/, '') : null; }, LEISTE);
+const leisteNr = page => page.locator(LEISTE + ' strong').textContent();
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
+const os = require('node:os');
 const playwright = require('playwright');
+const ui = require('./fk-ui.cjs');
 const name = process.argv[2] || 'chromium';
 const projects = {A: '26.0901 Köln & Süd + 50% #Hof', B: '26.0902 Kontext B', U: '26.0904 Kontext U'};
 let browser, server;
@@ -19,12 +26,15 @@ let browser, server;
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}/index.html`;
-  browser = await playwright[name].launch();
+  if (name !== 'chromium') browser = await playwright[name].launch();
   async function scenario(title, run, initialRead = '') {
     aktuellesSzenario = title;
-    const ctx = await browser.newContext({viewport: {width: 1280, height: 900}});
+    // Chromium (Playwright 1.63 / Build 1243) stürzt im Inkognito-Kontext ab, sobald ein in IndexedDB abgelegtes OPFS-Ordner-Handle
+    // wieder gelesen wird (Archiv-Handle „mosaik-suite“/„archiv“) – unabhängig von der App. Mit frischem eigenem Profil je Szenario nicht.
+    const profil = name === 'chromium' ? fs.mkdtempSync(path.join(os.tmpdir(), 'fk-projektkontext-')) : '';
+    const ctx = profil ? await playwright.chromium.launchPersistentContext(profil, {viewport: {width: 1280, height: 900}}) : await browser.newContext({viewport: {width: 1280, height: 900}});
     try {
-      const page = await ctx.newPage(), errors = [], dialogs = [];
+      const page = ctx.pages()[0] || await ctx.newPage(), errors = [], dialogs = [];
       page.on('pageerror', e => errors.push(e.message));
       page.on('dialog', d => {dialogs.push(d.message());d.dismiss();});
       await page.goto(base);
@@ -37,8 +47,7 @@ let browser, server;
       if (!canWrite) {
         await page.goto(base + '?projekt=' + encodeURIComponent(projects.A));
         await page.waitForSelector('#mosaikLeiste');
-        assert.equal(await page.locator('#mosaikLeiste .ml-proj b').count(), 0, 'URL allein bestätigt kein geöffnetes Projekt');
-        assert.equal(await page.locator('#projBadge').isVisible(), false);
+        assert.equal(await page.locator(LEISTE).count(), 0, 'URL allein bestätigt kein geöffnetes Projekt');
         assert.deepEqual(errors, []);
         console.log(`SKIP (${name}): ${title} – kein schreibbarer Ordnerzugriff; ungeöffneter URL-Kontext geprüft`);
         return false;
@@ -101,15 +110,16 @@ let browser, server;
       }, {projects, initialRead});
       const start = async () => {
         await page.goto(base + '?projekt=' + encodeURIComponent(projects.A) + '&ansicht=liste&extra=1&extra=2#fotos');
-        await page.waitForFunction(() => !document.body.inert && document.querySelectorAll('#list .desc').length === 1);
+        await page.waitForFunction(() => !document.body.inert && document.querySelectorAll('#list .row').length === 1);
         await contextIs('A');
         await page.evaluate(() => history.replaceState({synthetic: 'erhalten'}, '', location.href));
       };
       const contextIs = async key => {
-        await page.waitForFunction(([key, n]) => !document.body.inert && document.querySelector('#projBadge').textContent.includes(n.split(' ')[0]) && document.querySelector('#mosaikLeiste .ml-proj b')?.textContent === n, [key, projects[key]]);
+        await page.waitForFunction(([n, sel]) => { const b = document.querySelector(sel); return !document.body.inert && !!b && b.querySelector('strong').textContent.includes(n.split(' ')[0]) && b.title === n + ' – anderes Projekt öffnen'; }, [projects[key], LEISTE]);
         assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('projekt'), projects[key]);
-        assert.ok((await page.locator('#folderName').textContent()).includes(projects[key]));
-        assert.equal(await page.locator('#list .desc').first().inputValue(), key + ' Beschreibung');
+        assert.equal(await leisteName(page), projects[key]);
+        assert.equal(await page.locator('#folderName').isVisible(), false, 'Ordnerzeile nur ohne zugeordnetes Projekt');
+        assert.equal(await ui.feld(page, 'desc', 0).inputValue(), key + ' Beschreibung');
         for (const a of await page.locator('#mosaikLeiste a.ml-step, #mosaikLeiste a.ml-weiter').all()) {
           const url = new URL(await a.getAttribute('href'), page.url());
           assert.equal(url.searchParams.has('projekt'), false);
@@ -117,25 +127,25 @@ let browser, server;
         }
       };
       const stillA = async description => {
-        assert.match(await page.locator('#projBadge').textContent(), /26\.0901/);
-        assert.equal(await page.locator('#mosaikLeiste .ml-proj b').textContent(), projects.A);
+        assert.match(await leisteNr(page), /26\.0901/);
+        assert.equal(await leisteName(page), projects.A);
         assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('projekt'), projects.A);
-        assert.equal(await page.locator('#list .desc').first().inputValue(), description);
+        assert.equal(await ui.feld(page, 'desc', 0).inputValue(), description);
       };
-      const disk = key => page.evaluate(async ([key, n]) => {
+      const disk = key => page.evaluate(async ([key, n]) => { for (let versuch = 0; ; versuch++) try {
         const root = await navigator.storage.getDirectory();
         const p = await (key === 'U' ? root : await root.getDirectoryHandle('Archiv')).getDirectoryHandle(n), f = await p.getDirectoryHandle('Fotos');
         const raw = await (await (await f.getFileHandle('_Bildumbenenner.json')).getFile()).text();
         const bytes = Array.from(new Uint8Array(await (await (await f.getFileHandle(key + '_01.jpg')).getFile()).arrayBuffer()));
         const sharedRaw = await (await (await p.getFileHandle('_Projekt.json')).getFile()).text();
         return {raw, json: JSON.parse(raw), bytes, sharedRaw};
-      }, [key, projects[key]]);
-      const open = async key => {await page.evaluate(key => window.nextFolder = key, key);await page.locator('#btnOpen').click();};
+      } catch (e) { if (e.name !== 'NotReadableError' || versuch > 40) throw e; await new Promise(r => setTimeout(r, 25)); } }, [key, projects[key]]);   // Autosave-Rennen beim Lesen: erneut
+      const open = async key => {await page.evaluate(key => window.nextFolder = key, key);await ui.oeffnen(page);};
       await run({page, start, open, contextIs, stillA, disk, base});
       assert.deepEqual(errors, [], 'Keine JavaScript-Fehler');assert.deepEqual(dialogs, [], 'Keine unerwarteten Dialoge');
       console.log(`OK (${name}): ${title}`);
       return true;
-    } finally {await ctx.close();}
+    } finally {await ctx.close();if (profil) (() => { try { fs.rmSync(profil, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (_) {} })();}
   }
 
   const supported = await scenario('Zentrale A → manueller Wechsel B → Navigation und Reload', async ({page, start, open, contextIs, disk}) => {
@@ -150,7 +160,7 @@ let browser, server;
     const beforeB = await disk('B'), historyLength = await page.evaluate(() => history.length);
     let navigations = 0;page.on('load', () => navigations++);
     await open('B');
-    await page.waitForFunction(() => !document.body.inert && document.getElementById('projBadge').textContent.includes('26.0902'));
+    await page.waitForFunction(() => !document.body.inert && document.querySelector('#mosaikLeiste .ml-proj[title] strong')?.textContent.includes('26.0902'));
     assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('projekt'), projects.B, 'Erfolgreich geöffnetes B bestimmt die URL');
     await contextIs('B');
     const url = new URL(page.url());assert.equal(url.searchParams.get('ansicht'), 'liste');assert.deepEqual(url.searchParams.getAll('extra'), ['1', '2']);assert.ok(url.hash.startsWith('#fotos&'));assert.equal(url.searchParams.has('projekt'), false);
@@ -164,24 +174,23 @@ let browser, server;
     await page.goto(base + '?projekt=' + encodeURIComponent(projects.A));
     await page.waitForFunction(() => io.readStarted);
     await page.waitForSelector('#mosaikLeiste');
-    assert.equal(await page.locator('#mosaikLeiste .ml-proj b').count(), 0);
-    assert.equal(await page.locator('#projBadge').isVisible(), false);
+    assert.equal(await page.locator(LEISTE).count(), 0, 'Projekt erst nach erfolgreichem Öffnen im Kopfband');
     await page.evaluate(() => releaseRead());await contextIs('A');
   }, 'A_01.jpg');
 
   for (const file of ['_Bildumbenenner.json', '_Projekt.json']) {
     await scenario(`Speicherfehler ${file}: A und Navigationskontext bleiben erhalten`, async ({page, start, open, stillA, disk}) => {
       await start();const b = await disk('B');await page.evaluate(file => io.failSave = file, file);
-      if (file === '_Projekt.json') {await page.locator('#btnMeta').click();await page.locator('#m_objekt').fill('A neue Projektdaten');await page.locator('#zCancel').click();}
-      await page.locator('#list .desc').fill('A ungesicherte Eingabe');await open('B');
+      if (file === '_Projekt.json') {await page.locator('#btnPdf').click();await page.locator('#m_objekt').fill('A neue Projektdaten');await page.locator('#zCancel').click();}
+      await ui.feld(page, 'desc', 0).fill('A ungesicherte Eingabe');await open('B');
       await page.waitForFunction(() => !document.body.inert && document.getElementById('bSaveRetry'));
       await stillA('A ungesicherte Eingabe');assert.deepEqual(await disk('B'), b);
     });
     for (const failAfterDelay of [false, true]) {
       await scenario(`Verzögerte Speicherung ${file}, Fehler=${failAfterDelay}`, async ({page, start, open, stillA, contextIs}) => {
         await start();await page.evaluate(file => io.holdSave = file, file);
-        if (file === '_Projekt.json') {await page.locator('#btnMeta').click();await page.locator('#m_objekt').fill('A verzögerter Objektname');await page.locator('#zCancel').click();}
-        await page.locator('#list .desc').fill('A verzögerte Eingabe');
+        if (file === '_Projekt.json') {await page.locator('#btnPdf').click();await page.locator('#m_objekt').fill('A verzögerter Objektname');await page.locator('#zCancel').click();}
+        await ui.feld(page, 'desc', 0).fill('A verzögerte Eingabe');
         // Bereits gestarteten Autosave und den danach gestarteten Wechsel prüfen.
         await page.waitForFunction(() => io.started);await open('B');
         await page.waitForFunction(() => document.body.inert);
@@ -196,16 +205,17 @@ let browser, server;
   }
   for (const failure of ['failRead', 'failList']) {
     await scenario(`Zielordner nicht lesbar (${failure}): A bleibt bearbeitbar`, async ({page, start, open, stillA, disk}) => {
-      await start();const b = await disk('B');await page.locator('#list .desc').fill('A vor Lesefehler');
+      await start();const b = await disk('B');await ui.feld(page, 'desc', 0).fill('A vor Lesefehler');
       await page.evaluate(failure => io[failure] = true, failure);await open('B');
       await page.waitForFunction(() => !document.body.inert && document.querySelector('#banner').textContent.includes('konnte nicht geöffnet'));
       await stillA('A vor Lesefehler');
       await page.evaluate(failure => io[failure] = false, failure);assert.deepEqual(await disk('B'), b);
-      await page.locator('#list .desc').fill('A nach Lesefehler');
+      await ui.feld(page, 'desc', 0).fill('A nach Lesefehler');
       await waitForAsync(page, async () => {
         const root = await navigator.storage.getDirectory(), a = await (await root.getDirectoryHandle('Archiv')).getDirectoryHandle('26.0901 Köln & Süd + 50% #Hof');
-        const data = JSON.parse(await (await (await (await a.getDirectoryHandle('Fotos')).getFileHandle('_Bildumbenenner.json')).getFile()).text());
-        return data.bilder['A_01.jpg'].beschreibung === 'A nach Lesefehler';
+        // Ein Autosave zwischen getFile() und text() macht den Schnappschuss kurz unlesbar – dann erneut versuchen.
+        try{ const data = JSON.parse(await (await (await (await a.getDirectoryHandle('Fotos')).getFileHandle('_Bildumbenenner.json')).getFile()).text());
+          return data.bilder['A_01.jpg'].beschreibung === 'A nach Lesefehler'; }catch(e){ if (e.name === 'NotReadableError') return false; throw e; }
       });
       assert.deepEqual(await disk('B'), b, 'Keine A-Eingaben in B geschrieben');
     });
@@ -218,7 +228,7 @@ let browser, server;
   });
   await scenario('Ziel-Autosave bei spätem Bildfehler: keine A-Daten in B', async ({page, start, open, stillA, disk}) => {
     await start();
-    await page.locator('#list .desc').fill('A erhaltene Eingabe');
+    await ui.feld(page, 'desc', 0).fill('A erhaltene Eingabe');
     await page.evaluate(async () => {
       const root = await navigator.storage.getDirectory();
       const p = await (await root.getDirectoryHandle('Archiv')).getDirectoryHandle('26.0902 Kontext B');
@@ -245,11 +255,12 @@ let browser, server;
     await page.evaluate(() => {io.failRead = true;releaseRead();});
     await page.waitForFunction(() => !document.body.inert && document.querySelector('#banner').textContent.includes('konnte nicht geöffnet'));
     await stillA('A erhaltene Eingabe');
-    // 1.17: Projektfassungen stehen unter „⋯ Mehr“.
-    if (await page.locator('#morePanel').isHidden()) await page.locator('#btnMore').click();
+    // Projektfassungen: „Mehr …“ › „Sicherungen und Programmstand …“ (#dlgSicher)
+    await ui.sicher(page);
     await page.locator('[data-pj-recovery]').click();
     await page.locator('[data-pj-recovery-dialog] h3').filter({hasText:projects.A}).waitFor();
     await page.locator('[data-pj-recovery-dialog]').getByRole('button',{name:'Schließen',exact:true}).click();
+    await ui.sicherZu(page);   // „Sicherungen und Programmstand“ bleibt unter dem Fassungsdialog offen
     await page.evaluate(() => {io.failRead = false;io.holdJSON = false;if (window.releaseJSON) releaseJSON();});
     await page.waitForTimeout(700);
     assert.deepEqual(await disk('B'), beforeB, 'Fehlgeschlagener Wechsel darf B nicht verändern');
@@ -277,7 +288,7 @@ let browser, server;
       const r = await navigator.storage.getDirectory();
       const p = await (await r.getDirectoryHandle('Archiv')).getDirectoryHandle('26.0902 Kontext B');
       const h = await (await p.getDirectoryHandle('Fotos')).getFileHandle('_Bildumbenenner.json');
-      return JSON.parse(await (await h.getFile()).text()).projekt.objekt === 'B aus gemeinsamer Datei';
+      try{ return JSON.parse(await (await h.getFile()).text()).projekt.objekt === 'B aus gemeinsamer Datei'; }catch(e){ if (e.name === 'NotReadableError') return false; throw e; }
     });
     const saved = await disk('B');
     assert.equal(saved.json.projekt.proj, '26.0902');
@@ -288,7 +299,7 @@ let browser, server;
 
   for (const malformed of ['reihenfolge', 'beschreibung', 'abschnitt']) {
     await scenario(`Später Zielfehler (${malformed}): Bildzustand und spätere Speicherung von A bleiben erhalten`, async ({page, start, open, stillA, disk}) => {
-      await start();await page.locator('#list .desc').fill('A erhaltene Eingabe');
+      await start();await ui.feld(page, 'desc', 0).fill('A erhaltene Eingabe');
       await page.evaluate(async malformed => {
         const root = await navigator.storage.getDirectory();
         const p = await (await root.getDirectoryHandle('Archiv')).getDirectoryHandle('26.0902 Kontext B');
@@ -302,11 +313,11 @@ let browser, server;
       await open('B');
       await page.waitForFunction(() => !document.body.inert && document.querySelector('#banner').textContent.includes('konnte nicht geöffnet'));
       await stillA('A erhaltene Eingabe');
-      assert.equal(await page.locator('#list .desc').count(), 1);
-      assert.equal(await page.locator('#list .sec').inputValue(), 'Flur A');
-      assert.equal(await page.locator('#list .probe').inputValue(), 'P1');
+      assert.equal(await page.locator('#list .row').count(), 1);
+      assert.equal(await ui.feld(page, 'sec', 0).inputValue(), 'Flur A');
+      assert.equal(await ui.feld(page, 'probe', 0).inputValue(), 'P1');
       assert.equal(await page.locator('#list .row.rotated').count(), 1);
-      await page.locator('#list .desc').fill('A nach spätem Ladefehler');
+      await ui.feld(page, 'desc', 0).fill('A nach spätem Ladefehler');
       await open('unknown');await page.waitForFunction(() => !document.body.inert && document.getElementById('btnAssign'));
       const a = await disk('A');
       assert.deepEqual(a.json.bilder, {'A_01.jpg': {beschreibung: 'A nach spätem Ladefehler', abschnitt: 'Flur A', probe: 'P1', drehung: 90}});
@@ -317,19 +328,19 @@ let browser, server;
 
   await scenario('Unbekannten Fotos-Ordner öffnen und nachträglich richtig zuordnen', async ({page, start, open, disk}) => {
     await start();const beforeU = await disk('U');await open('unknown');
-    await page.waitForFunction(() => !document.body.inert && document.getElementById('btnAssign') && !document.querySelector('#mosaikLeiste .ml-proj b'));
+    await page.waitForFunction(() => !document.body.inert && document.getElementById('btnAssign') && !document.querySelector('#mosaikLeiste .ml-proj[title]'));
     assert.equal(new URL(page.url()).searchParams.has('projekt'), false);assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).has('projekt'), false);assert.equal(new URL(page.url()).searchParams.get('ansicht'), 'liste');
-    assert.equal(await page.locator('#projBadge').isVisible(), false);assert.equal(await page.locator('#mosaikLeiste .ml-proj b').count(), 0);
+    assert.equal(await page.locator(LEISTE).count(), 0);
     assert.match(await page.locator('#folderName').textContent(), /Projekt unbekannt/);assert.equal(await page.locator('#mosaikLeiste a.ml-step').count(), 0);
     assert.equal(await page.locator('[data-pj-recovery]').count(),0,'unassigned folder has no stale recovery action');
-    await page.locator('#list .desc').fill('U nachträgliche Beschreibung');
+    await ui.feld(page, 'desc', 0).fill('U nachträgliche Beschreibung');
     await page.evaluate(() => window.nextFolder = 'A');await page.locator('#btnAssign').click();
     await page.waitForFunction(() => document.getElementById('banner').textContent.includes('nicht der Projektordner'));
     assert.equal(new URL(page.url()).searchParams.has('projekt'), false);assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).has('projekt'), false);
     await page.evaluate(() => window.nextFolder = 'U');await page.locator('#btnAssign').click();
-    await page.waitForFunction(() => !document.body.inert && document.querySelector('#mosaikLeiste .ml-proj b')?.textContent === '26.0904 Kontext U');
-    assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('projekt'), projects.U);assert.match(await page.locator('#projBadge').textContent(), /26\.0904/);
-    assert.equal(await page.locator('#list .desc').inputValue(), 'U nachträgliche Beschreibung');
+    await page.waitForFunction(() => !document.body.inert && document.querySelector('#mosaikLeiste .ml-proj[title]')?.title === '26.0904 Kontext U – anderes Projekt öffnen');
+    assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('projekt'), projects.U);assert.match(await leisteNr(page), /26\.0904/);
+    assert.equal(await ui.feld(page, 'desc', 0).inputValue(), 'U nachträgliche Beschreibung');
     const u = await disk('U');assert.deepEqual(u.bytes, beforeU.bytes);
     assert.deepEqual(u.json.bilder['U_01.jpg'], {...beforeU.json.bilder['U_01.jpg'], beschreibung: 'U nachträgliche Beschreibung'});
   });

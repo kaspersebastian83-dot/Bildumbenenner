@@ -3,6 +3,11 @@
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),http=require('node:http'),pw=require('playwright');
 const root=path.resolve(__dirname,'..'),browserName=process.argv[2]||'chromium',peer=process.argv[3]&&path.resolve(process.argv[3]);
 const PROJECT='26.0101 Fiktives Projekt',initial={format:'mosaik-projekt',version:1,projektnummer:'26.0101',objekt:'ALT',sachverstaendiger:'ALT',unknown:{deep:['erhalten']}};
+const ui=require('./fk-ui.cjs');
+// FotoKit 2.0: Projektdaten (früher „Projektdaten …“ #btnMeta) stehen im Dialog von „Bilddokumentation erstellen →“ (#btnPdf, Felder #m_…,
+// Abbrechen #zCancel); „Projektfassungen prüfen“ ([data-pj-recovery]) unter „Mehr …“ › „Sicherungen und Programmstand …“ (ui.sicher),
+// roter Punkt #moreDot am Knopf „Mehr …“.
+async function sicherFk(p){if(!(await p.locator('#dlgSicher').isVisible()))await ui.sicher(p);}
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{promise,resolve};};
 (async()=>{
 const tmp=await fs.mkdtemp(path.join(os.tmpdir(),'f3-browser-')),project=path.join(tmp,PROJECT),contexts=[],errors=[];
@@ -42,13 +47,13 @@ async function page(source){
  const open=async()=>{
   await p.goto(base+'/'+source+'/index.html');
   if(central[source]){await p.locator('#btnStart, #btnArchive').first().click();await p.locator('.proj[data-name="'+PROJECT+'"]').click();await p.locator('#pj_objekt').waitFor({state:'attached'});}
-  else{await p.locator('#btnOpen').click();await p.waitForFunction(()=>!document.getElementById('btnMeta').disabled);}
+  else{await ui.oeffnen(p);await p.waitForFunction(()=>!document.body.inert&&document.querySelectorAll('#list .row').length===1&&!document.getElementById('btnPdf').disabled);}
  };
  await open();return{p,context,barrier,open,source};
 }
 async function edit(s,key,value){
  if(central[s.source]){if(!await s.p.locator('#pjBox').evaluate(e=>e.open))await s.p.locator('#pjBox > summary').click();await s.p.locator('#pj_'+key).fill(value);}
- else{await s.p.locator('#btnMeta').click();await s.p.locator('#m_'+(key==='sachverstaendiger'?'sv':'objekt')).fill(value);await s.p.locator('#zCancel').click();}
+ else{await s.p.locator('#btnPdf').click();await s.p.locator('#m_'+(key==='sachverstaendiger'?'sv':'objekt')).fill(value);await s.p.locator('#zCancel').click();}
 }
 for(const other of [0,...(peer?[1]:[])]){
  await fs.writeFile(path.join(project,'_Projekt.json'),JSON.stringify(initial));
@@ -57,21 +62,21 @@ for(const other of [0,...(peer?[1]:[])]){
  await edit(A,'objekt','NEU A');await edit(B,'sachverstaendiger','NEU B');
  await Promise.all([A.barrier.arrived.promise,B.barrier.arrived.promise]);
  A.barrier.release.resolve();
- await A.p.locator('#moreDot').waitFor();   // 1.17: roter Punkt am „⋯ Mehr“-Knopf
- (await A.p.locator('#morePanel').isHidden()&&await A.p.locator('#btnMore').click());
+ await A.p.locator('#moreDot').waitFor();   // roter Punkt am Knopf „Mehr …“
+ if(central[0])(await A.p.locator('#morePanel').isHidden()&&await A.p.locator('#btnMore').click());else await sicherFk(A.p);
  await A.p.locator('[data-pj-recovery]').filter({hasText:/abweichend/}).waitFor();
  // The recovery count is refreshed by the app only after the verified save returns.
  if(central[0])await A.p.locator('#pjSave.ok').waitFor();
  assert.equal(JSON.parse(await fs.readFile(path.join(project,'_Projekt.json'),'utf8')).objekt,'NEU A');
  B.barrier.release.resolve();
- (await B.p.locator('#morePanel').isHidden()&&await B.p.locator('#btnMore').click());await B.p.locator('[data-pj-recovery]').filter({hasText:/abweichend/}).waitFor();
+ if(central[other])(await B.p.locator('#morePanel').isHidden()&&await B.p.locator('#btnMore').click());else await sicherFk(B.p);await B.p.locator('[data-pj-recovery]').filter({hasText:/abweichend/}).waitFor();
  if(central[other])await B.p.locator('#pjSave.ok').waitFor();
  const main=JSON.parse(await fs.readFile(path.join(project,'_Projekt.json'),'utf8'));assert.equal(main.objekt,'ALT');assert.equal(main.sachverstaendiger,'NEU B');assert.deepEqual(main.unknown,initial.unknown);
  await A.context.close();await B.context.close();
  // A new browser context has no memory of either writer. Discover and explicitly
  // inspect A's full candidate through the application's actual recovery UI.
  const reopened=await page(other);
- (await reopened.p.locator('#morePanel').isHidden()&&await reopened.p.locator('#btnMore').click());await reopened.p.locator('[data-pj-recovery]').click();
+ if(central[other])(await reopened.p.locator('#morePanel').isHidden()&&await reopened.p.locator('#btnMore').click());else await sicherFk(reopened.p);await reopened.p.locator('[data-pj-recovery]').click();
  await reopened.p.locator('[data-pj-recovery-dialog]').waitFor();
  const choices=reopened.p.locator('[data-pj-recovery-dialog] button').filter({hasText:/Fassung prüfen:/});
  await choices.first().waitFor();

@@ -5,6 +5,8 @@
 //  • „nach Abschnitt (Begehung)“: Abschnitte in der Reihenfolge ihres ersten Vorkommens, geerbte Abschnitte werden fest eingetragen,
 //    Bildnummern laufen neu, Reihenfolge danach „manuell“, „Rückgängig“ stellt alles wieder her
 //  • PDF: „Bilddokumentation_<Nr>_<Ort>_<JJJJ-MM-TT>.pdf“ im Ordner Fotos, zweites PDF am selben Tag → „… (2).pdf“
+// FotoKit 2.0: Projekt im Kopfband statt #projBadge, Projektdaten im Dialog „Bilddokumentation erstellen“ (#btnMeta entfallen),
+//   Eingaben in der Fotokarte (#fDesc/#fSec) für das gewählte Foto, Sortierung über „Mehr …“ › „Sortierung …“.
 // Ordner werden im Origin Private File System nachgebildet, showDirectoryPicker wird ersetzt. WebKit kann keine Ordner beschreiben – dort nur Laden.
 process.env.TZ = 'Europe/Berlin';
 const assert = require('node:assert/strict');
@@ -12,6 +14,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const playwright = require('playwright');
+const ui = require('./fk-ui.cjs');
 
 const name = process.argv[2] || 'chromium';
 const root = path.join(__dirname, '..');
@@ -25,14 +28,19 @@ const PROJ = '26.0177 Bad Teststadt';
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}/index.html`;
-  const browser = await playwright[name].launch();
-  const page = await (await browser.newContext({ viewport: { width: 1300, height: 900 } })).newPage();
+  // Chromium: eigenes (persistentes) Profil je Lauf – im Inkognito-Kontext stürzt Chromium 1243 (Playwright 1.63) beim Lesen eines
+  // in IndexedDB abgelegten Ordner-Handles ab (SIGTRAP; hier: Archivordner „mosaik-suite“/archiv); wie in fotos-uebernehmen-browser.cjs.
+  const profil = name === 'chromium' ? fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'fk-profil-')) : null;
+  const ctx = profil ? await playwright.chromium.launchPersistentContext(profil, { viewport: { width: 1300, height: 900 } })
+    : await (await playwright[name].launch()).newContext({ viewport: { width: 1300, height: 900 } });
+  const browser = profil ? { close: async () => { await ctx.close(); (() => { try { fs.rmSync(profil, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (_) {} })(); } } : ctx.browser();
+  const page = ctx.pages()[0] || await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   page.on('dialog', d => d.accept());
   await page.goto(base);
-  await page.waitForSelector('#btnOpen');
+  await page.waitForSelector('#btnOpen2');
 
   const kann = await page.evaluate(async () => {
     if (!('showDirectoryPicker' in window) || !navigator.storage || !navigator.storage.getDirectory) return false;
@@ -72,21 +80,22 @@ const PROJ = '26.0177 Bad Teststadt';
   const naechsterPicker = pfad => page.evaluate(pfad => {
     window.showDirectoryPicker = async () => { let d = await navigator.storage.getDirectory(); for (const n of pfad) d = await d.getDirectoryHandle(n); return d; };
   }, pfad);
-  const badge = () => page.locator('#projBadge').evaluate(e => e.hidden ? '' : e.textContent.trim());
+  // Projekt im Kopfband (.ml-kopf gibt es nur bei bekanntem Projekt); „Nr · Ort“
+  const badge = async () => { const b = page.locator('#mosaikLeiste .ml-kopf .ml-proj strong'); return (await b.count()) ? (await b.first().textContent()).trim() : ''; };
 
   // 1a) „Fotos“ direkt gewählt, Archivordner bekannt → Projekt erkannt
   await anlegen(true);
-  await page.goto(base); await page.waitForSelector('#btnOpen');
+  await page.goto(base); await page.waitForSelector('#btnOpen2');
   await naechsterPicker(['Archiv', PROJ, 'Fotos']);
-  await page.locator('#btnOpen').click();
-  await page.waitForFunction(() => !document.getElementById('btnMeta').disabled);
-  assert.equal((await badge()).replace(/\s+/g, ' '), '26.0177 Bad Teststadt', 'Projekt über den Archivordner erkannt');
+  await ui.oeffnen(page);
+  await page.waitForFunction(() => !document.body.inert && document.querySelectorAll('#list .row').length === 5 && document.querySelector('#mosaikLeiste .ml-kopf .ml-proj strong'));
+  assert.equal((await badge()).replace(/\s+/g, ' '), '26.0177 · Bad Teststadt', 'Projekt über den Archivordner erkannt');
 
   // 1b) ohne Archivordner: „Projekt zuordnen …“ → Projektordner wählen
   await anlegen(false);
-  await page.goto(base); await page.waitForSelector('#btnOpen');
+  await page.goto(base); await page.waitForSelector('#btnOpen2');
   await naechsterPicker(['Archiv', PROJ, 'Fotos']);
-  await page.locator('#btnOpen').click();
+  await ui.oeffnen(page);
   await page.waitForSelector('#btnAssign');
   assert.equal(await badge(), '', 'Projekt zunächst unbekannt');
   // falscher Ordner wird abgelehnt
@@ -96,10 +105,12 @@ const PROJ = '26.0177 Bad Teststadt';
   await naechsterPicker(['Archiv', PROJ]);
   await page.locator('#btnAssign').click();
   await page.waitForFunction(() => /zugeordnet/.test(document.getElementById('banner').textContent));
-  assert.equal((await badge()).replace(/\s+/g, ' '), '26.0177 Bad Teststadt', 'Projekt zugeordnet');
+  await page.waitForFunction(() => document.querySelector('#mosaikLeiste .ml-kopf .ml-proj strong'));
+  assert.equal((await badge()).replace(/\s+/g, ' '), '26.0177 · Bad Teststadt', 'Projekt zugeordnet');
 
-  // Dialog: Projektdaten übernommen, Auftraggeber/Schaden-Nr. nur lesbar
-  await page.locator('#btnMeta').click();
+  // Dialog „Bilddokumentation erstellen“ (Deckblatt, früher „Projektdaten …“): Projektdaten übernommen, Auftraggeber/Schaden-Nr. nur lesbar
+  await page.locator('#btnPdf').click();
+  await page.waitForSelector('#overlay.show #m_objekt');
   assert.equal(await page.locator('#m_objekt').inputValue(), 'EFH, Badweg 5');
   assert.equal(await page.locator('#m_proj').inputValue(), '26.0177');
   assert.equal(await page.locator('#m_pz_auftraggeber').inputValue(), 'Muster Versicherung AG');
@@ -111,12 +122,17 @@ const PROJ = '26.0177 Bad Teststadt';
   const rows = page.locator('#list .row');
   const secs = ['Flur', '', 'Küche', 'flur ', ''];
   for (let i = 0; i < 5; i++){
-    await rows.nth(i).locator('.desc').fill(`Bild ${i + 1}`);
-    if (secs[i]) await rows.nth(i).locator('.sec').fill(secs[i]);
+    await ui.feld(page, 'desc', i).fill(`Bild ${i + 1}`);
+    if (secs[i]) await ui.feld(page, 'sec', i).fill(secs[i]);
   }
-  const liste = () => page.evaluate(() => [...document.querySelectorAll('#list .row')].map(r => [r.querySelector('.desc').value, r.querySelector('.sec').value, r.querySelector('.n').textContent.trim()]));
+  assert.equal(await rows.count(), 5);
+  // je Foto: Beschreibung und eingetragener Abschnitt aus der Fotokarte, Bildnummer aus der Kachel
+  const liste = async () => { const out = [];
+    for (let i = 0; i < 5; i++){ await ui.foto(page, i); out.push([await page.locator('#fDesc').inputValue(), await page.locator('#fSec').inputValue(), (await rows.nth(i).locator('.bildnr').textContent()).trim()]); }
+    return out; };
   const vorher = await liste();
-  await page.locator('#sort').selectOption('section');
+  assert.deepEqual(vorher.map(r => r[2]), ['Bild 1', 'Bild 2', 'Bild 3', 'Bild 4', 'Bild 5']);
+  await ui.sortieren(page, 'section');
   await page.waitForFunction(() => /Nach Abschnitt sortiert/.test(document.getElementById('banner').textContent));
   const nachher = await liste();
   assert.deepEqual(nachher.map(r => r[0]), ['Bild 1', 'Bild 2', 'Bild 4', 'Bild 5', 'Bild 3'], 'Reihenfolge der Begehung');
@@ -126,7 +142,7 @@ const PROJ = '26.0177 Bad Teststadt';
   assert.match(await page.locator('#banner').textContent(), /2 Abschnitte.*2 Bild\(er\)/);
   await page.locator('#bUndoSec').click();
   assert.deepEqual(await liste(), vorher, 'Rückgängig stellt Reihenfolge und Abschnitte wieder her');
-  await page.locator('#sort').selectOption('section');
+  await ui.sortieren(page, 'section');
   await page.waitForFunction(() => /Nach Abschnitt sortiert/.test(document.getElementById('banner').textContent));
 
   // 3) PDF zweimal → zweiter Name mit „(2)“, nichts überschrieben

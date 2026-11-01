@@ -5,11 +5,14 @@
 // Zuordnung, Dateiname und Ordner bleiben; nach „Fotos neu einlesen“ ist das Foto noch P2 zugeordnet → Hinweis wieder da;
 // aussortiert → kein Hinweis; Storno in LabelKit aufgehoben + „Fotos neu einlesen“ → wieder angeboten, Hinweis weg;
 // LabelKit-Datei unverändert. Nur erfundene Namen.
+// FotoKit 2.0: Eingaben und Hinweis in der Fotokarte (#fDesc/#fProbe/#fStorno) für das gewählte Foto, Kachel-Hinweis .tnote.storno,
+// Weg/Zurückholen über den Haken der Kachel, „Fotos neu einlesen“ unter „Mehr …“.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const playwright = require('playwright');
+const ui = require('./fk-ui.cjs');
 const browserName = process.argv[2] || 'chromium';
 const root = path.join(__dirname, '..');
 const FEST = { am: '2026-10-29T08:00:00.000Z', anlass: 'Etiketten' };
@@ -18,7 +21,7 @@ const LABELKIT = { version: '4.49.0', nrSchutz: 1, projekt: { nr: '26.0902' }, p
            { id: 12, _nr: 2, z2: 'Dachboden', z3: 'stark verrußt', z4: 'Sparren', nrFest: FEST, storniert: { am: '2026-10-30T10:00:00.000Z', kuerzel: 'Ka', grund: 'doppelt genommen' } }],
   chloridProben: [], asbestProben: [{ id: 13, _nr: 3, z2: 'Keller', z3: 'Floor-Flex-Platte', nrFest: FEST }], sonstigeProben: [] };
 const DATEI = '26.0902_Daten.json';
-const HINWEIS = '⚠ P2 ist in LabelKit storniert – dieses Foto ist noch P2 zugeordnet. Ordne es einer anderen Probe zu oder sortiere es mit ✕ aus.';
+const HINWEIS = '⚠ P2 ist in LabelKit storniert – dieses Foto ist noch P2 zugeordnet. Ordne es einer anderen Probe zu oder lege es mit „Weg“ beiseite.';
 let browser, server;
 (async () => {
   server = http.createServer((req, res) => {
@@ -71,13 +74,26 @@ let browser, server;
   await picker();
   await lkSchreiben(labelkitText);
   const vorher = await fotos();
-  await page.locator('#btnOpen').click();
+  await ui.oeffnen(page);
   await page.waitForFunction(() => !document.body.inert && document.querySelectorAll('#list .row').length === 4);
-  const row = name => page.locator('#list .row', { has: page.locator('.orig', { hasText: name }) });
-  const desc = name => row(name).locator('.desc'), probe = name => row(name).locator('.probe'), hinweis = name => row(name).locator('.storno');
-  const zustand = name => desc(name).evaluate(e => ({ wert: e.value, markiert: e.value.slice(e.selectionStart, e.selectionEnd) }));
+  // Foto über den Dateinamen (aria-label der Kachel); Felder der Fotokarte gelten für das gewählte Foto
+  const row = name => page.locator(`#list .row[aria-label^="${name}"]`);
+  const waehle = async name => { const r = row(name); if (!(await r.evaluate(e => e.classList.contains('active')))) await r.locator('.tinfo').click(); };
+  const kartenFeld = (name, sel) => new Proxy({}, { get: (_, m) => async (...a) => { await waehle(name); return page.locator(sel)[m](...a); } });
+  const desc = name => kartenFeld(name, '#fDesc'), probe = name => kartenFeld(name, '#fProbe');
+  const zustand = async name => { assert.equal(await row(name).evaluate(e => e.classList.contains('active')), true, name + ' gewählt');
+    return page.locator('#fDesc').evaluate(e => ({ wert: e.value, markiert: e.value.slice(e.selectionStart, e.selectionEnd) })); };
   const tippe = async t => { for (const ch of t) await page.keyboard.type(ch); };
-  const sichtbar = name => hinweis(name).evaluate(e => !e.hidden && e.offsetHeight > 0);
+  // Hinweis: auf der Kachel kurz („⚠ P2 storniert“) und in der Fotokarte ausführlich (#fStorno)
+  const kachelHinweis = name => row(name).locator('.tnote.storno');
+  const sichtbar = async name => {
+    const kachel = await kachelHinweis(name).evaluate(e => !e.hidden && e.offsetHeight > 0);
+    await waehle(name);
+    const karte = await page.locator('#fStorno').evaluate(e => !e.hidden && e.offsetHeight > 0);
+    assert.equal(kachel, karte, name + ': Hinweis auf Kachel und in der Fotokarte gleich');
+    return karte;
+  };
+  const hinweis = name => ({ textContent: async () => { await waehle(name); return page.locator('#fStorno').textContent(); } });
 
   // LabelKit-Datei wird beim Öffnen im Hintergrund gelesen: warten, bis P1 vorgeschlagen wird
   for (const ende = Date.now() + 5000; ;){
@@ -104,6 +120,7 @@ let browser, server;
   assert.equal(await probe('IMG_0002').inputValue(), 'P2');
   assert.equal(await sichtbar('IMG_0002'), true);
   assert.equal(await hinweis('IMG_0002').textContent(), HINWEIS);
+  assert.equal(await kachelHinweis('IMG_0002').textContent(), '⚠ P2 storniert');
   assert.match(await page.locator('#stats').textContent(), /⚠ 1 Foto bei stornierter Probe/);
   assert.equal(await probe('IMG_0002').evaluate(e => document.getElementById(e.getAttribute('aria-describedby')).textContent), HINWEIS, 'Hinweis am Feld Probe-Nr. angesagt');
   await probe('IMG_0003').click(); await tippe('P1, p2');
@@ -115,17 +132,17 @@ let browser, server;
   // 3) Gespeichert, Seite neu geladen und Projekt neu geöffnet: Foto ist noch P2 zugeordnet → Hinweis wieder da (nichts automatisch gelöst)
   for (const ende = Date.now() + 8000; (await gespeicherteProbe('IMG_0002.jpg')) !== 'P2';){ assert.ok(Date.now() < ende, 'Zuordnung P2 gespeichert'); await page.waitForTimeout(200); }
   await page.reload(); await picker();
-  await page.locator('#btnOpen').click();
+  await ui.oeffnen(page);
   await page.waitForFunction(() => !document.body.inert && document.querySelectorAll('#list .row').length === 4);
-  await page.waitForFunction(() => [...document.querySelectorAll('#list .row')].some(r => !r.querySelector('.storno').hidden), null, { timeout: 5000 });
+  await page.waitForFunction(() => [...document.querySelectorAll('#list .row')].some(r => !r.querySelector('.tnote.storno').hidden), null, { timeout: 5000 });
   assert.equal(await probe('IMG_0002').inputValue(), 'P2', 'Zuordnung bleibt');
   assert.equal(await hinweis('IMG_0002').textContent(), HINWEIS);
   assert.equal(await sichtbar('IMG_0002'), true);
   assert.match(await page.locator('#stats').textContent(), /⚠ 1 Foto bei stornierter Probe/);
   assert.deepEqual(await fotos(), vorher, 'keine Datei umbenannt oder verschoben');
 
-  // 4) Aussortiert (✕) → kein Hinweis mehr, Zuordnung bleibt; ↺ → Hinweis wieder da
-  await row('IMG_0002').locator('button.x').click();
+  // 4) Weg (Haken der Kachel aus, früher ✕) → kein Hinweis mehr, Zuordnung bleibt; Haken wieder an → Hinweis wieder da
+  await row('IMG_0002').locator('.pick input').uncheck();
   assert.equal(await sichtbar('IMG_0002'), false, 'aussortiert: kein Hinweis');
   assert.doesNotMatch(await page.locator('#stats').textContent(), /stornierter Probe/);
   assert.equal(await probe('IMG_0002').inputValue(), 'P2');
@@ -134,22 +151,23 @@ let browser, server;
   await page.waitForSelector('#overlay.show #zOk');
   assert.equal(await page.locator('#dStorno').count(), 0, 'aussortiert: keine Storno-Rückfrage vor dem PDF');
   await page.locator('#zCancel').click();
-  await row('IMG_0002').locator('button.x').click();
+  await row('IMG_0002').locator('.pick input').check();
   assert.equal(await sichtbar('IMG_0002'), true, 'wiederhergestellt: Hinweis wieder da');
 
   // 5) Vor PDF und ZIP: Rückfrage mit Probe und Fotozahl; Abbrechen exportiert nichts und springt zum ersten betroffenen Foto
   await probe('IMG_0003').fill('P2');
   const FRAGE = '2 Fotos sind noch P2 zugeordnet – P2 ist in LabelKit storniert. In der Bilddokumentation stehen sie dann weiter unter P2. Trotzdem exportieren?';
   const exporteVorher = await pdfs();
-  for (const knopf of ['#btnPdf', '#btnZip']) {
-    await page.locator(knopf).click();
+  for (const knopf of ['#btnPdf', 'mehrZip']) {
+    if (knopf === 'mehrZip') await ui.mehr(page, 'mehrZip'); else await page.locator(knopf).click();
     await page.waitForSelector('#overlay.show #dStorno');
     assert.equal(await page.locator('#dialog h3').textContent(), '2 Fotos bei stornierter Probe');
     assert.equal(await page.locator('#dStorno').textContent(), FRAGE);
     assert.equal(await page.locator('#dCancel').evaluate(e => e === document.activeElement), true, 'Abbrechen ist vorgewählt');
     await page.keyboard.press('Enter');   // vorgewählt = Abbrechen
     assert.equal(await dialogOffen(), false, knopf + ': Abbrechen schließt, kein Exportdialog');
-    assert.equal(await page.evaluate(() => { const e = document.activeElement; return e.classList.contains('probe') ? e.value : ''; }), 'P2', 'Fokus im Feld Probe-Nr. des ersten betroffenen Fotos');
+    assert.equal(await page.evaluate(() => { const e = document.activeElement; return e.id === 'fProbe' ? e.value : ''; }), 'P2', 'Fokus im Feld Probe-Nr. …');
+    assert.equal(await row('IMG_0002').evaluate(e => e.classList.contains('active')), true, '… des ersten betroffenen Fotos');
   }
   assert.deepEqual(await pdfs(), exporteVorher, 'Abbrechen: nichts exportiert');
   // „Trotzdem exportieren“ → PDF wie bisher, Zuordnungen unverändert
@@ -170,8 +188,8 @@ let browser, server;
   // 7) Storno in LabelKit aufgehoben → „Fotos neu einlesen“ → Hinweis weg, P2 wird wieder angeboten
   const aufgehoben = JSON.parse(labelkitText); delete aufgehoben.proben[1].storniert; aufgehoben.proben[1].nrFest = { am: '2026-10-31T09:00:00.000Z', anlass: 'Storno aufgehoben' };
   await lkSchreiben(JSON.stringify(aufgehoben));
-  await page.locator('#btnReload').click();
-  await page.waitForFunction(() => [...document.querySelectorAll('#list .row')].every(r => r.querySelector('.storno').hidden), null, { timeout: 5000 });
+  await ui.mehr(page, 'mehrReload');
+  await page.waitForFunction(() => [...document.querySelectorAll('#list .row')].every(r => r.querySelector('.tnote.storno').hidden), null, { timeout: 5000 });
   assert.doesNotMatch(await page.locator('#stats').textContent(), /stornierter Probe/);
   assert.equal(await probe('IMG_0002').inputValue(), 'P2');
   await desc('IMG_0004').click(); await tippe('P2');
