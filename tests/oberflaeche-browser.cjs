@@ -227,6 +227,8 @@ let browser, server;
       if (width <= 760) {
         // Schmale Ansicht: Karte oben; Enter / Shift+Enter in „Was ist zu sehen?“ wechselt das Foto, Fokus bleibt im Feld
         await ui.foto(page, 0);
+        // Vorschau lädt nach dem Fotowechsel asynchron (src wird erst entfernt, dann neu gesetzt) – erst dann dekodieren
+        await page.waitForFunction(() => { const i = document.querySelector('#pvImg'); return document.querySelector('#pvName').textContent === 'IMG_0001.jpg' && i.getAttribute('src') && i.complete && i.naturalWidth > 0; });
         await page.locator('#pvImg').evaluate(img => img.decode());
         const selected = await page.locator('#pvName').textContent(), descriptions = await beschreibungen();
         await page.locator('#fDesc').press('Enter');
