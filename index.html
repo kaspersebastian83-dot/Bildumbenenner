@@ -253,6 +253,8 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 #banner.ok{background:color-mix(in srgb,var(--ok) 14%,var(--panel))}
 #banner.err{background:color-mix(in srgb,var(--err) 14%,var(--panel))}
 #banner.info{background:var(--panel2)}
+#zweiOrte{padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px;background:color-mix(in srgb,var(--err) 14%,var(--panel))}
+#zweiOrte[hidden]{display:none}
 #banner .repBtn{font-size:12px;padding:2px 9px;margin-left:auto}
 #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:2147483003;cursor:zoom-out}
 #lightbox.show{display:flex}
@@ -343,6 +345,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 <div id="fkMeldung" hidden><button id="btnUpd" class="sp-knopf sp-knopf-app upd" hidden title="Neu laden lädt die neue Version – ungespeicherte Änderungen werden vorher gesichert">Update verfügbar – neu laden</button></div>
 
 <div id="banner"></div>
+<div id="zweiOrte" role="status" hidden></div>
 
 <div id="empty">
   <div class="drop" id="drop">
@@ -500,11 +503,12 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.0.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:dc5988e936a9cc35ada344fe7f9763c9090a24827f1086a03de80e2306073e07';
-const APP_DATE = '2026-11-01';
+const APP_BUILD = 'sha256:df9e1be7efc75c66461d432dccb350b52445a23ab82a3e8fff0471f874ec2952';
+const APP_DATE = '2026-11-10';
 const CHANGELOG = [
+  ['2.0.1', '10.11.2026', 'Dateien an zwei Orten (Audit K1): Liegen FotoKit-, Projekt-, LabelKit-, Plan- oder Ergebnisdateien in „_Spektron“ und zusätzlich am früheren Ort (z. B. eine kopierte _Projekt.json), gilt immer die Datei in „_Spektron“ – vorher schaltete eine solche Datei das Projekt ohne Hinweis zurück. Eine Zeile unter dem Kopf nennt beide Dateien mit Datum; gelöscht wird nichts.'],
   ['2.0.0', '01.11.2026', 'Neue, einfache Oberfläche (Spektron „einfache Oberfläche“): Oben das Kopfband wie in BerichtKit – Projekt groß, sechs Schritt-Kacheln, „Weiter: … →“. In der Mitte eine Frage: „Welche Fotos gehören in die Doku?“ – Fotos als große Kacheln (gelb = Beschreibung fehlt, abgeblendet = Weg), rechts die Karte des gewählten Fotos mit „Was ist zu sehen?“, „Gehört zu Probe“ (Vorschläge aus LabelKit), „Raum / Abschnitt“, Drehen, Weg und „◂ Früher / Später ▸“. Ein Zustand statt zwei: Haken „in der Doku“ auf der Kachel = dasselbe wie „Weg“ in der Karte, gespeichert wie früher das ✕; Weg-Fotos bleiben an ihrem Platz; Alle/Keine/Umkehren wirken sofort und lassen sich rückgängig machen (die Nachfrage „nicht angehakt“ vor dem Export entfällt). Die ▲▼✕-Knöpfe sind weg – Reihenfolge per Ziehen, Früher/Später oder Alt+←/→. Unten „Mehr …“ (Dateinamen, Sortierung, Dateien umbenennen, ZIP, Ergebnistabelle, Fotos neu einlesen, Sicherungen und Programmstand, Kurzanleitung, Handbuch, Rückmeldung), daneben der Stand („n Fotos ohne Beschreibung“ springt zum nächsten) und eine Hauptaktion „Bilddokumentation erstellen →“. Der Dialog dazu zeigt zuerst das Deckblatt (Pflichtangaben gelb), Bildqualität usw. unter „Einstellungen“; der eigene Knopf „Projektdaten …“ entfällt. Beim ersten Erstellen der Bilddoku eines Projekts bietet der Dialog einmal an, die Dateien vorher passend umzubenennen (die Nummer im Dateinamen ist die Bildnummer im PDF). „Gehört zu Probe“ schlägt die Proben aus LabelKit vor. Farben aus der Spektron-Leiste (FotoKit-Blau), Schrift Segoe UI. An Projektdatei, PDF, ZIP und der Verbindung zu den anderen Apps ändert sich nichts.'],
   ['1.34.0', '01.11.2026', 'Spektron-Leiste v2: Schritt „BerichtKit · Brandbericht“ bzw. „· Asbestbericht“, wenn BerichtKit sich die Berichtsart des Projekts gemerkt hat (der Link öffnet genau diese); Haken bei BerichtKit nur für einen gespeicherten Bericht dieser Art, dessen Datei noch in „Mitteilungen“ liegt (Projekte ohne BerichtKit-Angaben wie bisher nach dem Dateinamen). Nach dem gespeicherten Bericht heißt der Knopf „Weiter: Ans Büro übergeben →“ (Projektzentrale, eigenes Fenster). „Weiter“ nennt im Tooltip Ziel und Grund. Keine Nummern mehr an den Schritten (✓ reicht), die eigene App ist deutlicher markiert, „Aktuelles Projekt“ im Projektmenü lädt nicht mehr neu.'],
   ['1.33.0', '31.10.2026', 'Umbenennen ist gegen Abbrüche abgesichert: FotoKit schreibt vor dem ersten Foto ein kleines Journal („_Umbenennen-Journal_…“) in den FotoKit-Datenordner. Bricht das Umbenennen mitten im Lauf ab (Browser oder Remote-Sitzung beendet, Rechner aus), blieben bisher Fotos unter ausgeblendeten Hilfsnamen („umb-tmp_…“) liegen und fehlten in der Liste, ihre Beschreibungen hingen an Namen, die es nicht mehr gibt. Jetzt setzt FotoKit beim nächsten Öffnen des Projekts alle Fotos auf ihre alten Namen zurück – Beschreibungen, Abschnitte und Proben stehen ja noch unter diesen Namen – und sagt es in einem Hinweis; führe das Umbenennen dann einfach noch einmal aus. Das Journal wird erst gelöscht, wenn die Projektdaten zu den neuen Namen gespeichert sind (gilt auch für „Rückgängig“). Gibt es schon Fotos mit „umb-tmp_…“ ohne Journal (Abbruch vor dieser Version), weist FotoKit beim Öffnen darauf hin, statt sie still auszublenden. Außerdem: Liegen beim Umbenennen noch Fotos bei einer in LabelKit stornierten Probe, steht im Bestätigungsfenster ein Hinweis – das Umbenennen wird dadurch nicht aufgehalten und ändert die Zuordnung nicht.'],
@@ -1384,6 +1388,15 @@ async function spektronOrt(projDir, bereich){
   const r = await SO.ort(projDir, bereich);
   return r.wo === 'neu' && !r.dir ? await SO.ort(projDir, bereich, { anlegen: true }) : r;
 }
+/** K1: App-Dateien an zwei Orten (in „_Spektron“ und am früheren Ort) – eine sichtbare Zeile, Text aus spektron-ordner.js.
+    Nur lesen; die Bereiche, die FotoKit liest oder schreibt. */
+async function zweiOrteZeigen(){
+  const el = $('zweiOrte'), proj = S.proj; if (!el) return;
+  let z = [];
+  try{ if (proj && proj.dir && SO.zweiOrte) z = await SO.zweiOrte(proj.dir, ['projekt', 'fotokit', 'fotokitPruefsummen', 'labelkit', 'plankit', 'resultkit']); }catch(e){}
+  if (S.proj !== proj) return;
+  el.hidden = !z.length; el.innerHTML = z.map(e => esc(SO.zweiOrteText(e))).join('<br>');
+}
 /** Beim Öffnen: wo liegen Projektdaten (proj.pjDir) und FotoKit-Datei (Rückgabe)? Ohne Projekt: der geöffnete Ordner. */
 async function spektronOrteSetzen(dir, proj){
   if (!proj || !proj.dir) return dir;
@@ -1794,6 +1807,7 @@ async function openDir(dir, proj = null){
       projektHinweisFuer = '';
       if (note) banner(P.readOnly ? 'err' : 'info', note);
       fotoUebernahmeKnopf();   // Unterordner der Mitarbeiter mit Fotos? – im Hintergrund
+      void zweiOrteZeigen();   // K1: Dateien an zwei Orten? – im Hintergrund
     }catch(e){
       clearTimeout(P.timer); clearTimeout(PJ.timer);
       const replaced = S.items !== previous.state.items;
