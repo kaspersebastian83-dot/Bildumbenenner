@@ -505,7 +505,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.0.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:74ae45a0efd199585a1c7e7238e2aba8f1db67e7021234748b90c3783e511627';
+const APP_BUILD = 'sha256:93854223151aacb287bf0781ae5b26eb863f422c77ba40c8429f6d8ba41fb6d4';
 const APP_DATE = '2026-11-10';
 const CHANGELOG = [
   ['2.0.1', '10.11.2026', 'Dateien an zwei Orten (Audit K1): Liegen FotoKit-, Projekt-, LabelKit-, Plan- oder Ergebnisdateien in „_Spektron“ und zusätzlich am früheren Ort (z. B. eine kopierte _Projekt.json), gilt immer die Datei in „_Spektron“ – vorher schaltete eine solche Datei das Projekt ohne Hinweis zurück. Eine Zeile unter dem Kopf nennt beide Dateien mit Datum (auch beim Zurückkommen ins Fenster neu geprüft); gelöscht wird nichts. Ändert sich der Speicherort, während FotoKit offen ist, speichert FotoKit nichts mehr und bittet, das Projekt neu zu öffnen.'],
@@ -837,6 +837,7 @@ function flushProject(){
   P.writing = P.writing.then(async () => {
     try{
       if (P.session !== session) return false;
+      if (S.ortGewechselt) return true;   // K1: Ort hat gewechselt – auch ein schon eingereihter Schreibvorgang schreibt nicht mehr
       const onDisk = await photoSnapshot(dir);
       if (P.session !== session) return false;
       // Preserve the exact loaded bytes even if a different writer already replaced them.
@@ -853,13 +854,14 @@ function flushProject(){
         }
       } else if (P.lastBytes){ throw photoConflict(); }
       const saved = clone(P.data), json = projToJson(saved), bytes = photoEncode(json);
-      await photoCommit(dir, onDisk, bytes, () => P.session === session);
+      await photoCommit(dir, onDisk, bytes, () => P.session === session && !S.ortGewechselt);
       if (P.session !== session) return false;
       P.lastText = json; P.lastBytes = bytes; P.base = saved;
       if (P.failed){ P.failed = false; if (!PJ.failed) hideBanner(); }
       return true;
     }catch(e){
       if (P.session !== session) return false;
+      if (S.ortGewechselt) return true;   // K1: abgebrochen, weil der Ort gewechselt hat – kein Speicherfehler, die Sperre ist angezeigt
       P.dirty = true;
       if (!P.failed){ P.failed = true; saveError(`Projektdatei „${PROJ_FILE}“ konnte nicht gespeichert werden: ${esc(e.message)}.`); }
       logProblem('Speichern ' + PROJ_FILE + ': ' + e.message);
@@ -1415,8 +1417,12 @@ async function ortWechselPruefen(proj){
   let jetzt;
   try{ jetzt = { projekt: (await SO.ort(proj.dir, 'projekt')).wo, fotokit: (await SO.ort(proj.dir, 'fotokit')).wo }; }catch(e){ return; }
   if (S.proj !== proj || (jetzt.projekt === proj.orteWo.projekt && jetzt.fotokit === proj.orteWo.fotokit)) return;
-  S.ortGewechselt = true; P.readOnly = true; clearTimeout(P.timer); clearTimeout(PJ.timer);
-  banner('err', 'Die FotoKit- oder Projektdaten dieses Projekts liegen inzwischen an einem anderen Ort (siehe Zeile darunter). FotoKit speichert deshalb nichts mehr – bitte das Projekt neu öffnen. <button class="primary" id="bOrtNeu">Projekt neu öffnen</button>');
+  // Sperre: auch schon eingereihte Schreibvorgänge verfallen (neue Sitzung für die FotoKit-Datei, Projektdaten prüfen die Sperre
+  // beim Start); noch nicht geschriebene Eingaben zu den Projektdaten werden verworfen – sie gingen sonst an den alten Ort.
+  const offen = Object.keys(PJ.pending).length + (P.dirty ? 1 : 0);
+  S.ortGewechselt = true; P.readOnly = true; P.dirty = false; clearTimeout(P.timer); clearTimeout(PJ.timer); PJ.pending = {};
+  banner('err', 'Die FotoKit- oder Projektdaten dieses Projekts liegen inzwischen an einem anderen Ort (siehe Zeile darunter). FotoKit speichert deshalb nichts mehr' +
+    (offen ? ' – deine letzten, noch nicht gespeicherten Eingaben werden nicht übernommen' : '') + '. Bitte das Projekt neu öffnen. <button class="primary" id="bOrtNeu">Projekt neu öffnen</button>');
   const b = $('bOrtNeu'); if (b) b.onclick = () => { hideBanner(); openDir(S.dir, S.proj); };
 }
 /* project values fill the fields; the project file wins over this app's own copy, because it is what Projektzentrale
@@ -1477,6 +1483,7 @@ function flushPJ(){
     const patch = PJ.pending;
     PJ.pending = {};
     try{
+      if (S.ortGewechselt) return true;   // K1: Ort hat gewechselt – nicht über den alten Ordner schreiben (auch wenn schon eingereiht)
       if (!Object.keys(patch).length) return !PJ.failed;
       /* Lesen → ändern → Schreiben unter einer Sperre je Projekt: Projektzentrale (anderer Tab) schreibt dieselbe Datei und nimmt dieselbe Sperre. */
       const o = await ProjectStore.update(proj.pjDir || proj.dir, proj.name, cur => {
@@ -1541,7 +1548,7 @@ async function withSavedProject(action, next){
         }
         // Merging, timers or an already queued write may have added work while
         // awaiting the first operation. Never replace their state prematurely.
-      }while (P.writes || PJ.writes || (P.dirty && !P.readOnly) || Object.keys(PJ.pending).length);
+      }while (P.writes || PJ.writes || (P.dirty && !P.readOnly) || (Object.keys(PJ.pending).length && !S.ortGewechselt));
     }
     await next();
     return true;
