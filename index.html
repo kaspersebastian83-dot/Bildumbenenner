@@ -505,7 +505,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.0.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:93854223151aacb287bf0781ae5b26eb863f422c77ba40c8429f6d8ba41fb6d4';
+const APP_BUILD = 'sha256:a1ef1257af6d058b656f7e00e3c2371578e5c4c70eb0c9833546ee03e4d32f26';
 const APP_DATE = '2026-11-10';
 const CHANGELOG = [
   ['2.0.1', '10.11.2026', 'Dateien an zwei Orten (Audit K1): Liegen FotoKit-, Projekt-, LabelKit-, Plan- oder Ergebnisdateien in „_Spektron“ und zusätzlich am früheren Ort (z. B. eine kopierte _Projekt.json), gilt immer die Datei in „_Spektron“ – vorher schaltete eine solche Datei das Projekt ohne Hinweis zurück. Eine Zeile unter dem Kopf nennt beide Dateien mit Datum (auch beim Zurückkommen ins Fenster neu geprüft); gelöscht wird nichts. Ändert sich der Speicherort, während FotoKit offen ist, speichert FotoKit nichts mehr und bittet, das Projekt neu zu öffnen.'],
@@ -4176,6 +4176,7 @@ async function openPhotoVersions(){
         $('vBack').onclick = openPhotoVersions;
         $('vRestore').onclick = async () => {
           if (P.session !== session || (S.data || S.dir) !== dir || S.changing || S.busy) return;
+          if (S.ortGewechselt){ closeDialog(); return; }   // K1: Ort gewechselt – der Hinweis oben sagt, was zu tun ist
           S.changing = true;
           const inert = document.body.inert; document.body.inert = true;
           try{
@@ -4186,7 +4187,8 @@ async function openPhotoVersions(){
             if (P.session !== session || (S.data || S.dir) !== dir) throw new Error('Das Projekt hat sich geändert.');
             flushDrafts(); saveExtra(); clearTimeout(P.timer);
             await photoBackup(dir, 'kandidat', photoEncode(projToJson(clone(P.data))));
-            await restorePhotoVersion(dir, version, result.current, () => P.session === session && (S.data || S.dir) === dir);
+            if (S.ortGewechselt) throw new Error('Die FotoKit-Daten liegen inzwischen an einem anderen Ort – bitte das Projekt neu öffnen.');   // K1
+            await restorePhotoVersion(dir, version, result.current, () => P.session === session && (S.data || S.dir) === dir && !S.ortGewechselt);
             await loadProject(dir);
             P.writing = Promise.resolve(true);
             await loadItems();
