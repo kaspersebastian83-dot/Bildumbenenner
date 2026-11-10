@@ -505,7 +505,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.0.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:df9e1be7efc75c66461d432dccb350b52445a23ab82a3e8fff0471f874ec2952';
+const APP_BUILD = 'sha256:f4c34cc6584da2a3556eb757ec65b27cfb8eddc428bee0d4a8e0203b0b0fa31d';
 const APP_DATE = '2026-11-10';
 const CHANGELOG = [
   ['2.0.1', '10.11.2026', 'Dateien an zwei Orten (Audit K1): Liegen FotoKit-, Projekt-, LabelKit-, Plan- oder Ergebnisdateien in „_Spektron“ und zusätzlich am früheren Ort (z. B. eine kopierte _Projekt.json), gilt immer die Datei in „_Spektron“ – vorher schaltete eine solche Datei das Projekt ohne Hinweis zurück. Eine Zeile unter dem Kopf nennt beide Dateien mit Datum; gelöscht wird nichts.'],
@@ -964,7 +964,7 @@ async function refreshPJ(){
   if (applyPJ(meta)) projSet('meta', meta);
   if (!$('banner').classList.contains('err')) banner('ok', 'Projektdaten wurden geändert (Projektzentrale oder Kollege) und neu übernommen.');
 }
-window.addEventListener('focus', () => { checkExternal(); refreshPJ(); });
+window.addEventListener('focus', () => { checkExternal(); refreshPJ(); void zweiOrteZeigen(); });   // K1: Zeile auch beim Zurückkommen neu prüfen
 
 function applyMergedToItems(orderChanged){
   const d = P.data, disc = new Set(d.discard);
