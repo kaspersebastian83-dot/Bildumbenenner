@@ -506,11 +506,12 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.1.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:b4fe4ff8626b2659d3b1233be8785586727c43f6f82c4778cb202fef454218bf';
+const APP_BUILD = 'sha256:95343bf2da99e9d8534fae1323f4ed5b773839681af27b20c10d1e7d8916da49';
 const APP_DATE = '2026-11-11';
 const CHANGELOG = [
+  ['2.1.1', '11.11.2026', 'Laborstand („Seit der Übernahme hat sich der Ordner geändert“): zählt nur noch die LabelKit-Datei dieses Projekts – dieselbe wie ResultKit 2.3, PlanKit 2.1.1 und die Projektzentrale; eine fremde …_Daten.json gibt den Hinweis nicht mehr. Einmalig kann er erscheinen, wo bisher eine fremde oder eine ältere datierte Datei mitzählte: in ResultKit einmal „Erneut übernehmen“. Spektron-Leiste: „Proben ✓“ nur für eine Datei dieses Projekts. FotoKits eigene Dateiwahl (lkWahl) bleibt unverändert.'],
   ['2.1.0', '11.11.2026', 'LabelKit-Datei und Öffnen ohne Schreiben (Audit m1, m3): FotoKit nimmt nur noch die LabelKit-Datei dieses Projekts – Name beginnt mit der Projektnummer (auch alte Namen mit Datum), gleiche Wahl wie LabelKit und PlanKit. Liegt nur die Datei eines anderen Projekts da oder nennt die Datei im Inhalt ein anderes Projekt, lädt FotoKit keine Proben und sagt das in einer Zeile unter dem Kopf; nie mehr Probennummern oder Namen aus einem anderen Projekt. Öffnen und Ansehen schreiben nichts mehr: „_Bildumbenenner.json“, „_FotoKit_Fassungen“ und der Ordner „_Spektron/FotoKit“ entstehen erst mit der ersten Eingabe; übernommene Projektdaten aus der Projektzentrale werden dann mitgespeichert.'],
   ['2.0.1', '10.11.2026', 'Dateien an zwei Orten (Audit K1): Liegen FotoKit-, Projekt-, LabelKit-, Plan- oder Ergebnisdateien in „_Spektron“ und zusätzlich am früheren Ort (z. B. eine kopierte _Projekt.json), gilt immer die Datei in „_Spektron“ – vorher schaltete eine solche Datei das Projekt ohne Hinweis zurück. Eine Zeile unter dem Kopf nennt beide Dateien mit Datum (auch beim Zurückkommen ins Fenster neu geprüft); gelöscht wird nichts. Ändert sich der Speicherort, während FotoKit offen ist, speichert FotoKit nichts mehr und bittet, das Projekt neu zu öffnen.'],
   ['2.0.0', '01.11.2026', 'Neue, einfache Oberfläche (Spektron „einfache Oberfläche“): Oben das Kopfband wie in BerichtKit – Projekt groß, sechs Schritt-Kacheln, „Weiter: … →“. In der Mitte eine Frage: „Welche Fotos gehören in die Doku?“ – Fotos als große Kacheln (gelb = Beschreibung fehlt, abgeblendet = Weg), rechts die Karte des gewählten Fotos mit „Was ist zu sehen?“, „Gehört zu Probe“ (Vorschläge aus LabelKit), „Raum / Abschnitt“, Drehen, Weg und „◂ Früher / Später ▸“. Ein Zustand statt zwei: Haken „in der Doku“ auf der Kachel = dasselbe wie „Weg“ in der Karte, gespeichert wie früher das ✕; Weg-Fotos bleiben an ihrem Platz; Alle/Keine/Umkehren wirken sofort und lassen sich rückgängig machen (die Nachfrage „nicht angehakt“ vor dem Export entfällt). Die ▲▼✕-Knöpfe sind weg – Reihenfolge per Ziehen, Früher/Später oder Alt+←/→. Unten „Mehr …“ (Dateinamen, Sortierung, Dateien umbenennen, ZIP, Ergebnistabelle, Fotos neu einlesen, Sicherungen und Programmstand, Kurzanleitung, Handbuch, Rückmeldung), daneben der Stand („n Fotos ohne Beschreibung“ springt zum nächsten) und eine Hauptaktion „Bilddokumentation erstellen →“. Der Dialog dazu zeigt zuerst das Deckblatt (Pflichtangaben gelb), Bildqualität usw. unter „Einstellungen“; der eigene Knopf „Projektdaten …“ entfällt. Beim ersten Erstellen der Bilddoku eines Projekts bietet der Dialog einmal an, die Dateien vorher passend umzubenennen (die Nummer im Dateinamen ist die Bildnummer im PDF). „Gehört zu Probe“ schlägt die Proben aus LabelKit vor. Farben aus der Spektron-Leiste (FotoKit-Blau), Schrift Segoe UI. An Projektdatei, PDF, ZIP und der Verbindung zu den anderen Apps ändert sich nichts.'],
@@ -4856,9 +4857,13 @@ async function findLabFiles(){
     if (/\.xml$/i.test(h.name)) LAB.files.push({ handle: h, name: h.name, mod: f.lastModified });
   }
   LAB.files.sort((a, b) => b.mod - a.mod);
-  // Neueste LabelKit-Datei gehört zum Stand der Übernahme (wie in ResultKit) – bewusst jede …_Daten.json, solange ResultKit es so zählt (m1-Rest), nur Stand-Vergleich, keine Proben
+  // LabelKit-Datei im Stand der Übernahme: dieselbe wie in ResultKit 2.3 – die Datei dieses Projekts nach lkWahl (Regel wie LabelKit 5.1,
+  // Audit o16), nicht mehr die neueste beliebige. Nur Stand-Vergleich, keine Proben.
   const la = (await SO.ort(S.proj.dir, 'labelkit').catch(() => ({ dir: null }))).dir, laPfad = 'Laboraufträge';   // feste Kennung wie in ResultKit – bleibt nach dem Umzug gleich
-  if (la){ let neu = null; for await (const h of la.values()) if (h.kind === 'file' && /_Daten\.json$/i.test(h.name)){ const f = await h.getFile(); if (!neu || f.lastModified > neu.t) neu = { name: laPfad + '/' + h.name, size: f.size, t: f.lastModified }; } if (neu) stand.push(neu); }
+  if (la){
+    const nr = lkNfc((SO.projektNr && SO.projektNr(S.proj.name)) || S.proj.nr || ''), w = await lkWahl(la, nr);
+    if (w.datei){ const f = await (await la.getFileHandle(w.datei.name)).getFile(); stand.push({ name: laPfad + '/' + w.datei.name, size: f.size, t: f.lastModified }); }
+  }
   LAB.stand = standKennung(stand);
 }
 async function loadLabFile(file){
@@ -5465,7 +5470,12 @@ updateExample();
     try{ var fo = await bereich('fotokit', 'Fotos'); if (fo) s.fotos = await fo.getFileHandle('_Bildumbenenner.json').then(function(){ return true; }, function(){ return false; }); }catch(e4){}
     try{
       var la = await bereich('labelkit', 'Laboraufträge');
-      if (la) for await (var f of la.values()) if (f.kind === 'file' && /_Daten\.json$/i.test(f.name)){ s.label = true; break; }
+      // ✓ nur für die LabelKit-Datei dieses Projekts (Audit o8; Regel wie LabelKit 5.1): Name beginnt mit der Projektnummer, danach keine Ziffer
+      var lkM = /^(\d{2}\.\d{2,6})(?:[\s_-]|$)/.exec(nfc(proj.name).trim()), lkNr = lkM ? ((/(?<!\d)\d{2}\.\d{3,6}(?!\d)/.exec(lkM[1]) || [''])[0]) : '';
+      if (la) for await (var f of la.values()) if (f.kind === 'file' && /_Daten\.json$/i.test(nfc(f.name))){
+        var lkN = nfc(f.name).trim();
+        if (!lkNr || (lkN.indexOf(lkNr) === 0 && !/^\d/.test(lkN.slice(lkNr.length)))){ s.label = true; break; }
+      }
     }catch(e5){}
     try{ var le = await bereich('resultkit', 'Laborergebnisse'); if (le) s.ergebnis = await le.getFileHandle('_Ergebnisse.json').then(function(){ return true; }, function(){ return false; }); }catch(e8){}   // ResultKit: geprüfte Ergebnisse übernommen
     try{
