@@ -269,7 +269,7 @@ let browser, server;
     assert.equal((await disk('A')).json.bilder['B_01.jpg'], undefined);
   });
 
-  await scenario('Verzögertes Ziel mit geänderten gemeinsamen Daten: erst nach Erfolg autospeichern', async ({page, start, open, disk, contextIs}) => {
+  await scenario('Verzögertes Ziel mit geänderten gemeinsamen Daten: Öffnen schreibt nichts, erst die erste Eingabe speichert sie mit (Audit m3)', async ({page, start, open, disk, contextIs}) => {
     await start();
     await page.evaluate(async () => {
       const root = await navigator.storage.getDirectory();
@@ -284,6 +284,9 @@ let browser, server;
     await page.waitForTimeout(650);
     assert.deepEqual(await disk('B'), b, 'Beim Laden noch keine Ziel-Schreibvorgänge');
     await page.evaluate(() => releaseRead());await contextIs('B');
+    await page.waitForTimeout(1000);
+    assert.deepEqual(await disk('B'), b, 'Nach dem Öffnen (nur ansehen) unverändert – Projektdaten nur im Speicher (m3)');
+    await ui.feld(page, 'desc', 0).fill('B erste Eingabe');
     await waitForAsync(page, async () => {
       const r = await navigator.storage.getDirectory();
       const p = await (await r.getDirectoryHandle('Archiv')).getDirectoryHandle('26.0902 Kontext B');
@@ -292,7 +295,8 @@ let browser, server;
     });
     const saved = await disk('B');
     assert.equal(saved.json.projekt.proj, '26.0902');
-    assert.deepEqual(saved.json.bilder, b.json.bilder);
+    assert.equal(saved.json.bilder['B_01.jpg'].beschreibung, 'B erste Eingabe');
+    assert.deepEqual({...saved.json.bilder['B_01.jpg'], beschreibung: undefined}, {...b.json.bilder['B_01.jpg'], beschreibung: undefined});
     assert.deepEqual(saved.json.reihenfolge, b.json.reihenfolge);
     assert.equal(saved.sharedRaw, b.sharedRaw);
   });
