@@ -33,7 +33,8 @@ ctx.SK.usage = ''; ctx.SK.vds = {};
   assert.match(r.scale.cats[1].name, /im Bereich der korrosionschemisch relevanten Größenordnung/); }
 // Kategorie ohne „ab“-Wert (leeres Feld, in JSON als null gespeichert) bewertet keine Werte und wird nicht gespeichert
 { const ra = html.indexOf('function rate(scale, v){'), rb = html.indexOf('function photoNumbers()'); assert.ok(ra > 0 && rb > ra, 'rate() in index.html');
-  const rc = {}; vm.runInNewContext(html.slice(ra, rb) + '\nthis.rate = rate;', rc);
+  const sa = html.indexOf('const stufeErreicht = '), se = html.indexOf('\n', sa);   // KORROSION-CHLORID v2: rate() vergleicht über stufeErreicht
+  const rc = {}; vm.runInNewContext(html.slice(sa, se) + '\n' + html.slice(ra, rb) + '\nthis.rate = rate;', rc);
   const kaputt = JSON.parse(JSON.stringify({ name: 'x', cats: [{ name: 'niedrig', from: 0 }, { name: 'hoch', from: NaN }, { name: 'sehr hoch', from: 10 }] }));
   assert.equal(kaputt.cats[1].from, null);
   assert.deepEqual([0.1, 3, 50].map(v => rc.rate(kaputt, v)), ['niedrig', 'niedrig', 'sehr hoch'], 'from:null bewertet nicht jeden Wert');

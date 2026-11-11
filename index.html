@@ -506,11 +506,12 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '2.1.1';
+const APP_VERSION = '2.2.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:95343bf2da99e9d8534fae1323f4ed5b773839681af27b20c10d1e7d8916da49';
+const APP_BUILD = 'sha256:594cfd2ca06dcac93ed4ce8d1b08a4849dab018111f1044f95872f2ec740508c';
 const APP_DATE = '2026-11-11';
 const CHANGELOG = [
+  ['2.2.0', '11.11.2026', 'Chlorid genau 10 µg/cm² (Audit m7, Entscheidung 4): ein Wert von genau 10 µg/cm² (bzw. 100 mg/m²) liegt in der Ergebnistabelle jetzt „im Bereich“ der korrosionschemisch relevanten Größenordnung (VdS 2357: 5–10 µg/cm²), „oberhalb“ erst darüber; genau 5 bleibt „im Bereich“. Die Skalen-Übersicht zeigt „> 10 µg/cm²“. Gleich in ResultKit, PlanKit und BerichtKit (KORROSION-CHLORID v2). Eine in PlanKit angepasste Chlorid-Skala mit denselben Grenzen folgt derselben Regel, eine mit anderen Grenzen zählt ab ihren „ab“-Werten. Dateiformat unverändert.'],
   ['2.1.1', '11.11.2026', 'Laborstand („Seit der Übernahme hat sich der Ordner geändert“): zählt nur noch die LabelKit-Datei dieses Projekts – dieselbe wie ResultKit 2.3, PlanKit 2.1.1 und die Projektzentrale; eine fremde …_Daten.json gibt den Hinweis nicht mehr. Einmalig kann er erscheinen, wo bisher eine fremde oder eine ältere datierte Datei mitzählte: in ResultKit einmal „Erneut übernehmen“. Spektron-Leiste: „Proben ✓“ nur für eine Datei dieses Projekts. FotoKits eigene Dateiwahl (lkWahl) bleibt unverändert.'],
   ['2.1.0', '11.11.2026', 'LabelKit-Datei und Öffnen ohne Schreiben (Audit m1, m3): FotoKit nimmt nur noch die LabelKit-Datei dieses Projekts – Name beginnt mit der Projektnummer (auch alte Namen mit Datum), gleiche Wahl wie LabelKit und PlanKit. Liegt nur die Datei eines anderen Projekts da oder nennt die Datei im Inhalt ein anderes Projekt, lädt FotoKit keine Proben und sagt das in einer Zeile unter dem Kopf; nie mehr Probennummern oder Namen aus einem anderen Projekt. Öffnen und Ansehen schreiben nichts mehr: „_Bildumbenenner.json“, „_FotoKit_Fassungen“ und der Ordner „_Spektron/FotoKit“ entstehen erst mit der ersten Eingabe; übernommene Projektdaten aus der Projektzentrale werden dann mitgespeichert.'],
   ['2.0.1', '10.11.2026', 'Dateien an zwei Orten (Audit K1): Liegen FotoKit-, Projekt-, LabelKit-, Plan- oder Ergebnisdateien in „_Spektron“ und zusätzlich am früheren Ort (z. B. eine kopierte _Projekt.json), gilt immer die Datei in „_Spektron“ – vorher schaltete eine solche Datei das Projekt ohne Hinweis zurück. Eine Zeile unter dem Kopf nennt beide Dateien mit Datum (auch beim Zurückkommen ins Fenster neu geprüft); gelöscht wird nichts. Ändert sich der Speicherort, während FotoKit offen ist, speichert FotoKit nichts mehr und bittet, das Projekt neu zu öffnen.'],
@@ -4604,18 +4605,29 @@ const loadScales = () => store.get('bu-scales', {});
    VdS 2357; Quelle: LANUV, Bericht Steinhagen 15.02.2023, S. 7). Keine weiteren Skalen werden erfunden. */
 const SK = { usage: '', nutzung: '', vds: {}, quelle: '' };
 const VDS_WOHNEN = ['Wohnen', 'Büro', 'Öffentlich', 'Gesundheit & Labor'], VDS_INDUSTRIE = ['Gewerbe/Industrie', 'Landwirtschaft'];
-/* ===== KORROSION-CHLORID v1 – in ResultKit, PlanKit (TypeScript) und FotoKit (JavaScript) gleich halten =====
+/* ===== KORROSION-CHLORID v2 – in ResultKit, PlanKit (TypeScript), FotoKit und BerichtKit (JavaScript) gleich halten =====
    Chlorid auf Oberflächen: VdS 2357 nennt 5–10 µg/cm² als korrosionschemisch relevante Größenordnung (Vorgabe des Büros).
    Gilt unabhängig von der Nutzung. Die Grenzen werden in die Einheit des Berichts umgerechnet (1 µg/cm² = 10 mg/m²),
-   damit ältere Berichte in mg/m² gleich bewertet werden. Wie die PAK-Referenz in PlanKit anpassbar (dann nur im Projekt). */
+   damit ältere Berichte in mg/m² gleich bewertet werden. Wie die PAK-Referenz in PlanKit anpassbar (dann nur im Projekt).
+   v2 (Audit m7, Entscheidung 4): genau 10 µg/cm² liegt noch „im Bereich“, „oberhalb“ erst über 10; genau 5 bleibt „im Bereich“.
+   Keine neue Zahl: die Stufe „oberhalb“ trägt `ueber: true` (zählt erst über ihrem Wert), jede andere Stufe zählt ab ihrem Wert.
+   `ueber` steht nie in einer Datei. Eine in PlanKit angepasste Chlorid-Skala mit denselben Grenzen wie die Referenz bekommt es
+   beim Lesen (vdsRegel); eine mit anderen Grenzen zählt ab ihren „ab“-Werten. */
 const CHLORID_JE_UG_CM2 = { 'µg/cm2': 1, 'mg/m2': 10, 'µg/m2': 10000, 'mg/cm2': .001, 'µg/100cm2': 100, 'mg/dm2': .1 };
 const chloridEinheit = unit => CHLORID_JE_UG_CM2[String(unit || '').replace(/μ/g, 'µ').replace(/²/g, '2').replace(/\s+/g, '').toLowerCase()];
 function chloridSkala(param, unit){
   const f = /^Chlorid\b/i.test(String(param || '').trim()) ? chloridEinheit(unit) : undefined; if (!f) return null;
   return { name: 'VdS 2357 · Chlorid · korrosionschemisch relevant 5–10 µg/cm²', cats: [{ name: 'unterhalb der korrosionschemisch relevanten Größenordnung', from: 0 },
-    { name: 'im Bereich der korrosionschemisch relevanten Größenordnung', from: 5 * f }, { name: 'oberhalb der korrosionschemisch relevanten Größenordnung', from: 10 * f }] };
+    { name: 'im Bereich der korrosionschemisch relevanten Größenordnung', from: 5 * f }, { name: 'oberhalb der korrosionschemisch relevanten Größenordnung', from: 10 * f, ueber: true }] };
 }
-/* ===== Ende KORROSION-CHLORID v1 ===== */
+/** Wert in dieser Stufe? `ueber`: erst über dem Wert, sonst ab dem Wert. */
+const stufeErreicht = (c, v) => c.ueber ? v > c.from : v >= c.from;
+/** Angepasste Skala zu einer Referenz: gleiche Zahl Stufen mit denselben Grenzen → Regel der Referenz (`ueber`), nur im Speicher. */
+function vdsRegel(eigen, vds){
+  if (!vds.cats.some(c => c.ueber) || eigen.cats.length !== vds.cats.length || eigen.cats.some((c, i) => Number(c.from) !== vds.cats[i].from)) return eigen;
+  return { ...eigen, cats: eigen.cats.map((c, i) => vds.cats[i].ueber ? { ...c, ueber: true } : c) };
+}
+/* ===== Ende KORROSION-CHLORID v2 ===== */
 function vdsSkala(param, unit){
   const chlorid = chloridSkala(param, unit); if (chlorid) return chlorid;   // gilt ohne Nutzung
   if (!SK.usage || !/^(?:Summe|Σ)\s*16\s*EPA[-– ]PAK(?:\s.*)?$/i.test(param || '')) return null;
@@ -4628,7 +4640,7 @@ function vdsSkala(param, unit){
 /** Wirksame Skala für Parameter/Einheit: { scale, vds, angepasst }. */
 function skalaFuer(param, unit){
   const key = scaleKey(param, unit), vds = vdsSkala(param, unit);
-  if (vds){ const a = SK.vds[key]; return a && Array.isArray(a.cats) && a.cats.length ? { scale: { name: a.name || vds.name, cats: a.cats.map(c => ({ name: c.name, from: c.from })) }, vds, angepasst: true } : { scale: vds, vds, angepasst: false }; }
+  if (vds){ const a = SK.vds[key]; return a && Array.isArray(a.cats) && a.cats.length ? { scale: vdsRegel({ name: a.name || vds.name, cats: a.cats.map(c => ({ name: c.name, from: c.from })) }, vds), vds, angepasst: true } : { scale: vds, vds, angepasst: false }; }   // gleiche Grenzen → Regel der Referenz (v2)
   return { scale: loadScales()[key] || null, vds: null, angepasst: false };
 }
 async function loadSkalenregel(){
@@ -4651,7 +4663,7 @@ async function loadSkalenregel(){
 function rate(scale, v){
   if (!scale || !scale.cats || !scale.cats.length || !isFinite(v)) return '';
   let c = scale.cats[0].name;
-  for (const k of scale.cats) if (typeof k.from === 'number' && Number.isFinite(k.from) && v >= k.from) c = k.name;
+  for (const k of scale.cats) if (typeof k.from === 'number' && Number.isFinite(k.from) && stufeErreicht(k, v)) c = k.name;
   return c;
 }
 function photoNumbers(){        // Probe-Nr. → picture numbers as in the PDF / Bildverzeichnis
@@ -4951,7 +4963,7 @@ async function openLabDialog(){
       const eff = skalaFuer(r.p1, u);
       if (eff.vds) return `<div class="scale vds" data-unit="${esc(u)}"><div class="m">Skala für <b>${esc(shortParam(r.p1))} in ${esc(u)}</b>: ${eff.angepasst ? `in PlanKit angepasst aus „${esc(eff.vds.name)}“` : `VdS-Referenz „${esc(eff.vds.name)}“`} – ${chloridSkala(r.p1, u) ? 'gilt für Chlorid unabhängig von der Nutzung' : `gilt, weil die Nutzung gewählt ist (${esc(SK.quelle)})`}.
         Ändern in <b>PlanKit → Ergebniskarte</b>; die Änderung gilt dann auch hier.</div>
-        <table class="stab"><tr><th>Kategorie</th><th>Bereich</th></tr>${eff.scale.cats.map((c, i) => `<tr><td>${esc(c.name)}</td><td>${esc(i === 0 ? (eff.scale.cats[1] ? `< ${eff.scale.cats[1].from.toLocaleString('de-DE')} ${u}` : 'alle Werte') : `≥ ${c.from.toLocaleString('de-DE')} ${u}`)}</td></tr>`).join('')}</table></div>`;
+        <table class="stab"><tr><th>Kategorie</th><th>Bereich</th></tr>${eff.scale.cats.map((c, i) => `<tr><td>${esc(c.name)}</td><td>${esc(i === 0 ? (eff.scale.cats[1] ? `${eff.scale.cats[1].ueber ? '≤' : '<'} ${eff.scale.cats[1].from.toLocaleString('de-DE')} ${u}` : 'alle Werte') : `${c.ueber ? '>' : '≥'} ${c.from.toLocaleString('de-DE')} ${u}`)}</td></tr>`).join('')}</table></div>`;
       const s = sc[scaleKey(r.p1, u)] || { name: '', cats: [{ name: '', from: 0 }] };
       return `<div class="scale" data-unit="${esc(u)}">
         <div class="m">Skala für <b>${esc(shortParam(r.p1))} in ${esc(u)}</b> – Kategorien aufsteigend; ein Wert gehört zur letzten Kategorie, deren „ab“-Wert er erreicht. Werte unter der BG, n.n. und n.b. erhalten keine Kategorie. Mit Archivordner gilt sie fürs ganze Büro (<code>_Spektron-Skalen.json</code>), sonst nur in diesem Browser.</div>
