@@ -508,7 +508,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.1.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:feba4e84f2817e3fec7a7e766030a98ebb0a7a60ce5ef93c890cedfba50f09d5';
+const APP_BUILD = 'sha256:b4fe4ff8626b2659d3b1233be8785586727c43f6f82c4778cb202fef454218bf';
 const APP_DATE = '2026-11-11';
 const CHANGELOG = [
   ['2.1.0', '11.11.2026', 'LabelKit-Datei und Öffnen ohne Schreiben (Audit m1, m3): FotoKit nimmt nur noch die LabelKit-Datei dieses Projekts – Name beginnt mit der Projektnummer (auch alte Namen mit Datum), gleiche Wahl wie LabelKit und PlanKit. Liegt nur die Datei eines anderen Projekts da oder nennt die Datei im Inhalt ein anderes Projekt, lädt FotoKit keine Proben und sagt das in einer Zeile unter dem Kopf; nie mehr Probennummern oder Namen aus einem anderen Projekt. Öffnen und Ansehen schreiben nichts mehr: „_Bildumbenenner.json“, „_FotoKit_Fassungen“ und der Ordner „_Spektron/FotoKit“ entstehen erst mit der ersten Eingabe; übernommene Projektdaten aus der Projektzentrale werden dann mitgespeichert.'],
@@ -1410,6 +1410,13 @@ async function spektronOrt(projDir, bereich){
 function spaeterAnlegen(projDir, bereich){
   let echt = null, unterwegs = null;
   const fehlt = () => new DOMException('Ordner ist noch nicht angelegt', 'NotFoundError');
+  // Codex (#84): hat inzwischen ein anderer PC/Tab den Ordner am neuen Ort angelegt, wird er übernommen – sonst sähen
+  // refreshPJ/checkExternal dessen Dateien nicht. Nur am neuen Ort; gilt ein anderer Ort, bleibt es beim leeren Platzhalter (K1-Sperre).
+  const finden = async () => {
+    if (echt) return echt;
+    try{ const r = await SO.ort(projDir, bereich); if (r.wo === 'neu' && r.dir) echt = r.dir; }catch(e){}
+    return echt;
+  };
   const anlegen = () => echt ? Promise.resolve(echt) : unterwegs || (unterwegs = (async () => {
     try{
       const r = await SO.ort(projDir, bereich, { anlegen: true });
@@ -1417,16 +1424,16 @@ function spaeterAnlegen(projDir, bereich){
       return (echt = r.dir);
     }finally{ unterwegs = null; }
   })());
-  const leer = async function* (){};
+  const liste = art => (async function* (){ const d = await finden(); if (d) yield* d[art](); })();
   return {
     kind: 'directory', spaeter: true,
     get name(){ return echt ? echt.name : (SO.BEREICHE && SO.BEREICHE[bereich] && SO.BEREICHE[bereich].neu.slice(-1)[0]) || SO.ORDNER; },
-    async getFileHandle(n, o){ if (echt) return echt.getFileHandle(n, o); if (o && o.create) return (await anlegen()).getFileHandle(n, o); throw fehlt(); },
-    async getDirectoryHandle(n, o){ if (echt) return echt.getDirectoryHandle(n, o); if (o && o.create) return (await anlegen()).getDirectoryHandle(n, o); throw fehlt(); },
-    async removeEntry(n, o){ if (echt) return echt.removeEntry(n, o); throw fehlt(); },
-    values(){ return echt ? echt.values() : leer(); },
-    keys(){ return echt ? echt.keys() : leer(); },
-    entries(){ return echt ? echt.entries() : leer(); },
+    async getFileHandle(n, o){ const d = await finden(); if (d) return d.getFileHandle(n, o); if (o && o.create) return (await anlegen()).getFileHandle(n, o); throw fehlt(); },
+    async getDirectoryHandle(n, o){ const d = await finden(); if (d) return d.getDirectoryHandle(n, o); if (o && o.create) return (await anlegen()).getDirectoryHandle(n, o); throw fehlt(); },
+    async removeEntry(n, o){ const d = await finden(); if (d) return d.removeEntry(n, o); throw fehlt(); },
+    values(){ return liste('values'); },
+    keys(){ return liste('keys'); },
+    entries(){ return liste('entries'); },
     [Symbol.asyncIterator](){ return this.entries(); },
     async isSameEntry(x){ if (x === this) return true; return !!(echt && x && !x.spaeter) && echt.isSameEntry(x); },
     async resolve(x){ return echt ? echt.resolve(x) : null; },
