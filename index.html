@@ -255,6 +255,8 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 #banner.info{background:var(--panel2)}
 #zweiOrte{padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px;background:color-mix(in srgb,var(--err) 14%,var(--panel))}
 #zweiOrte[hidden]{display:none}
+#lkZeile{padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px;background:color-mix(in srgb,var(--warn) 18%,var(--panel))}
+#lkZeile[hidden]{display:none}
 #banner .repBtn{font-size:12px;padding:2px 9px;margin-left:auto}
 #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:2147483003;cursor:zoom-out}
 #lightbox.show{display:flex}
@@ -346,6 +348,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 
 <div id="banner"></div>
 <div id="zweiOrte" role="status" hidden></div>
+<div id="lkZeile" role="status" hidden></div>
 
 <div id="empty">
   <div class="drop" id="drop">
@@ -503,11 +506,12 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '2.0.1';
+const APP_VERSION = '2.1.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:a1ef1257af6d058b656f7e00e3c2371578e5c4c70eb0c9833546ee03e4d32f26';
-const APP_DATE = '2026-11-10';
+const APP_BUILD = 'sha256:b4fe4ff8626b2659d3b1233be8785586727c43f6f82c4778cb202fef454218bf';
+const APP_DATE = '2026-11-11';
 const CHANGELOG = [
+  ['2.1.0', '11.11.2026', 'LabelKit-Datei und Öffnen ohne Schreiben (Audit m1, m3): FotoKit nimmt nur noch die LabelKit-Datei dieses Projekts – Name beginnt mit der Projektnummer (auch alte Namen mit Datum), gleiche Wahl wie LabelKit und PlanKit. Liegt nur die Datei eines anderen Projekts da oder nennt die Datei im Inhalt ein anderes Projekt, lädt FotoKit keine Proben und sagt das in einer Zeile unter dem Kopf; nie mehr Probennummern oder Namen aus einem anderen Projekt. Öffnen und Ansehen schreiben nichts mehr: „_Bildumbenenner.json“, „_FotoKit_Fassungen“ und der Ordner „_Spektron/FotoKit“ entstehen erst mit der ersten Eingabe; übernommene Projektdaten aus der Projektzentrale werden dann mitgespeichert.'],
   ['2.0.1', '10.11.2026', 'Dateien an zwei Orten (Audit K1): Liegen FotoKit-, Projekt-, LabelKit-, Plan- oder Ergebnisdateien in „_Spektron“ und zusätzlich am früheren Ort (z. B. eine kopierte _Projekt.json), gilt immer die Datei in „_Spektron“ – vorher schaltete eine solche Datei das Projekt ohne Hinweis zurück. Eine Zeile unter dem Kopf nennt beide Dateien mit Datum (auch beim Zurückkommen ins Fenster neu geprüft); gelöscht wird nichts. Ändert sich der Speicherort, während FotoKit offen ist, speichert FotoKit nichts mehr und bittet, das Projekt neu zu öffnen.'],
   ['2.0.0', '01.11.2026', 'Neue, einfache Oberfläche (Spektron „einfache Oberfläche“): Oben das Kopfband wie in BerichtKit – Projekt groß, sechs Schritt-Kacheln, „Weiter: … →“. In der Mitte eine Frage: „Welche Fotos gehören in die Doku?“ – Fotos als große Kacheln (gelb = Beschreibung fehlt, abgeblendet = Weg), rechts die Karte des gewählten Fotos mit „Was ist zu sehen?“, „Gehört zu Probe“ (Vorschläge aus LabelKit), „Raum / Abschnitt“, Drehen, Weg und „◂ Früher / Später ▸“. Ein Zustand statt zwei: Haken „in der Doku“ auf der Kachel = dasselbe wie „Weg“ in der Karte, gespeichert wie früher das ✕; Weg-Fotos bleiben an ihrem Platz; Alle/Keine/Umkehren wirken sofort und lassen sich rückgängig machen (die Nachfrage „nicht angehakt“ vor dem Export entfällt). Die ▲▼✕-Knöpfe sind weg – Reihenfolge per Ziehen, Früher/Später oder Alt+←/→. Unten „Mehr …“ (Dateinamen, Sortierung, Dateien umbenennen, ZIP, Ergebnistabelle, Fotos neu einlesen, Sicherungen und Programmstand, Kurzanleitung, Handbuch, Rückmeldung), daneben der Stand („n Fotos ohne Beschreibung“ springt zum nächsten) und eine Hauptaktion „Bilddokumentation erstellen →“. Der Dialog dazu zeigt zuerst das Deckblatt (Pflichtangaben gelb), Bildqualität usw. unter „Einstellungen“; der eigene Knopf „Projektdaten …“ entfällt. Beim ersten Erstellen der Bilddoku eines Projekts bietet der Dialog einmal an, die Dateien vorher passend umzubenennen (die Nummer im Dateinamen ist die Bildnummer im PDF). „Gehört zu Probe“ schlägt die Proben aus LabelKit vor. Farben aus der Spektron-Leiste (FotoKit-Blau), Schrift Segoe UI. An Projektdatei, PDF, ZIP und der Verbindung zu den anderen Apps ändert sich nichts.'],
   ['1.34.0', '01.11.2026', 'Spektron-Leiste v2: Schritt „BerichtKit · Brandbericht“ bzw. „· Asbestbericht“, wenn BerichtKit sich die Berichtsart des Projekts gemerkt hat (der Link öffnet genau diese); Haken bei BerichtKit nur für einen gespeicherten Bericht dieser Art, dessen Datei noch in „Mitteilungen“ liegt (Projekte ohne BerichtKit-Angaben wie bisher nach dem Dateinamen). Nach dem gespeicherten Bericht heißt der Knopf „Weiter: Ans Büro übergeben →“ (Projektzentrale, eigenes Fenster). „Weiter“ nennt im Tooltip Ziel und Grund. Keine Nummern mehr an den Schritten (✓ reicht), die eigene App ist deutlicher markiert, „Aktuelles Projekt“ im Projektmenü lädt nicht mehr neu.'],
@@ -609,6 +613,14 @@ const store = {
   }
 };
 function projGet(kind, d){ return P.data && P.data[kind] !== undefined ? clone(P.data[kind]) : d; }
+/** Audit m3: Projektdaten aus _Projekt.json (beim Öffnen, beim Zurückkommen ins Fenster) nur im Speicher übernehmen – mit
+    „Doku geändert“, wie projSet. Geschrieben wird erst beim nächsten Speichern, das der Nutzer auslöst; Öffnen und Ansehen
+    schreiben nichts. (BerichtKit sieht „veraltet“ dadurch erst nach diesem Speichern – offener Punkt o15.) */
+function metaNurImSpeicher(meta){
+  if (!P.data || JSON.stringify(P.data.meta) === JSON.stringify(meta)) return;
+  P.data.meta = clone(meta);
+  dokuGeaendert();
+}
 function projSet(kind, v){
   if (!P.data || JSON.stringify(P.data[kind]) === JSON.stringify(v)) return;
   P.data[kind] = clone(v);
@@ -636,7 +648,7 @@ function dokuBestandPruefen(){
   if (!b || !Array.isArray(b.bestand) || P.readOnly) return;
   if (ext.dokuGeaendert && ext.dokuGeaendert > b.erstellt) return;   // schon veraltet
   const damals = new Set(b.bestand), jetzt = S.items.map(it => it.name);
-  if (jetzt.length !== damals.size || jetzt.some(n => !damals.has(n))){ dokuGeaendert(); scheduleProjSave(); }
+  if (jetzt.length !== damals.size || jetzt.some(n => !damals.has(n))) dokuGeaendert();   // m3: nur im Speicher – geht mit dem nächsten Speichern in die Datei
 }
 function bilddokuVermerken(dateien, anlage){
   if (!P.data) return;
@@ -945,7 +957,7 @@ async function checkExternal(){
     if (P.session !== session || (S.data || S.dir) !== dir || S.changing) return;
     mergeExternal(theirs);
     P.lastText = onDisk; P.lastBytes = snapshot.bytes; P.base = projFromJson(JSON.parse(onDisk));
-    if (!same(P.data, P.base)) scheduleProjSave();      // our unsaved changes still have to be written
+    if (P.dirty && !same(P.data, P.base)) scheduleProjSave();      // our unsaved changes still have to be written (m3: nur übernommene Projektdaten allein schreiben nichts)
   }catch(e){ /* not there yet / being written – the next save merges anyway */ }
 }
 /* Projektdaten (_Projekt.json) ändern sich auch in Projektzentrale oder bei Kollegen: beim Zurückkehren ins Fenster neu lesen,
@@ -963,7 +975,7 @@ async function refreshPJ(){
   if (!changed) return;
   for (const [, pk] of PJ_MAP) PJ.sent[pk] = (fresh[pk] || '').trim();
   const meta = projGet('meta', {});
-  if (applyPJ(meta)) projSet('meta', meta);
+  if (applyPJ(meta)) metaNurImSpeicher(meta);
   if (!$('banner').classList.contains('err')) banner('ok', 'Projektdaten wurden geändert (Projektzentrale oder Kollege) und neu übernommen.');
 }
 window.addEventListener('focus', () => { checkExternal(); refreshPJ(); void zweiOrteZeigen(); });   // K1: Zeile auch beim Zurückkommen neu prüfen
@@ -1385,10 +1397,49 @@ const SO = window.SpektronOrdner || { ORDNER: '_Spektron', AB: '26.0560', projek
       if (!h && !(o && o.anlegen)) return { dir: null, wo: 'alt', pfad: pfad.join('/'), konflikt: false, umgezogen: false, bereich };
       d = h ? await d.getDirectoryHandle(h.name) : await d.getDirectoryHandle(teil, { create: true }); }
     return { dir: d, wo: 'alt', pfad: pfad.join('/'), konflikt: false, umgezogen: false, bereich }; } };
-/** Ordner eines Bereichs im Projekt; am neuen Ort wird er bei Bedarf angelegt (dann gibt es „_Spektron“ ja schon). */
+/** Ordner eines Bereichs im Projekt. Fehlt er am neuen Ort, steht dort ein Platzhalter (spaeterAnlegen): Öffnen und Ansehen
+    legen nichts an (Audit m3) – „_Spektron/…“ (mit Hinweisdatei) entsteht erst beim ersten Speichern. Welcher Ort gilt, entscheidet
+    weiter allein SO.ort(); der Platzhalter ändert daran nichts. */
 async function spektronOrt(projDir, bereich){
   const r = await SO.ort(projDir, bereich);
-  return r.wo === 'neu' && !r.dir ? await SO.ort(projDir, bereich, { anlegen: true }) : r;
+  return r.wo === 'neu' && !r.dir ? { ...r, dir: spaeterAnlegen(projDir, bereich) } : r;
+}
+/** Platzhalter für einen noch fehlenden Ordner am neuen Ort: liest sich wie ein leerer Ordner; erst ein Schreibzugriff
+    (getFileHandle/getDirectoryHandle mit create) legt den echten Ordner über SO.ort(…, { anlegen }) an und reicht dann alles weiter.
+    Gilt bis dahin nicht mehr der neue Ort, wird nichts angelegt (Fehler statt Schreiben am falschen Ort). */
+function spaeterAnlegen(projDir, bereich){
+  let echt = null, unterwegs = null;
+  const fehlt = () => new DOMException('Ordner ist noch nicht angelegt', 'NotFoundError');
+  // Codex (#84): hat inzwischen ein anderer PC/Tab den Ordner am neuen Ort angelegt, wird er übernommen – sonst sähen
+  // refreshPJ/checkExternal dessen Dateien nicht. Nur am neuen Ort; gilt ein anderer Ort, bleibt es beim leeren Platzhalter (K1-Sperre).
+  const finden = async () => {
+    if (echt) return echt;
+    try{ const r = await SO.ort(projDir, bereich); if (r.wo === 'neu' && r.dir) echt = r.dir; }catch(e){}
+    return echt;
+  };
+  const anlegen = () => echt ? Promise.resolve(echt) : unterwegs || (unterwegs = (async () => {
+    try{
+      const r = await SO.ort(projDir, bereich, { anlegen: true });
+      if (r.wo !== 'neu' || !r.dir) throw new Error('Der Speicherort dieses Projekts hat sich geändert. Bitte das Projekt neu öffnen.');
+      return (echt = r.dir);
+    }finally{ unterwegs = null; }
+  })());
+  const liste = art => (async function* (){ const d = await finden(); if (d) yield* d[art](); })();
+  return {
+    kind: 'directory', spaeter: true,
+    get name(){ return echt ? echt.name : (SO.BEREICHE && SO.BEREICHE[bereich] && SO.BEREICHE[bereich].neu.slice(-1)[0]) || SO.ORDNER; },
+    async getFileHandle(n, o){ const d = await finden(); if (d) return d.getFileHandle(n, o); if (o && o.create) return (await anlegen()).getFileHandle(n, o); throw fehlt(); },
+    async getDirectoryHandle(n, o){ const d = await finden(); if (d) return d.getDirectoryHandle(n, o); if (o && o.create) return (await anlegen()).getDirectoryHandle(n, o); throw fehlt(); },
+    async removeEntry(n, o){ const d = await finden(); if (d) return d.removeEntry(n, o); throw fehlt(); },
+    values(){ return liste('values'); },
+    keys(){ return liste('keys'); },
+    entries(){ return liste('entries'); },
+    [Symbol.asyncIterator](){ return this.entries(); },
+    async isSameEntry(x){ if (x === this) return true; return !!(echt && x && !x.spaeter) && echt.isSameEntry(x); },
+    async resolve(x){ return echt ? echt.resolve(x) : null; },
+    async queryPermission(o){ return projDir.queryPermission(o); },
+    async requestPermission(o){ return projDir.requestPermission(o); }
+  };
 }
 /** K1: App-Dateien an zwei Orten (in „_Spektron“ und am früheren Ort) – eine sichtbare Zeile, Text aus spektron-ordner.js.
     Nur lesen; die Bereiche, die FotoKit liest oder schreibt. */
@@ -1457,7 +1508,7 @@ async function loadPJ(){
   catch(e){ return `„${PJ_FILE}“ ist nicht lesbar (${esc(e.message)}) – gemeinsame Projektdaten werden in dieser Sitzung nicht übernommen.`; }
   for (const [, pk] of PJ_MAP) PJ.sent[pk] = (PJ.data[pk] || '').trim();
   const meta = projGet('meta', {});
-  if (applyPJ(meta)) projSet('meta', meta);
+  if (applyPJ(meta)) metaNurImSpeicher(meta);
   return '';
 }
 function queuePJ(m){
@@ -1825,7 +1876,7 @@ async function openDir(dir, proj = null){
       $('btnReload').disabled = false;
       $('btnVersions').disabled = false;
       $('btnLab').disabled = false; LAB.rep = null; LAB.err = ''; LAB.manuell = false; LAB.geladen = '';
-      loadBohrkernZuordnung();   // LabelKit-Proben für Vorschläge und Bohrkern-Zuordnung – im Hintergrund, blockiert das Öffnen nie
+      lkZeileZeigen(''); loadBohrkernZuordnung();   // LabelKit-Proben für Vorschläge und Bohrkern-Zuordnung – im Hintergrund, blockiert das Öffnen nie (Zeile zur LabelKit-Datei setzt lkLesen)
       projektHinweisFuer = '';
       if (note) banner(P.readOnly ? 'err' : 'info', note);
       fotoUebernahmeKnopf();   // Unterordner der Mitarbeiter mit Fotos? – im Hintergrund
@@ -4303,7 +4354,7 @@ const normProbe = s => {
   return m ? 'P' + m[1] + m[2].toLowerCase() : t.toUpperCase();
 };
 /* Bohrkerne: Auf Fotos steht die Kern-ID (z. B. „EG-WZ-B-7“) oder Segment-ID („EG-WZ-B-7-T2“), im Laborbericht „Probe n“.
-   Die Zuordnung kommt aus der neuesten LabelKit-Projektdatei (Laboraufträge/…_Daten.json): Kern-ID → alle analysierten
+   Die Zuordnung kommt aus der LabelKit-Projektdatei dieses Projekts (lkWahl, Regel wie LabelKit 5.1): Kern-ID → alle analysierten
    Segmente, Segment-ID → genau dieses. Rückstellproben haben keinen Laborwert und zählen nicht. Gleiche Regel in PlanKit (annex.ts). */
 const BK_RUECKSTELL = 'Rückstellprobe – nicht analysieren';
 function bohrkernNummern(daten){
@@ -4324,6 +4375,46 @@ function bohrkernNummern(daten){
 const fotoProben = (text, bk) => [...new Set(String(text || '').split(/[,;\/]+/).map(x => x.trim()).filter(Boolean)
   .flatMap(x => { const p = normProbe(x); return (!/^P\d+[a-z]?$/.test(p) && bk && bk.get(p)) || [p]; }))];
 const BK = { map: new Map(), datei: '' };
+/* Welche LabelKit-Datei gehört zum Projekt? Gleiche Regel wie LabelKit 5.1.0 (eigeneProjektdatei/projektdateienLesen) und PlanKit 2.1.0
+   (Audit m1): eigen = Name (NFC, ohne Rand-Leerzeichen) beginnt mit der Projektnummer, danach keine Ziffer (auch alte Namen mit Datum).
+   „<Nr>_Daten.json“ gilt; eine andere eigene Datei nur, wenn sie „gespeichertAm“ hat und das später ist als „gespeichertAm“ der festen
+   Datei (fehlt es dort: deren Änderungsdatum). Ohne feste Datei: die eigene mit dem neuesten Änderungsdatum. Fremde Dateien werden nie
+   gelesen. Ohne Projektnummer (Ordnername ohne Nummer) zählt jede …_Daten.json als eigen – wie LabelKit. */
+const lkNfc = s => String(s == null ? '' : s).normalize('NFC').trim();
+function lkEigen(name, nr){
+  const n = lkNfc(name);
+  if (!/_Daten\.json$/i.test(n)) return false;
+  return !nr || (n.startsWith(nr) && !/^\d/.test(n.slice(nr.length)));
+}
+const lkGespeichert = o => o && typeof o.gespeichertAm === 'string' && Number.isFinite(Date.parse(o.gespeichertAm)) ? Date.parse(o.gespeichertAm) : null;
+async function lkWahl(dir, nr){
+  const eigene = [], fremde = [];
+  for await (const h of dir.values()){
+    if (h.kind !== 'file' || !/_Daten\.json$/i.test(h.name)) continue;
+    (lkEigen(h.name, nr) ? eigene : fremde).push(h);
+  }
+  fremde.sort((a, b) => a.name.localeCompare(b.name, 'de', { numeric: true }));
+  if (!eigene.length) return { datei: null, fremde: fremde.map(h => h.name) };
+  const lesen = async h => { const f = await h.getFile(), text = await f.text(); let daten = null; try{ daten = JSON.parse(text); }catch(e){} return { name: h.name, t: f.lastModified, daten }; };
+  const fest = nr ? eigene.find(h => lkNfc(h.name) === nr + '_Daten.json') : null;
+  let wahl;
+  if (fest){
+    wahl = await lesen(fest);
+    let schwelle = lkGespeichert(wahl.daten); if (schwelle == null) schwelle = wahl.t;
+    for (const h of eigene){
+      if (h === fest) continue;
+      const k = await lesen(h), g = lkGespeichert(k.daten);
+      if (g != null && g > schwelle){ wahl = k; schwelle = g; }
+    }
+  } else {
+    let best = null, bt = -Infinity;
+    for (const h of eigene){ const t = (await h.getFile()).lastModified; if (t > bt){ best = h; bt = t; } }
+    wahl = await lesen(best);
+  }
+  return { datei: wahl, fremde: fremde.map(h => h.name) };
+}
+/** Zeile unter dem Kopf: fremde oder nicht passende LabelKit-Datei (leer = keine Zeile). */
+function lkZeileZeigen(text){ const el = $('lkZeile'); if (!el) return; el.textContent = text || ''; el.hidden = !text; }
 async function loadBohrkernZuordnung(){
   const hatteStorno = LK.storniert.size > 0;
   BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.storniert = new Set(); LK.datei = '';
@@ -4332,22 +4423,32 @@ async function loadBohrkernZuordnung(){
   try{ await lkLesen(proj); } finally { if (S.proj === proj) recompute(); }   // Storno-Hinweise in den Zeilen auffrischen
 }
 async function lkLesen(proj){
+  let zeile = '';
   try{
-    const d = (await SO.ort(proj.dir, 'labelkit')).dir; if (!d) return;   // LabelKit-Datei: „Laboraufträge“ oder künftig „_Spektron/LabelKit“
-    let best = null;
-    for await (const h of d.values()){
-      if (h.kind !== 'file' || !/_Daten\.json$/i.test(h.name)) continue;
-      const f = await h.getFile(); if (!best || f.lastModified > best.lastModified) best = f;
-    }
-    if (!best) return;
-    const daten = JSON.parse(await best.text());
+    const r = await SO.ort(proj.dir, 'labelkit'), d = r.dir; if (!d) return;   // LabelKit-Datei: „Laboraufträge“ oder „_Spektron/LabelKit“
+    const nr = lkNfc((SO.projektNr && SO.projektNr(proj.name)) || proj.nr || '');
+    const pfad = r.pfad || 'Laboraufträge', w = await lkWahl(d, nr);
     if (S.proj !== proj) return;   // inzwischen anderes Projekt geöffnet
-    BK.map = bohrkernNummern(daten); BK.datei = best.name;
-    LK.storniert = new Set(); LK.proben = labelkitProben(daten, LK.storniert); LK.datei = best.name;
+    const fremdText = w.fremde.slice(0, 2).map(n => '„' + n + '“').join(', ') + (w.fremde.length > 2 ? ` und ${w.fremde.length - 2} weitere` : '');
+    if (!w.datei){
+      if (w.fremde.length) zeile = `⚠ In „${pfad}“ liegt keine LabelKit-Datei von Projekt ${nr} – nur ${fremdText}. FotoKit lädt sie nicht; „Gehört zu Probe“ bleibt leer.`;
+      return;
+    }
+    const daten = w.datei.daten;
+    if (!daten || typeof daten !== 'object') return;   // nicht lesbar: wie bisher keine Proben
+    const imInhalt = daten.projekt && daten.projekt.nr != null ? lkNfc(daten.projekt.nr) : '';
+    if (nr && imInhalt && imInhalt !== nr){
+      zeile = `⚠ „${w.datei.name}“ nennt im Inhalt Projekt ${imInhalt}. FotoKit lädt sie nicht; „Gehört zu Probe“ bleibt leer. Bitte in LabelKit prüfen.`;
+      return;
+    }
+    if (w.fremde.length) zeile = `⚠ In „${pfad}“ liegt auch ${fremdText} – nach dem Namen nicht von Projekt ${nr}. FotoKit nimmt sie nicht.`;
+    BK.map = bohrkernNummern(daten); BK.datei = w.datei.name;
+    LK.storniert = new Set(); LK.proben = labelkitProben(daten, LK.storniert); LK.datei = w.datei.name;
   }catch(e){ if (S.proj === proj){ BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.storniert = new Set(); LK.datei = ''; } }
+  finally{ if (S.proj === proj) lkZeileZeigen(zeile); }
 }
 /* ---------- Beschreibung schneller: Vorschläge ----------
-   1) Probe-Nr. → Beschreibung aus LabelKit (neueste …_Daten.json in „Laboraufträge“, nur gelesen):
+   1) Probe-Nr. → Beschreibung aus LabelKit (Projektdatei nach lkWahl, nur gelesen):
       Raum / Ort, Beaufschlagung, Oberflächenart – Reihenfolge der LabelKit-Übergabe an Eurofins (Asbest: Raum, Bauteil/Material). Nummerierung wie in LabelKit:
       _nr, sonst fortlaufend ab probenStartNr über PAK → Chlorid → Asbest → Sonstige.
    2) Beim Tippen: Ergänzung aus den Beschreibungen dieses Projekts (zuletzt verwendete zuerst) und den Räumen/Proben aus
@@ -4755,7 +4856,7 @@ async function findLabFiles(){
     if (/\.xml$/i.test(h.name)) LAB.files.push({ handle: h, name: h.name, mod: f.lastModified });
   }
   LAB.files.sort((a, b) => b.mod - a.mod);
-  // Neueste LabelKit-Datei gehört zum Stand der Übernahme (wie in ResultKit)
+  // Neueste LabelKit-Datei gehört zum Stand der Übernahme (wie in ResultKit) – bewusst jede …_Daten.json, solange ResultKit es so zählt (m1-Rest), nur Stand-Vergleich, keine Proben
   const la = (await SO.ort(S.proj.dir, 'labelkit').catch(() => ({ dir: null }))).dir, laPfad = 'Laboraufträge';   // feste Kennung wie in ResultKit – bleibt nach dem Umzug gleich
   if (la){ let neu = null; for await (const h of la.values()) if (h.kind === 'file' && /_Daten\.json$/i.test(h.name)){ const f = await h.getFile(); if (!neu || f.lastModified > neu.t) neu = { name: laPfad + '/' + h.name, size: f.size, t: f.lastModified }; } if (neu) stand.push(neu); }
   LAB.stand = standKennung(stand);
