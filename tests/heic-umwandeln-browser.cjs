@@ -92,8 +92,25 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
     window.testMove = move;
     FileSystemFileHandle.prototype.move = function (...a) { if (this.name === 'IMG_0002.heic') return Promise.reject(new DOMException('gesperrt', 'NotAllowedError')); return move.apply(this, a); };
   });
+  // 2.3.1 (Arbeitsspeicher): je Foto erst ein Decoder-Worker, der beendet ist, bevor der Kodier-Worker startet; das zweite Foto bekommt frische Worker
+  await page.evaluate(() => {
+    const W = window.Worker, log = window.testWorkerLog = []; window.testWorkerEcht = W;
+    window.Worker = function (url, opt) {
+      const w = new W(url, opt), e = { arten: [], zu: false, offenBeiStart: log.filter(x => !x.zu).length };
+      log.push(e);
+      const pm = w.postMessage.bind(w), term = w.terminate.bind(w);
+      w.postMessage = (m, t) => { e.arten.push(m && m.art); pm(m, t); if (m && m.rgba) e.rgbaDanach = m.rgba.byteLength; };
+      w.terminate = () => { e.zu = true; term(); };
+      return w;
+    };
+  });
   await page.click('#btnHeic'); await idle();
   assert.match(await page.locator('#banner').textContent(), /1 iPhone-Foto umgewandelt, 1 nicht: IMG_0002\.heic.*unverändert in „Fotos“/s);
+  const worker = await page.evaluate(() => { window.Worker = window.testWorkerEcht; return window.testWorkerLog; });
+  assert.deepEqual(worker.map(w => w.arten), [['dekodieren'], ['kodieren'], ['dekodieren'], ['kodieren']], 'je Foto zwei Worker, je eine Nachricht');
+  assert.ok(worker.every(w => w.zu && w.offenBeiStart === 0), 'jeder Worker beendet, bevor der nächste startet');
+  assert.ok(worker.filter(w => w.arten[0] === 'kodieren').every(w => w.rgbaDanach === 0), 'Pixel ohne Kopie übergeben');
+  console.log(`OK ${browserName}: zwei Fotos nacheinander – je Foto Decoder-Worker beendet vor dem Kodieren, frische Worker für das zweite`);
   let f = await inhalt();
   assert.deepEqual(Object.keys(f).sort(), ['IMG_0001.AAE', 'IMG_0001.MOV', 'IMG_0001.jpg', 'IMG_0002.heic', 'IMG_0002.jpg', '_Originale', '_aussortiert'], 'kein IMG_0002_2.jpg, kein Zwischenname');
   assert.equal(f['IMG_0002.heic'], heic.length);
@@ -164,10 +181,10 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
   for (const [jpg, heicName] of [['IMG_0001.jpg', 'IMG_0001.HEIC'], ['IMG_0002_2.jpg', 'IMG_0002.heic']]) {
     const h = pd.bilder[jpg].heic;
     assert.deepEqual({ ...h, umgewandelt: typeof h.umgewandelt }, { original: heicName, ablage: '_Originale/' + heicName, sha256: heicSha, bytes: heic.length, umgewandelt: 'string',
-      decoder: 'libheif-js 1.23.5', qualitaet: 92, breite: 96, hoehe: 128, exif: true, farbprofil: true, fotokit: '2.3.0' }, jpg);
+      decoder: 'libheif-js 1.23.5', qualitaet: 92, breite: 96, hoehe: 128, exif: true, farbprofil: true, fotokit: '2.3.1' }, jpg);
     assert.ok(!Number.isNaN(Date.parse(h.umgewandelt)));
   }
-  assert.equal(pd.version, '2.3.0');
+  assert.equal(pd.version, '2.3.1');
   console.log(`OK ${browserName}: Nachweis „heic“ je JPG (Original, Ablage, SHA-256, Zeit, Decoder), Beschreibung und Abschnitt gewandert`);
 
   // Abbruch nach dem Speichern, vor dem Ablegen: HEIC liegt noch in „Fotos“, sein JPG mit Nachweis schon da → nur noch ablegen, kein zweites JPG

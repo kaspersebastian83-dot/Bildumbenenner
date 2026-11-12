@@ -508,11 +508,12 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.3.1';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:1da02fc2a972607a1d6ec3397e981fcf3a3f994384c12de8d2716b9222dfee8a';
+const APP_BUILD = 'sha256:abeeb1cd446fba453eb91b2cf4377e5f0d9a8a10325a713774460db60c07881e';
 const APP_DATE = '2026-11-12';
 const CHANGELOG = [
+  ['2.3.1', '12.11.2026', 'iPhone-Fotos umwandeln braucht weniger Arbeitsspeicher: Je Foto dekodiert jetzt ein eigener Hintergrundprozess (Web Worker) nur das Bild und wird beendet, bevor ein zweiter das JPG erstellt – so wird der Speicher des Decoders frei, bevor das JPG entsteht, und jedes Foto beginnt mit frischem Speicher. Bei einem 48-MP-Foto sinkt die Speicherspitze im Browser etwa von 1,2 auf 0,7 GB, bei 12 MP von 0,34 auf 0,2 GB. Ergebnis, Reihenfolge, Nachweis, Namen, Qualität und Metadaten unverändert.'],
   ['2.3.0', '12.11.2026', 'iPhone-Fotos (HEIC/HEIF) wandelt FotoKit jetzt in echte JPG um: Liegen HEIC-Fotos im Ordner „Fotos“, steht über den Fotos „n iPhone-Fotos umwandeln“ (ebenso direkt nach „Fotos übernehmen“; vor „Bilddokumentation erstellen“ fragt FotoKit einmal nach, statt Platzhalter ins PDF zu setzen). Nie ohne Klick. Jedes Foto wird ein JPG mit gleichem Namen (IMG_0001.HEIC → IMG_0001.jpg, gibt es den schon: IMG_0001_2.jpg), volle Auflösung, Qualität 92 %, richtig gedreht; Aufnahmedatum, Gerät, GPS und Farbprofil werden übernommen. Das Original kommt unverändert nach „Fotos/_Originale“ – erst nachdem das JPG geschrieben, zurückgelesen und die Projektdatei gespeichert ist; geht etwas schief, bleibt das HEIC liegen und kein halbes JPG. Beschreibung, Probe, Abschnitt, „Weg“ und Reihenfolge wandern zum JPG. In _Bildumbenenner.json steht je JPG, aus welchem Original es stammt (Name, Ablage, SHA-256, Zeitpunkt, Decoder). Live-Photo-Videos (.MOV), .AAE-Dateien, HEIC in Unterordnern und im geschützten Projektmodus bleiben unangetastet. Der Decoder (libheif, 2 MB) wird nur beim Umwandeln geladen und geht auch offline. Die Hinweise „Maximale Kompatibilität“ entfallen.'],
   ['2.2.0', '11.11.2026', 'Chlorid genau 10 µg/cm² (Audit m7, Entscheidung 4): ein Wert von genau 10 µg/cm² (bzw. 100 mg/m²) liegt in der Ergebnistabelle jetzt „im Bereich“ der korrosionschemisch relevanten Größenordnung (VdS 2357: 5–10 µg/cm²), „oberhalb“ erst darüber; genau 5 bleibt „im Bereich“. Die Skalen-Übersicht zeigt „> 10 µg/cm²“. Gleich in ResultKit, PlanKit und BerichtKit (KORROSION-CHLORID v2). Eine in PlanKit angepasste Chlorid-Skala mit denselben Grenzen folgt derselben Regel, eine mit anderen Grenzen zählt ab ihren „ab“-Werten. Dateiformat unverändert.'],
   ['2.1.1', '11.11.2026', 'Laborstand („Seit der Übernahme hat sich der Ordner geändert“): zählt nur noch die LabelKit-Datei dieses Projekts – dieselbe wie ResultKit 2.3, PlanKit 2.1.1 und die Projektzentrale; eine fremde …_Daten.json gibt den Hinweis nicht mehr. Einmalig kann er erscheinen, wo bisher eine fremde oder eine ältere datierte Datei mitzählte: in ResultKit einmal „Erneut übernehmen“. Spektron-Leiste: „Proben ✓“ nur für eine Datei dieses Projekts. FotoKits eigene Dateiwahl (lkWahl) bleibt unverändert.'],
@@ -1864,29 +1865,41 @@ function heicAngebotImBanner(){
   $('bHeicJetzt').onclick = () => heicUmwandelnStarten();
 }
 
-/* Decoder im Web Worker, eine Anfrage je Foto. Stürzt der Worker ab (meist zu wenig Arbeitsspeicher), gilt das für dieses Foto;
-   das nächste bekommt einen frischen Worker. Startet gar keiner, bricht der Lauf mit einer verständlichen Meldung ab. */
+/* Decoder im Web Worker, je Foto zwei Worker nacheinander (2.3.1, Arbeitsspeicher): der erste dekodiert nur und gibt die Pixel
+   ohne Kopie zurück; er wird sofort beendet, denn nur so wird der Arbeitsspeicher des Decoders frei (bei 48 MP rund 400 MB).
+   Erst dann kodiert ein zweiter Worker (ohne Decoder) das JPG und wird ebenfalls beendet. Jedes Foto bekommt frische Worker.
+   Stürzt ein Worker ab (meist zu wenig Arbeitsspeicher), gilt das für dieses Foto. Startet gar keiner, bricht der Lauf mit einer
+   verständlichen Meldung ab. */
 const HEIC_OHNE_WORKER = 'Der Browser startet den HEIC-Decoder hier nicht (FotoKit als lokale Datei geöffnet?). iPhone-Fotos lassen sich in der Online-Fassung von FotoKit umwandeln';
 function heicDienst(){
-  let w = null, geantwortet = false, nr = 0;
-  const offen = new Map();
-  const weg = grund => { for (const p of offen.values()) p.rej(grund); offen.clear(); if (w) try{ w.terminate(); }catch(_){} w = null; };
-  const start = () => {
-    if (w) return w;
-    try{ w = new Worker('heic-worker.js'); }catch(e){ throw Object.assign(new Error(HEIC_OHNE_WORKER), { ganzerLauf: true }); }
-    w.onmessage = e => { geantwortet = true; const p = offen.get(e.data && e.data.id); if (!p) return; offen.delete(e.data.id); if (e.data.ok) p.res(e.data.ergebnis); else p.rej(new Error(e.data.fehler)); };
+  let geantwortet = false, nr = 0;
+  const laufend = new Set();
+  /** ein Auftrag = ein frischer Worker, eine Nachricht, danach terminate() */
+  const auftrag = (nachricht, transfer) => new Promise((res, rej) => {
+    let w;
+    try{ w = new Worker('heic-worker.js'); }catch(e){ return rej(Object.assign(new Error(HEIC_OHNE_WORKER), { ganzerLauf: true })); }
+    const id = ++nr, a = {
+      zu(){ laufend.delete(a); try{ w.terminate(); }catch(_){} },
+      weg(grund){ a.zu(); rej(grund); }
+    };
+    laufend.add(a);
+    w.onmessage = e => { if (!e.data || e.data.id !== id) return; geantwortet = true; a.zu(); if (e.data.ok) res(e.data.ergebnis); else rej(new Error(e.data.fehler)); };
     w.onerror = e => {
       if (e && e.preventDefault) e.preventDefault();
-      weg(geantwortet ? new Error('Das Umwandeln ist abgebrochen (zu wenig Arbeitsspeicher?)') : Object.assign(new Error(HEIC_OHNE_WORKER), { ganzerLauf: true }));
+      a.weg(geantwortet ? new Error('Das Umwandeln ist abgebrochen (zu wenig Arbeitsspeicher?)') : Object.assign(new Error(HEIC_OHNE_WORKER), { ganzerLauf: true }));
     };
-    return w;
-  };
+    w.postMessage({ id, ...nachricht }, transfer);
+  });
   return {
-    umwandeln(bytes){
-      const wk = start();
-      return new Promise((res, rej) => { const id = ++nr; offen.set(id, { res, rej }); wk.postMessage({ id, bytes, qualitaet: HEIC_QUALITAET }); });
+    async umwandeln(bytes){
+      const t0 = Date.now();
+      const teil = await auftrag({ art: 'dekodieren', bytes }, []);   // Decoder-Worker ist danach beendet
+      if (teil.jpeg) return { ...teil, ms: Date.now() - t0 };        // heic-worker.js von 2.3.0 (noch im Cache): hat schon alles gemacht
+      const transfer = [teil.rgba.buffer, ...(teil.exif ? [teil.exif.buffer] : []), ...(teil.icc ? [teil.icc.buffer] : [])];
+      const r = await auftrag({ art: 'kodieren', ...teil, qualitaet: HEIC_QUALITAET }, transfer);
+      return { ...r, ms: Date.now() - t0 };
     },
-    ende(){ weg(new Error('beendet')); }
+    ende(){ for (const a of [...laufend]) a.weg(new Error('beendet')); }
   };
 }
 
