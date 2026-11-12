@@ -2,11 +2,17 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **2.3.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **2.3.1** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
 Die Webadresse, die Projektdatei `_Bildumbenenner.json` und die gespeicherten Einstellungen behalten den alten Namen – so funktionieren bestehende Projekte, Lesezeichen und installierte Apps weiter. Die aktuelle Version steht oben links in der blauen Kopfzeile (Klick darauf: Änderungen, Problem melden). Daneben öffnet „? Kurzanleitung“ (oder F1) die Kurzanleitung – auch zum Ausdrucken.
+
+## Neu in 2.3.1 · 12.11.2026 – weniger Arbeitsspeicher beim Umwandeln
+
+- Je iPhone-Foto zwei Web Worker nacheinander: der erste dekodiert nur (Metadaten + Pixel) und gibt die Pixel ohne Kopie zurück; er wird sofort beendet, weil nur so der Arbeitsspeicher des Decoders (WebAssembly) frei wird. Erst dann erstellt ein zweiter Worker, der den Decoder gar nicht lädt, das JPG. Jedes Foto bekommt frische Worker (bisher lief ein Worker für den ganzen Lauf, sein Speicher wuchs mit).
+- Gemessen (künstliche Bilder, Chrome 153, Cloud-Rechner): Speicherspitze 48 MP etwa 1,2 → 0,7 GB, 12 MP etwa 0,34 → 0,2 GB (bei 5 Fotos nacheinander 0,48 → 0,2 GB). Dauer je Foto praktisch gleich.
+- Unverändert: Reihenfolge je Foto, Nachweis in der Projektdatei, Namen, Qualität 92 %, EXIF/Farbprofil, Texte, Oberfläche, `vendor/libheif-bundle.js`.
 
 ## Neu in 2.3.0 · 12.11.2026 – iPhone-Fotos (HEIC) umwandeln
 

@@ -6,6 +6,8 @@
    Ablauf je Foto: HEIF-Container lesen (EXIF-Block, Farbprofil des Hauptbilds) → mit libheif dekodieren (die Drehung aus
    dem Container – irot/imir – wendet libheif selbst an) → JPEG 92 %, volle Auflösung → EXIF unverändert übernehmen, nur
    „Orientation“ auf 1 (die Drehung ist eingebacken) → Farbprofil (z. B. Display P3) als ICC_PROFILE mitgeben.
+   Seit 2.3.1 in zwei Workern nacheinander (Arbeitsspeicher): der erste dekodiert nur und wird danach beendet – erst dann
+   kodiert ein zweiter, der den Decoder gar nicht lädt, das JPG. Bei 48 MP liegen Decoder und JPEG-Kodierer so nie gleichzeitig im Speicher.
    Das HEIC selbst wird nie verändert; Dateien schreibt nur index.html. */
 (function (root) {
   'use strict';
@@ -243,31 +245,53 @@
     if (!blob || blob.type !== 'image/jpeg') throw new Error('Der Browser konnte kein JPG erzeugen');
     return new Uint8Array(await blob.arrayBuffer());
   }
-  /** Ein HEIC umwandeln: { jpeg, breite, hoehe, exif, icc, orientierungVorher, decoder, qualitaet, ms }
-      opt.kodieren nur für den Node-Test (dort gibt es keinen Browser-JPEG-Kodierer). */
-  async function umwandeln(bytes, opt = {}) {
-    const t0 = Date.now(), q = opt.qualitaet || QUALITAET;
+  /** Schritt 1 (Decoder-Worker): Metadaten lesen und dekodieren, noch kein JPEG → { rgba, breite, hoehe, exif, icc }.
+      Danach beendet index.html diesen Worker: nur so wird der Arbeitsspeicher des Decoders frei (WebAssembly gibt ihn nicht zurück). */
+  async function dekodierenMitMetadaten(bytes) {
     const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
     const meta = heifMetadaten(u8);
     const bild = await dekodieren(u8);
-    let jpeg = await (opt.kodieren || jpegKodieren)(bild.rgba, bild.breite, bild.hoehe, q);
-    bild.rgba = null;
-    const o = meta.exif ? orientierungEins(meta.exif) : { tiff: null, vorher: null };
-    jpeg = jpegMitMetadaten(jpeg, o.tiff, meta.icc);
-    return { jpeg, breite: bild.breite, hoehe: bild.hoehe, exif: !!o.tiff, icc: meta.icc ? meta.icc.length : 0, orientierungVorher: o.vorher,
-      decoder: DECODER, qualitaet: Math.round(q * 100), ms: Date.now() - t0 };
+    return { rgba: bild.rgba, breite: bild.breite, hoehe: bild.hoehe, exif: meta.exif, icc: meta.icc };
+  }
+  /** Schritt 2 (eigener Worker, ohne Decoder): Pixel → JPEG mit EXIF (Orientation 1) und Farbprofil.
+      → { jpeg, breite, hoehe, exif, icc, orientierungVorher, decoder, qualitaet }. opt.kodieren nur für den Node-Test. */
+  async function kodierenMitMetadaten(teil, opt = {}) {
+    const q = opt.qualitaet || QUALITAET;
+    let jpeg = await (opt.kodieren || jpegKodieren)(teil.rgba, teil.breite, teil.hoehe, q);
+    const o = teil.exif ? orientierungEins(teil.exif) : { tiff: null, vorher: null };
+    jpeg = jpegMitMetadaten(jpeg, o.tiff, teil.icc);
+    return { jpeg, breite: teil.breite, hoehe: teil.hoehe, exif: !!o.tiff, icc: teil.icc ? teil.icc.length : 0, orientierungVorher: o.vorher,
+      decoder: DECODER, qualitaet: Math.round(q * 100) };
+  }
+  /** Ein HEIC in einem Zug umwandeln (Node-Test; Worker-Nachricht ohne „art“): beide Schritte nacheinander, dazu ms.
+      opt.kodieren nur für den Node-Test (dort gibt es keinen Browser-JPEG-Kodierer). */
+  async function umwandeln(bytes, opt = {}) {
+    const t0 = Date.now();
+    const teil = await dekodierenMitMetadaten(bytes);
+    const r = await kodierenMitMetadaten(teil, opt);
+    teil.rgba = null;
+    return { ...r, ms: Date.now() - t0 };
   }
 
-  const api = { DECODER, DECODER_DATEI, QUALITAET, heifMetadaten, orientierungEins, jpegMitMetadaten, dekodieren, umwandeln };
+  const api = { DECODER, DECODER_DATEI, QUALITAET, heifMetadaten, orientierungEins, jpegMitMetadaten, dekodieren, dekodierenMitMetadaten, kodierenMitMetadaten, umwandeln };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FotoKitHeic = api;
 
-  // Als Worker: eine Nachricht { id, bytes } je Foto, Antwort { id, ok, ergebnis | fehler }
+  // Als Worker (2.3.1): je Foto zwei Worker nacheinander, jeder bekommt eine Nachricht und wird danach beendet:
+  //   { id, art: 'dekodieren', bytes }                                → { id, ok, ergebnis: { rgba, breite, hoehe, exif, icc } }
+  //   { id, art: 'kodieren', rgba, breite, hoehe, exif, icc, qualitaet } → { id, ok, ergebnis: { jpeg, … } }
+  // Pixel und JPEG werden ohne Kopie übergeben (transfer). Ohne „art“ (Nachricht von 2.3.0): alles in einem Zug wie bisher.
+  // Fehler: { id, ok: false, fehler }
   if (typeof WorkerGlobalScope !== 'undefined' && root instanceof WorkerGlobalScope) {
     root.onmessage = async e => {
-      const { id, bytes, qualitaet } = e.data || {};
+      const { id, art, bytes, qualitaet } = e.data || {};
       try {
-        const r = await umwandeln(bytes, { qualitaet });
+        if (art === 'dekodieren') {
+          const t = await dekodierenMitMetadaten(bytes);
+          root.postMessage({ id, ok: true, ergebnis: t }, [t.rgba.buffer, ...(t.exif ? [t.exif.buffer] : []), ...(t.icc ? [t.icc.buffer] : [])]);
+          return;
+        }
+        const r = art === 'kodieren' ? await kodierenMitMetadaten(e.data, { qualitaet }) : await umwandeln(bytes, { qualitaet });
         root.postMessage({ id, ok: true, ergebnis: r }, [r.jpeg.buffer]);
       } catch (err) {
         root.postMessage({ id, ok: false, fehler: String(err && err.message || err) });
