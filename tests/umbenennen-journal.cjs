@@ -40,7 +40,7 @@ function welt(start, opts = {}){
     async removeEntry(n){ lebt(); if (!files.has(n)) throw err('NotFoundError', 'fehlt'); if (locked.has(n)) throw err('NoModificationAllowedError', 'gesperrt'); files.delete(n); },
     async *values(){ lebt(); for (const n of [...files.keys()].sort()) yield { kind: 'file', name: n }; }
   };
-  const ctx = { S: { dir, data: opts.data || dir }, P: { readOnly: !!opts.readOnly, data: { extensions: opts.extensions || {} } }, TMP_PREFIX: 'umb-tmp_', extOf: n => n.slice(n.lastIndexOf('.')),
+  const ctx = { S: { dir, data: opts.data || dir }, P: { readOnly: !!opts.readOnly, data: { extensions: opts.extensions || {} } }, TMP_PREFIX: 'umb-tmp_', HEIC_TMP: 'umb-tmp_heic_', extOf: n => n.slice(n.lastIndexOf('.')),
     PROTECTED_PROJECT: 'geschützt', navigator: { userAgent: '' }, Date, Error, TypeError, TextEncoder, TextDecoder, Uint8Array, JSON, Set, Map, Number,
     fmtDate: d => `${d.getUTCDate()}.${d.getUTCMonth() + 1}.${d.getUTCFullYear()}`, fmtTime: d => `${d.getUTCHours()}:${String(d.getUTCMinutes()).padStart(2, '0')}`,
     esc: x => String(x), APP_VERSION: '1.33.0' };
@@ -165,6 +165,14 @@ const JR = j => ({ journal: j });
     const w = welt({ ...START, 'umb-tmp_abc_0.jpg': 'X', 'umb-tmp_abc_1.jpg': 'Y' });
     const hinweis = await w.umbenennenPruefen();
     assert.match(hinweis, /2 Dateien mit vorläufigem Namen/); assert.equal(w.files.get('umb-tmp_abc_0.jpg'), 'X');
+  }
+  { // 2.3.0: unfertiges JPG eines abgebrochenen HEIC-Umwandelns wird entfernt (nie ein Original) – kein „vorläufiger Name“-Hinweis
+    const w = welt({ ...START, 'IMG_1.HEIC': 'H', 'umb-tmp_heic_abc_0.jpg': 'halb', 'umb-tmp_abc_1.jpg': 'Y' });
+    const hinweis = await w.umbenennenPruefen();
+    assert.equal(w.files.has('umb-tmp_heic_abc_0.jpg'), false); assert.equal(w.files.get('IMG_1.HEIC'), 'H');
+    assert.match(hinweis, /ein unfertiges JPG entfernt/); assert.match(hinweis, /1 Datei mit vorläufigem Namen \(z\. B\. „umb-tmp_abc_1\.jpg“\)/);
+    const g = welt({ ...START, 'umb-tmp_heic_abc_0.jpg': 'halb' }, { readOnly: true });
+    assert.equal(await g.umbenennenPruefen(), ''); assert.equal(g.files.get('umb-tmp_heic_abc_0.jpg'), 'halb', 'geschützter Modus: nichts entfernt');
   }
   { // Marke ohne Journal (abgebrochenes Aufräumen) wird weggeräumt; Ordner ohne Journal: kein Hinweis
     const w = welt({ ...START, '_Umbenennen-Journal_q.phase2': '' });

@@ -2,11 +2,21 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **1.34.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **2.3.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
 Die Webadresse, die Projektdatei `_Bildumbenenner.json` und die gespeicherten Einstellungen behalten den alten Namen – so funktionieren bestehende Projekte, Lesezeichen und installierte Apps weiter. Die aktuelle Version steht oben links in der blauen Kopfzeile (Klick darauf: Änderungen, Problem melden). Daneben öffnet „? Kurzanleitung“ (oder F1) die Kurzanleitung – auch zum Ausdrucken.
+
+## Neu in 2.3.0 · 12.11.2026 – iPhone-Fotos (HEIC) umwandeln
+
+- Liegen HEIC/HEIF-Fotos (iPhone) direkt in `Fotos`, steht über den Fotos **„n iPhone-Fotos umwandeln“** – ebenso direkt nach „Fotos übernehmen“. Vor „Bilddokumentation erstellen …“ fragt FotoKit einmal nach, statt Platzhalter ins PDF zu setzen. Nie ohne Klick; bis dahin zeigt die Kachel „iPhone-Foto – noch nicht umgewandelt“.
+- Jedes HEIC wird **ein echtes JPG** mit gleichem Namen (`IMG_0001.HEIC` → `IMG_0001.jpg`, gibt es den Namen schon: `IMG_0001_2.jpg`): volle Auflösung, Qualität 92 %, richtig gedreht. Der EXIF-Block wird vollständig übernommen (Aufnahmedatum, Gerät, GPS), nur „Orientation“ auf 1; das Farbprofil (iPhone: Display P3) kommt mit.
+- **Das Original bleibt unverändert** und kommt nach `Fotos/_Originale` – erst nachdem das JPG geschrieben, bytegleich zurückgelesen, als Bild geprüft und die Projektdatei gespeichert ist. Scheitert ein Schritt, entfernt FotoKit sein JPG wieder und das HEIC bleibt liegen; ein unfertiges JPG eines abgebrochenen Laufs (`umb-tmp_heic_…`) räumt das nächste Öffnen weg.
+- Beschreibung, Probe, Abschnitt, „Weg“ und Reihenfolge wandern zum JPG. `_Bildumbenenner.json` vermerkt je JPG unter `bilder[…].heic`, woher es stammt: `original`, `ablage`, `sha256` und `bytes` des Originals, `umgewandelt`, `decoder`, `qualitaet`, Maße, `exif`, `farbprofil`, `fotokit`. Ein Bildfeld, das FotoKit ab F6 unverändert mitführt und beim Umbenennen mitnimmt.
+- Unangetastet: Live-Photo-Videos (`.MOV`), `.AAE`, HEIC in Unterordnern (auch `_aussortiert`), TIFF; im geschützten Projektmodus wird nichts umgewandelt.
+- Decoder: `vendor/libheif-bundle.js` (libheif-js 1.23.5, LGPL-3.0, unverändert, 2 MB), nur beim Umwandeln geladen, im Web Worker `heic-worker.js`; offline über `sw.js` (Cache `v18`). Als lokale Datei geöffnet (ohne Web Worker) sagt FotoKit, dass das Umwandeln nur in der Online-Fassung geht.
+- Tests: `tests/heic-umwandeln.cjs` (Node, echter Decoder) und `tests/heic-umwandeln-browser.cjs` mit dem künstlichen Testbild `tests/fixtures/testbild.heic` (`tools/heic-testbild.py`).
 
 ## Neu in 1.31.0 · 31.10.2026 – stornierte Proben (Nachzug zu LabelKit 4.49.0 „Proben stornieren“)
 

@@ -51,6 +51,7 @@ jobs:
       - run: node tests/bilddoku-stand.cjs
       - run: node tests/bilddoku-deckblatt.cjs
       - run: node tests/storno-proben.cjs
+      - run: node tests/heic-umwandeln.cjs
 
   browser-tests:
     name: Browser tests (${{ matrix.browser }})
@@ -123,3 +124,5 @@ jobs:
         run: node tests/ci-wiederholen.cjs tests/projektkontext-browser.cjs ${{ matrix.browser }}
       - name: Independent sessions retain complete confirmed photo metadata and explicit recovery
         run: node tests/ci-wiederholen.cjs tests/n2-speichersicherheit-browser.cjs ${{ matrix.browser }}
+      - name: iPhone-Fotos (HEIC) → JPG, Originale nach _Originale, Abbrüche, Nachweis in der Projektdatei
+        run: node tests/ci-wiederholen.cjs tests/heic-umwandeln-browser.cjs ${{ matrix.browser }}

@@ -113,7 +113,7 @@ test('Rückfrage vor PDF und ZIP: Text, nur nicht aussortierte Fotos, beide Knö
   assert.equal(r.fotos.length, 2, 'aussortierte und gültige zählen nicht'); assert.deepEqual(P(r.proben), ['P2', 'P5']);
   c.S.view = [{ probe: 'P1' }, { probe: 'P5', discard: true }];
   assert.equal(c.stornoFotos().fotos.length, 0, 'nichts betroffen → keine Rückfrage');
-  assert.ok(html.includes("$('btnZip').onclick = guardStorno(openZipDialog);") && html.includes("$('btnPdf').onclick = guardStorno(openPdfDialog);"), 'PDF und ZIP fragen nach');
+  assert.ok(html.includes("$('btnZip').onclick = guardStorno(openZipDialog);") && html.includes("$('btnPdf').onclick = guardHeic(guardStorno(openPdfDialog));"), 'PDF und ZIP fragen nach (vor der PDF erst die iPhone-Fotos, 2.3.0)');
   const g = html.slice(fb, html.indexOf('function clearDropMarks('));
   assert.ok(!/readOnly/.test(g), 'gilt auch im geschützten Modus');
   assert.ok(!/it\.probe\s*=|\.discard\s*=/.test(g), 'Rückfrage ändert keine Zuordnung');
