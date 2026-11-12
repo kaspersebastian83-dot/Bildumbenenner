@@ -510,7 +510,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.3.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:d9ca6129df0ebde31e4e67b54b6d5ffa7342a6b177e9b3da3e8c057dfcd1dc89';
+const APP_BUILD = 'sha256:1da02fc2a972607a1d6ec3397e981fcf3a3f994384c12de8d2716b9222dfee8a';
 const APP_DATE = '2026-11-12';
 const CHANGELOG = [
   ['2.3.0', '12.11.2026', 'iPhone-Fotos (HEIC/HEIF) wandelt FotoKit jetzt in echte JPG um: Liegen HEIC-Fotos im Ordner „Fotos“, steht über den Fotos „n iPhone-Fotos umwandeln“ (ebenso direkt nach „Fotos übernehmen“; vor „Bilddokumentation erstellen“ fragt FotoKit einmal nach, statt Platzhalter ins PDF zu setzen). Nie ohne Klick. Jedes Foto wird ein JPG mit gleichem Namen (IMG_0001.HEIC → IMG_0001.jpg, gibt es den schon: IMG_0001_2.jpg), volle Auflösung, Qualität 92 %, richtig gedreht; Aufnahmedatum, Gerät, GPS und Farbprofil werden übernommen. Das Original kommt unverändert nach „Fotos/_Originale“ – erst nachdem das JPG geschrieben, zurückgelesen und die Projektdatei gespeichert ist; geht etwas schief, bleibt das HEIC liegen und kein halbes JPG. Beschreibung, Probe, Abschnitt, „Weg“ und Reihenfolge wandern zum JPG. In _Bildumbenenner.json steht je JPG, aus welchem Original es stammt (Name, Ablage, SHA-256, Zeitpunkt, Decoder). Live-Photo-Videos (.MOV), .AAE-Dateien, HEIC in Unterordnern und im geschützten Projektmodus bleiben unangetastet. Der Decoder (libheif, 2 MB) wird nur beim Umwandeln geladen und geht auch offline. Die Hinweise „Maximale Kompatibilität“ entfallen.'],
@@ -1825,12 +1825,14 @@ async function fotoUebernehmen(ordner, alsAbschnitt){
    Fotos, dasselbe Angebot nach „Fotos übernehmen“, eine Nachfrage vor „Bilddokumentation erstellen“.
    Je Foto, sicher gegen Abbruch (E7):
      1. JPG unter Zwischennamen „umb-tmp_heic_…“ schreiben   2. zurücklesen (bytegleich) und dekodieren
-     3. auf den Endnamen bringen (IMG_0001.jpg, belegt → IMG_0001_2.jpg)
-     4. Projektdaten umstellen (Beschreibung, Abschnitt, Probe, Weg, Reihenfolge wandern zum JPG; Nachweis „heic“) und speichern
+     3. Projektdaten umstellen (Beschreibung, Abschnitt, Probe, Weg, Reihenfolge wandern zum JPG-Endnamen; Nachweis „heic“ mit
+        dem Zwischennamen) und speichern – die Projektdatei ist das Protokoll des Laufs
+     4. auf den Endnamen bringen (IMG_0001.jpg, belegt → IMG_0001_2.jpg)
      5. erst dann das HEIC unverändert nach „Fotos/_Originale“ verschieben.
    Scheitert ein Schritt, wird das eigene JPG wieder entfernt und die Projektdaten zurückgestellt – das HEIC bleibt liegen.
-   Bricht FotoKit zwischen 4 und 5 ab, erkennt der nächste Klick das fertige JPG am Nachweis (Name + SHA-256) und legt nur noch
-   das Original ab. Ein liegengebliebener Zwischenname wird beim Öffnen entfernt (er ist nie ein Original).
+   Bricht FotoKit ab: vor 3 entfernt das nächste Öffnen den Zwischennamen; zwischen 3 und 4 bringt es das JPG auf den Endnamen
+   (der Nachweis nennt beide); zwischen 4 und 5 erkennt der nächste Klick das fertige JPG am Nachweis (Name + SHA-256) und legt
+   nur noch das Original ab. In keinem Fall entsteht ein zweites JPG.
    Nachweis je JPG in _Bildumbenenner.json: bilder[JPG].heic (Originalname, Ablage, SHA-256, Zeitpunkt, Decoder) – ein Bildfeld,
    das FotoKit-Fassungen ab F6 (1.9) unverändert mitführen und beim Umbenennen mitnehmen (docs/F6-unknown-fields.md).
    Der Decoder (vendor/libheif-bundle.js, 2 MB) wird erst beim Umwandeln geladen, nur im Web Worker heic-worker.js – im Fenster
@@ -1906,6 +1908,37 @@ function heicDatenUmstellen(it, von, nach, nachweis){
   it.name = nach; it.final = nach;   // ein Zusammenführen mitten im Lauf (flushDrafts/saveExtra) liest die Namen aus der Liste
   dokuGeaendert(); scheduleProjSave();
 }
+/** Nachweis ohne „zwischen“: das JPG trägt jetzt seinen Endnamen (nur im Speicher, wie metaNurImSpeicher). */
+function heicZwischenErledigt(jpg){
+  const ie = P.data && P.data.imageExtensions, e = ie && ie[jpg];
+  if (!e || !e.heic || e.heic.zwischen === undefined) return;
+  const { zwischen, ...rest } = e.heic;
+  ie[jpg] = { ...e, heic: rest };
+}
+/** Beim Öffnen (vor dem Einlesen): Reste eines unterbrochenen Umwandelns. Ein Zwischenname „umb-tmp_heic_…“, den ein gespeicherter
+    Nachweis nennt, war schon geprüft und die Projektdaten zeigen auf den Endnamen → auf den Endnamen bringen. Jeder andere
+    Zwischenname ist ein unfertiges JPG (nie ein Original, das HEIC liegt noch daneben) → entfernen. Unter der Sperre der Originale,
+    damit ein zweites Fenster im selben Browser nicht das JPG eines laufenden Umwandelns erwischt (andere Rechner erreicht sie nicht). */
+async function heicResteBeimOeffnen(foto){
+  if (P.readOnly) return [];
+  return originaleSperre(async () => {
+    const reste = [], hinweise = [];
+    try{ for await (const h of foto.values()) if (h.kind === 'file' && h.name.startsWith(HEIC_TMP)) reste.push(h.name); }catch(e){ return []; }
+    const ie = (P.data && P.data.imageExtensions) || {};
+    let weg = 0, fertig = 0;
+    for (const n of reste){
+      const jpg = Object.keys(ie).find(k => ie[k] && ie[k].heic && ie[k].heic.zwischen === n);
+      try{
+        if (jpg && !(await exists(foto, jpg))){ await transferLocked(foto, foto, n, jpg); heicZwischenErledigt(jpg); fertig++; }
+        else if (jpg) hinweise.push(`⚠ „${esc(n)}“ (umgewandeltes iPhone-Foto) bleibt liegen: der Name „${esc(jpg)}“ ist inzwischen belegt. Bitte im Ordner ansehen.`);
+        else { await foto.removeEntry(n); weg++; }
+      }catch(e){ hinweise.push(`⚠ „${esc(n)}“ (Rest eines Umwandelns) konnte nicht aufgeräumt werden: ${esc(e.message)}`); }
+    }
+    if (fertig) hinweise.unshift(`Ein Umwandeln von iPhone-Fotos war unterbrochen. FotoKit hat ${fertig === 1 ? 'ein fertiges JPG' : fertig + ' fertige JPG'} auf den richtigen Namen gebracht; ${fertig === 1 ? 'das Original liegt' : 'die Originale liegen'} noch im Ordner – „iPhone-Fotos umwandeln“ legt ${fertig === 1 ? 'es' : 'sie'} nach „${esc(FOTOS_DIR)}/${ORIGINALE_DIR}“.`);
+    if (weg) hinweise.unshift(`Ein Umwandeln von iPhone-Fotos war unterbrochen. FotoKit hat ${weg === 1 ? 'ein unfertiges JPG' : weg + ' unfertige JPG'} entfernt; die iPhone-Fotos liegen unverändert im Ordner – bei Bedarf noch einmal umwandeln.`);
+    return hinweise;
+  });
+}
 /** Eigenes JPG wieder entfernen: der Zwischenname (eindeutig, nur von diesem Lauf) immer, auch leer oder halb geschrieben;
     der Endname nur, solange er noch genau unsere Bytes enthält (nie eine fremde Datei löschen). */
 async function heicJpgWeg(dir, name, blob){
@@ -1950,22 +1983,30 @@ async function heicEines(it, dienst, belegt, tmp){
     try{ bmp = await createImageBitmap(zurueck, { resizeWidth: 256, resizeQuality: 'low' }); }catch(e){ throw new Error('Das geschriebene JPG lässt sich nicht öffnen'); }
     const passt = Math.abs(bmp.height - 256 * r.hoehe / r.breite) <= 1.5; bmp.close && bmp.close();
     if (!passt) throw new Error('Das geschriebene JPG hat nicht die erwarteten Maße');
-    // 3. Endname
-    await transferLocked(dir, dir, tmp, ziel); liegt = ziel; belegt.add(nameKey(ziel));
-    // 4. Projektdaten umstellen und speichern – vor dem Ablegen des Originals
+    // 3. Projektdaten umstellen und speichern, solange das JPG noch den Zwischennamen trägt: der Nachweis nennt ihn („zwischen“).
+    //    Die Projektdatei ist damit das Protokoll – bricht FotoKit vor Schritt 4 ab, bringt das nächste Öffnen das JPG auf den
+    //    Endnamen (heicResteBeimOeffnen); ohne gespeicherten Nachweis wird der Zwischenname dort entfernt.
+    belegt.add(nameKey(ziel));
     const sub = await originale(), ablage = await freeName(sub, name);
     stand = heicStand();
     heicDatenUmstellen(it, name, ziel, { original: name, ablage: ORIGINALE_DIR + '/' + ablage, sha256: pruef, bytes: bytes.byteLength, umgewandelt: new Date().toISOString(),
-      decoder: r.decoder, qualitaet: r.qualitaet, breite: r.breite, hoehe: r.hoehe, exif: r.exif, farbprofil: r.icc > 0, fotokit: APP_VERSION });
+      decoder: r.decoder, qualitaet: r.qualitaet, breite: r.breite, hoehe: r.hoehe, exif: r.exif, farbprofil: r.icc > 0, fotokit: APP_VERSION, zwischen: tmp });
     const gespeichert = await flushProject();
     if (gespeichert === false || P.failed) throw new Error('Die Projektdaten konnten nicht gespeichert werden');
+    // 4. Endname
+    await transferLocked(dir, dir, tmp, ziel); liegt = ziel;
+    heicZwischenErledigt(ziel);   // nur im Speicher – geht mit der nächsten Speicherung in die Datei
     // 5. Original unverändert ablegen
     await transferLocked(dir, sub, name, ablage);
     liegt = null;
     return { von: name, nach: ziel, ablage, ms: r.ms };
   }catch(e){
     if (stand){ heicStandZurueck(stand, it, name); await flushProject(); }
-    if (liegt){ await heicJpgWeg(dir, liegt, blob); belegt.delete(nameKey(liegt)); }
+    if (liegt){
+      // eigenes JPG weg – unter dem Zwischennamen und (falls es ihn schon trägt) unter dem Endnamen, dort nur mit genau unseren Bytes
+      await heicJpgWeg(dir, tmp, blob); await heicJpgWeg(dir, ziel, blob);
+      if (!(await exists(dir, ziel).catch(() => true))) belegt.delete(nameKey(ziel));
+    }
     throw e;
   }
 }
@@ -3022,14 +3063,7 @@ async function umbenennenPruefen(){
       hinweise.push(`⚠ Ein Umbenennen${wann} war unterbrochen; FotoKit konnte es nicht vollständig zurücksetzen (${res.zurueck} zurück, ${res.probleme.length} Probleme, z. B. ${esc(res.probleme[0])}). Das Protokoll bleibt liegen, beim nächsten Öffnen versucht FotoKit es erneut. Fotos mit dem Namensanfang „${TMP_PREFIX}“ fehlen so lange in der Liste.`);
     }
   }
-  // Unfertiges JPG eines abgebrochenen HEIC-Umwandelns (2.3.0): nie ein Original, das HEIC liegt noch daneben → entfernen
-  const heicRest = [];
-  try{ for await (const h of foto.values()) if (h.kind === 'file' && h.name.startsWith(HEIC_TMP)) heicRest.push(h.name); }catch(e){}
-  if (heicRest.length && !P.readOnly){
-    let weg = 0;
-    for (const n of heicRest){ try{ await foto.removeEntry(n); weg++; }catch(_){} }
-    if (weg) hinweise.push(`Ein Umwandeln von iPhone-Fotos war unterbrochen. FotoKit hat ${weg === 1 ? 'ein unfertiges JPG' : weg + ' unfertige JPG'} entfernt; die iPhone-Fotos liegen unverändert im Ordner – bei Bedarf noch einmal umwandeln.`);
-  }
+  hinweise.push(...await heicResteBeimOeffnen(foto));   // abgebrochenes HEIC-Umwandeln (2.3.0)
   // vorläufige Namen ohne Protokoll (Umbenennen unterbrochen vor FotoKit 1.33): die Fotos fehlen in der Liste – das nicht verschweigen
   const lose = [];
   try{ for await (const h of foto.values()) if (h.kind === 'file' && (h.name.startsWith(TMP_PREFIX) || h.name.startsWith('~umb_')) && !h.name.startsWith(HEIC_TMP)) lose.push(h.name); }catch(e){}
