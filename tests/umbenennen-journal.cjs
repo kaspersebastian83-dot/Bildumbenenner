@@ -10,6 +10,9 @@ const vm = require('node:vm');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const a = html.indexOf('async function exists(dir, name)'), b = html.indexOf('const moveBetween =');
 assert.ok(a > 0 && b > a, 'Block exists … umbenennenPruefen in index.html');
+// 2.3.0: Reste eines abgebrochenen HEIC-Umwandelns räumt umbenennenPruefen mit auf (heicZwischenErledigt … heicResteBeimOeffnen)
+const ha = html.indexOf('function heicZwischenErledigt('), hb = html.indexOf('/** Eigenes JPG wieder entfernen');
+assert.ok(ha > 0 && hb > ha, 'Block heicZwischenErledigt … heicResteBeimOeffnen in index.html');
 
 function welt(start, opts = {}){
   const files = new Map(Object.entries(start)), noCreate = new Set(), noMove = new Set(), locked = new Set();
@@ -40,11 +43,11 @@ function welt(start, opts = {}){
     async removeEntry(n){ lebt(); if (!files.has(n)) throw err('NotFoundError', 'fehlt'); if (locked.has(n)) throw err('NoModificationAllowedError', 'gesperrt'); files.delete(n); },
     async *values(){ lebt(); for (const n of [...files.keys()].sort()) yield { kind: 'file', name: n }; }
   };
-  const ctx = { S: { dir, data: opts.data || dir }, P: { readOnly: !!opts.readOnly, data: { extensions: opts.extensions || {} } }, TMP_PREFIX: 'umb-tmp_', extOf: n => n.slice(n.lastIndexOf('.')),
+  const ctx = { S: { dir, data: opts.data || dir }, P: { readOnly: !!opts.readOnly, data: { extensions: opts.extensions || {}, imageExtensions: opts.imageExtensions || {} } }, TMP_PREFIX: 'umb-tmp_', HEIC_TMP: 'umb-tmp_heic_', FOTOS_DIR: 'Fotos', ORIGINALE_DIR: '_Originale', extOf: n => n.slice(n.lastIndexOf('.')),
     PROTECTED_PROJECT: 'geschützt', navigator: { userAgent: '' }, Date, Error, TypeError, TextEncoder, TextDecoder, Uint8Array, JSON, Set, Map, Number,
     fmtDate: d => `${d.getUTCDate()}.${d.getUTCMonth() + 1}.${d.getUTCFullYear()}`, fmtTime: d => `${d.getUTCHours()}:${String(d.getUTCMinutes()).padStart(2, '0')}`,
     esc: x => String(x), APP_VERSION: '1.33.0' };
-  vm.runInNewContext('function assertOriginalsWritable(){ if (P.readOnly) throw new Error(PROTECTED_PROJECT); }\n' + html.slice(a, b) +
+  vm.runInNewContext('function assertOriginalsWritable(){ if (P.readOnly) throw new Error(PROTECTED_PROJECT); }\n' + html.slice(a, b) + '\n' + html.slice(ha, hb) +
     ';this.runPairs = runPairs; this.umbenennenPruefen = umbenennenPruefen; this.journalWeg = journalWeg;', ctx);
   return { ...ctx, files, noCreate, noMove, locked, dir, w, stand: () => Object.fromEntries([...files].sort()),
     fotos: () => Object.fromEntries([...files].filter(([k]) => !k.startsWith('_Umbenennen-Journal_')).sort()),
@@ -165,6 +168,26 @@ const JR = j => ({ journal: j });
     const w = welt({ ...START, 'umb-tmp_abc_0.jpg': 'X', 'umb-tmp_abc_1.jpg': 'Y' });
     const hinweis = await w.umbenennenPruefen();
     assert.match(hinweis, /2 Dateien mit vorläufigem Namen/); assert.equal(w.files.get('umb-tmp_abc_0.jpg'), 'X');
+  }
+  { // 2.3.0: unfertiges JPG eines abgebrochenen HEIC-Umwandelns wird entfernt (nie ein Original) – kein „vorläufiger Name“-Hinweis
+    const w = welt({ ...START, 'IMG_1.HEIC': 'H', 'umb-tmp_heic_abc_0.jpg': 'halb', 'umb-tmp_abc_1.jpg': 'Y' });
+    const hinweis = await w.umbenennenPruefen();
+    assert.equal(w.files.has('umb-tmp_heic_abc_0.jpg'), false); assert.equal(w.files.get('IMG_1.HEIC'), 'H');
+    assert.match(hinweis, /ein unfertiges JPG entfernt/); assert.match(hinweis, /1 Datei mit vorläufigem Namen \(z\. B\. „umb-tmp_abc_1\.jpg“\)/);
+    const g = welt({ ...START, 'umb-tmp_heic_abc_0.jpg': 'halb' }, { readOnly: true });
+    assert.equal(await g.umbenennenPruefen(), ''); assert.equal(g.files.get('umb-tmp_heic_abc_0.jpg'), 'halb', 'geschützter Modus: nichts entfernt');
+  }
+  { // 2.3.0, Codex #87: Abbruch nach dem Speichern, vor dem Endnamen – der Nachweis nennt den Zwischennamen → JPG auf den Endnamen, kein zweites JPG
+    const ie = { 'IMG_1.jpg': { beschreibung: 'Küche', heic: { original: 'IMG_1.HEIC', sha256: 'x', zwischen: 'umb-tmp_heic_abc_0.jpg' } } };
+    const w = welt({ ...START, 'IMG_1.HEIC': 'H', 'umb-tmp_heic_abc_0.jpg': 'JPG' }, { imageExtensions: JSON.parse(JSON.stringify(ie)) });
+    const hinweis = await w.umbenennenPruefen();
+    assert.equal(w.files.get('IMG_1.jpg'), 'JPG'); assert.equal(w.files.has('umb-tmp_heic_abc_0.jpg'), false); assert.equal(w.files.get('IMG_1.HEIC'), 'H', 'Original bleibt bis zum nächsten Klick');
+    assert.match(hinweis, /ein fertiges JPG auf den richtigen Namen gebracht/); assert.doesNotMatch(hinweis, /vorläufigem Namen|unfertig/);
+    assert.deepEqual(JSON.parse(JSON.stringify(w.P.data.imageExtensions['IMG_1.jpg'])), { beschreibung: 'Küche', heic: { original: 'IMG_1.HEIC', sha256: 'x' } }, '„zwischen“ erledigt, Rest unverändert');
+    // Endname inzwischen belegt → nichts überschrieben, nichts gelöscht, Hinweis
+    const b = welt({ ...START, 'IMG_1.jpg': 'FREMD', 'umb-tmp_heic_abc_0.jpg': 'JPG' }, { imageExtensions: JSON.parse(JSON.stringify(ie)) });
+    assert.match(await b.umbenennenPruefen(), /bleibt liegen: der Name „IMG_1\.jpg“ ist inzwischen belegt/);
+    assert.equal(b.files.get('IMG_1.jpg'), 'FREMD'); assert.equal(b.files.get('umb-tmp_heic_abc_0.jpg'), 'JPG');
   }
   { // Marke ohne Journal (abgebrochenes Aufräumen) wird weggeräumt; Ordner ohne Journal: kein Hinweis
     const w = welt({ ...START, '_Umbenennen-Journal_q.phase2': '' });

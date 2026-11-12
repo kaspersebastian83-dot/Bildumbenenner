@@ -58,9 +58,10 @@ main#app{flex:1;flex-direction:column;gap:12px;min-height:0;padding:20px 32px 0}
 .folder[hidden]{display:none}
 .folder .hint{font:12.5px var(--sans);color:var(--gelb-text);margin-left:8px}
 .folder #btnAssign{font:13px var(--sans);padding:2px 10px;margin-left:6px}
-#importCard{display:flex;align-items:center;gap:10px 16px;flex-wrap:wrap;padding:12px 16px;font-size:15px}
-#importCard[hidden]{display:none}
-#importCard span{flex:1 1 280px}
+#importCard,#heicCard{display:flex;align-items:center;gap:10px 16px;flex-wrap:wrap;padding:12px 16px;font-size:15px}
+#importCard[hidden],#heicCard[hidden]{display:none}
+#importCard span,#heicCard span{flex:1 1 280px}
+.thumb.heic{padding:8px;text-align:center;font-size:13px;line-height:1.3}
 .fk-body{flex:1;display:flex;gap:20px;min-height:0}
 #listWrap{flex:1 1 auto;min-width:0;overflow:auto;padding:0 6px 24px 2px}
 /* Auswahl „in der Doku“ (E2): Haken auf der Kachel = in der Doku, ohne Haken = Weg (dasselbe wie „Weg“ in der Fotokarte) */
@@ -367,6 +368,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
     <span class="folder" id="folderName" hidden></span>
   </div>
   <div id="importCard" class="sp-karte" hidden><span id="importText"></span><button id="btnImport" class="sp-knopf sp-knopf-app">Fotos übernehmen →</button></div>
+  <div id="heicCard" class="sp-karte" hidden><span id="heicText"></span><button id="btnHeic" class="sp-knopf sp-knopf-app">iPhone-Fotos umwandeln</button></div>
   <div class="fk-body">
     <section id="listWrap" aria-label="Fotos">
       <div id="pickBar" hidden role="group" aria-label="Fotos für die Bilddokumentation">
@@ -506,11 +508,12 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.3.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:594cfd2ca06dcac93ed4ce8d1b08a4849dab018111f1044f95872f2ec740508c';
-const APP_DATE = '2026-11-11';
+const APP_BUILD = 'sha256:1da02fc2a972607a1d6ec3397e981fcf3a3f994384c12de8d2716b9222dfee8a';
+const APP_DATE = '2026-11-12';
 const CHANGELOG = [
+  ['2.3.0', '12.11.2026', 'iPhone-Fotos (HEIC/HEIF) wandelt FotoKit jetzt in echte JPG um: Liegen HEIC-Fotos im Ordner „Fotos“, steht über den Fotos „n iPhone-Fotos umwandeln“ (ebenso direkt nach „Fotos übernehmen“; vor „Bilddokumentation erstellen“ fragt FotoKit einmal nach, statt Platzhalter ins PDF zu setzen). Nie ohne Klick. Jedes Foto wird ein JPG mit gleichem Namen (IMG_0001.HEIC → IMG_0001.jpg, gibt es den schon: IMG_0001_2.jpg), volle Auflösung, Qualität 92 %, richtig gedreht; Aufnahmedatum, Gerät, GPS und Farbprofil werden übernommen. Das Original kommt unverändert nach „Fotos/_Originale“ – erst nachdem das JPG geschrieben, zurückgelesen und die Projektdatei gespeichert ist; geht etwas schief, bleibt das HEIC liegen und kein halbes JPG. Beschreibung, Probe, Abschnitt, „Weg“ und Reihenfolge wandern zum JPG. In _Bildumbenenner.json steht je JPG, aus welchem Original es stammt (Name, Ablage, SHA-256, Zeitpunkt, Decoder). Live-Photo-Videos (.MOV), .AAE-Dateien, HEIC in Unterordnern und im geschützten Projektmodus bleiben unangetastet. Der Decoder (libheif, 2 MB) wird nur beim Umwandeln geladen und geht auch offline. Die Hinweise „Maximale Kompatibilität“ entfallen.'],
   ['2.2.0', '11.11.2026', 'Chlorid genau 10 µg/cm² (Audit m7, Entscheidung 4): ein Wert von genau 10 µg/cm² (bzw. 100 mg/m²) liegt in der Ergebnistabelle jetzt „im Bereich“ der korrosionschemisch relevanten Größenordnung (VdS 2357: 5–10 µg/cm²), „oberhalb“ erst darüber; genau 5 bleibt „im Bereich“. Die Skalen-Übersicht zeigt „> 10 µg/cm²“. Gleich in ResultKit, PlanKit und BerichtKit (KORROSION-CHLORID v2). Eine in PlanKit angepasste Chlorid-Skala mit denselben Grenzen folgt derselben Regel, eine mit anderen Grenzen zählt ab ihren „ab“-Werten. Dateiformat unverändert.'],
   ['2.1.1', '11.11.2026', 'Laborstand („Seit der Übernahme hat sich der Ordner geändert“): zählt nur noch die LabelKit-Datei dieses Projekts – dieselbe wie ResultKit 2.3, PlanKit 2.1.1 und die Projektzentrale; eine fremde …_Daten.json gibt den Hinweis nicht mehr. Einmalig kann er erscheinen, wo bisher eine fremde oder eine ältere datierte Datei mitzählte: in ResultKit einmal „Erneut übernehmen“. Spektron-Leiste: „Proben ✓“ nur für eine Datei dieses Projekts. FotoKits eigene Dateiwahl (lkWahl) bleibt unverändert.'],
   ['2.1.0', '11.11.2026', 'LabelKit-Datei und Öffnen ohne Schreiben (Audit m1, m3): FotoKit nimmt nur noch die LabelKit-Datei dieses Projekts – Name beginnt mit der Projektnummer (auch alte Namen mit Datum), gleiche Wahl wie LabelKit und PlanKit. Liegt nur die Datei eines anderen Projekts da oder nennt die Datei im Inhalt ein anderes Projekt, lädt FotoKit keine Proben und sagt das in einer Zeile unter dem Kopf; nie mehr Probennummern oder Namen aus einem anderen Projekt. Öffnen und Ansehen schreiben nichts mehr: „_Bildumbenenner.json“, „_FotoKit_Fassungen“ und der Ordner „_Spektron/FotoKit“ entstehen erst mit der ersten Eingabe; übernommene Projektdaten aus der Projektzentrale werden dann mitgespeichert.'],
@@ -1813,6 +1816,257 @@ async function fotoUebernehmen(ordner, alsAbschnitt){
   await fotoUebernahmeKnopf();
   if (fehler.length) banner('err', `${ok} Fotos übernommen, ${fehler.length} nicht: ${fehler.slice(0, 3).map(esc).join(' · ')}${fehler.length > 3 ? ' …' : ''} – diese liegen weiter im Unterordner.`);
   else banner('ok', `${ok} Fotos aus ${log.length} Unterordner${log.length === 1 ? '' : 'n'} übernommen. Die Herkunft jeder Datei steht in „_Bildumbenenner.json“.`);
+  heicAngebotImBanner();   // E2: dasselbe Angebot direkt nach „Fotos übernehmen“
+}
+
+/* ---------- iPhone-Fotos (HEIC/HEIF) umwandeln (2.3.0, Plan „fotokit-heic-plan“ E1–E9) ----------
+   HEIC kann der Browser nicht anzeigen, Word und die Windows-Fotoanzeige oft auch nicht. FotoKit wandelt jedes HEIC einmal in
+   ein echtes JPG um (92 %, volle Auflösung, EXIF vollständig mit Orientation 1, Farbprofil mit) – nie ohne Klick: Karte über den
+   Fotos, dasselbe Angebot nach „Fotos übernehmen“, eine Nachfrage vor „Bilddokumentation erstellen“.
+   Je Foto, sicher gegen Abbruch (E7):
+     1. JPG unter Zwischennamen „umb-tmp_heic_…“ schreiben   2. zurücklesen (bytegleich) und dekodieren
+     3. Projektdaten umstellen (Beschreibung, Abschnitt, Probe, Weg, Reihenfolge wandern zum JPG-Endnamen; Nachweis „heic“ mit
+        dem Zwischennamen) und speichern – die Projektdatei ist das Protokoll des Laufs
+     4. auf den Endnamen bringen (IMG_0001.jpg, belegt → IMG_0001_2.jpg)
+     5. erst dann das HEIC unverändert nach „Fotos/_Originale“ verschieben.
+   Scheitert ein Schritt, wird das eigene JPG wieder entfernt und die Projektdaten zurückgestellt – das HEIC bleibt liegen.
+   Bricht FotoKit ab: vor 3 entfernt das nächste Öffnen den Zwischennamen; zwischen 3 und 4 bringt es das JPG auf den Endnamen
+   (der Nachweis nennt beide); zwischen 4 und 5 erkennt der nächste Klick das fertige JPG am Nachweis (Name + SHA-256) und legt
+   nur noch das Original ab. In keinem Fall entsteht ein zweites JPG.
+   Nachweis je JPG in _Bildumbenenner.json: bilder[JPG].heic (Originalname, Ablage, SHA-256, Zeitpunkt, Decoder) – ein Bildfeld,
+   das FotoKit-Fassungen ab F6 (1.9) unverändert mitführen und beim Umbenennen mitnehmen (docs/F6-unknown-fields.md).
+   Der Decoder (vendor/libheif-bundle.js, 2 MB) wird erst beim Umwandeln geladen, nur im Web Worker heic-worker.js – im Fenster
+   selbst verbietet die Sicherheitsregel (CSP, kein 'wasm-unsafe-eval') WebAssembly, und das bleibt so. Startet kein Worker
+   (index.html als lokale Datei), sagt FotoKit das und lässt die HEIC liegen. .MOV/.AAE (Live Photo), HEIC in Unterordnern
+   (auch _aussortiert) und TIFF bleiben unangetastet; im geschützten Projektmodus wird nichts umgewandelt. */
+const HEIC_EXT = ['heic', 'heif'];
+const istHeic = it => HEIC_EXT.includes(it.ext.slice(1).toLowerCase());
+const ORIGINALE_DIR = '_Originale';
+const HEIC_TMP = TMP_PREFIX + 'heic_';
+const HEIC_QUALITAET = 0.92;
+const heicFotos = () => S.items.filter(istHeic);
+const heicWort = n => n === 1 ? 'iPhone-Foto' : 'iPhone-Fotos';
+const nameKey = n => n.normalize('NFC').toLowerCase();
+function heicKarte(){
+  const c = $('heicCard'); if (!c) return;
+  const n = S.dir && !P.readOnly ? heicFotos().length : 0;
+  c.hidden = !n;
+  if (!n) return;
+  $('heicText').textContent = `In „${FOTOS_DIR}“ ${n === 1 ? 'liegt 1 iPhone-Foto' : `liegen ${n} iPhone-Fotos`} (HEIC). Word, die Windows-Fotoanzeige und die Bilddokumentation können sie oft nicht öffnen. ` +
+    `FotoKit wandelt sie in JPG um (Aufnahmedatum, Gerät und GPS bleiben); die Originale kommen unverändert nach „${FOTOS_DIR}/${ORIGINALE_DIR}“.`;
+  $('btnHeic').textContent = `${n} ${heicWort(n)} umwandeln`;
+  $('btnHeic').disabled = S.busy;
+}
+function heicAngebotImBanner(){
+  const n = P.readOnly ? 0 : heicFotos().length;
+  if (!n || !$('banner').classList.contains('ok')) return;
+  $('banner').insertAdjacentHTML('beforeend', ` <span class="spacer"></span>Darunter ${n === 1 ? '1 iPhone-Foto' : n + ' iPhone-Fotos'} (HEIC). <button id="bHeicJetzt">${n} ${heicWort(n)} umwandeln</button>`);
+  $('bHeicJetzt').onclick = () => heicUmwandelnStarten();
+}
+
+/* Decoder im Web Worker, eine Anfrage je Foto. Stürzt der Worker ab (meist zu wenig Arbeitsspeicher), gilt das für dieses Foto;
+   das nächste bekommt einen frischen Worker. Startet gar keiner, bricht der Lauf mit einer verständlichen Meldung ab. */
+const HEIC_OHNE_WORKER = 'Der Browser startet den HEIC-Decoder hier nicht (FotoKit als lokale Datei geöffnet?). iPhone-Fotos lassen sich in der Online-Fassung von FotoKit umwandeln';
+function heicDienst(){
+  let w = null, geantwortet = false, nr = 0;
+  const offen = new Map();
+  const weg = grund => { for (const p of offen.values()) p.rej(grund); offen.clear(); if (w) try{ w.terminate(); }catch(_){} w = null; };
+  const start = () => {
+    if (w) return w;
+    try{ w = new Worker('heic-worker.js'); }catch(e){ throw Object.assign(new Error(HEIC_OHNE_WORKER), { ganzerLauf: true }); }
+    w.onmessage = e => { geantwortet = true; const p = offen.get(e.data && e.data.id); if (!p) return; offen.delete(e.data.id); if (e.data.ok) p.res(e.data.ergebnis); else p.rej(new Error(e.data.fehler)); };
+    w.onerror = e => {
+      if (e && e.preventDefault) e.preventDefault();
+      weg(geantwortet ? new Error('Das Umwandeln ist abgebrochen (zu wenig Arbeitsspeicher?)') : Object.assign(new Error(HEIC_OHNE_WORKER), { ganzerLauf: true }));
+    };
+    return w;
+  };
+  return {
+    umwandeln(bytes){
+      const wk = start();
+      return new Promise((res, rej) => { const id = ++nr; offen.set(id, { res, rej }); wk.postMessage({ id, bytes, qualitaet: HEIC_QUALITAET }); });
+    },
+    ende(){ weg(new Error('beendet')); }
+  };
+}
+
+/** Projektdaten, die beim Umwandeln vom HEIC- auf den JPG-Namen wandern (für das Zurückstellen bei einem Fehler) */
+const HEIC_KINDS = ['drafts', 'extra', 'orig', 'rot', 'hash', 'imageExtensions', 'discard', 'order'];
+const heicStand = () => Object.fromEntries(HEIC_KINDS.map(k => [k, clone(P.data[k])]));
+function heicStandZurueck(stand, it, name){
+  for (const k of HEIC_KINDS){ if (stand[k] === undefined) delete P.data[k]; else P.data[k] = clone(stand[k]); }
+  ROT = clone(P.data.rot || {}); it.name = name; it.final = name;
+  scheduleProjSave();
+}
+function heicDatenUmstellen(it, von, nach, nachweis){
+  const pairs = [{ from: von, to: nach }];
+  remapKeys('drafts', pairs); remapKeys('extra', pairs); remapKeys('orig', pairs); moveRotKeys(pairs);
+  const h = projGet('hash', {}); if (von in h){ delete h[von]; projSet('hash', h); }   // Prüfsumme gehörte zum HEIC, nicht zum JPG
+  const ie = projGet('imageExtensions', {}), e = ie[von] || {}; delete ie[von]; ie[nach] = { ...e, heic: nachweis }; projSet('imageExtensions', ie);
+  const ds = projGet('discard', []); if (ds.includes(von)) projSet('discard', ds.map(n => n === von ? nach : n));
+  const od = projGet('order', []); if (od.includes(von)) projSet('order', od.map(n => n === von ? nach : n));
+  it.name = nach; it.final = nach;   // ein Zusammenführen mitten im Lauf (flushDrafts/saveExtra) liest die Namen aus der Liste
+  dokuGeaendert(); scheduleProjSave();
+}
+/** Nachweis ohne „zwischen“: das JPG trägt jetzt seinen Endnamen (nur im Speicher, wie metaNurImSpeicher). */
+function heicZwischenErledigt(jpg){
+  const ie = P.data && P.data.imageExtensions, e = ie && ie[jpg];
+  if (!e || !e.heic || e.heic.zwischen === undefined) return;
+  const { zwischen, ...rest } = e.heic;
+  ie[jpg] = { ...e, heic: rest };
+}
+/** Beim Öffnen (vor dem Einlesen): Reste eines unterbrochenen Umwandelns. Ein Zwischenname „umb-tmp_heic_…“, den ein gespeicherter
+    Nachweis nennt, war schon geprüft und die Projektdaten zeigen auf den Endnamen → auf den Endnamen bringen. Jeder andere
+    Zwischenname ist ein unfertiges JPG (nie ein Original, das HEIC liegt noch daneben) → entfernen. Unter der Sperre der Originale,
+    damit ein zweites Fenster im selben Browser nicht das JPG eines laufenden Umwandelns erwischt (andere Rechner erreicht sie nicht). */
+async function heicResteBeimOeffnen(foto){
+  if (P.readOnly) return [];
+  return originaleSperre(async () => {
+    const reste = [], hinweise = [];
+    try{ for await (const h of foto.values()) if (h.kind === 'file' && h.name.startsWith(HEIC_TMP)) reste.push(h.name); }catch(e){ return []; }
+    const ie = (P.data && P.data.imageExtensions) || {};
+    let weg = 0, fertig = 0;
+    for (const n of reste){
+      const jpg = Object.keys(ie).find(k => ie[k] && ie[k].heic && ie[k].heic.zwischen === n);
+      try{
+        if (jpg && !(await exists(foto, jpg))){ await transferLocked(foto, foto, n, jpg); heicZwischenErledigt(jpg); fertig++; }
+        else if (jpg) hinweise.push(`⚠ „${esc(n)}“ (umgewandeltes iPhone-Foto) bleibt liegen: der Name „${esc(jpg)}“ ist inzwischen belegt. Bitte im Ordner ansehen.`);
+        else { await foto.removeEntry(n); weg++; }
+      }catch(e){ hinweise.push(`⚠ „${esc(n)}“ (Rest eines Umwandelns) konnte nicht aufgeräumt werden: ${esc(e.message)}`); }
+    }
+    if (fertig) hinweise.unshift(`Ein Umwandeln von iPhone-Fotos war unterbrochen. FotoKit hat ${fertig === 1 ? 'ein fertiges JPG' : fertig + ' fertige JPG'} auf den richtigen Namen gebracht; ${fertig === 1 ? 'das Original liegt' : 'die Originale liegen'} noch im Ordner – „iPhone-Fotos umwandeln“ legt ${fertig === 1 ? 'es' : 'sie'} nach „${esc(FOTOS_DIR)}/${ORIGINALE_DIR}“.`);
+    if (weg) hinweise.unshift(`Ein Umwandeln von iPhone-Fotos war unterbrochen. FotoKit hat ${weg === 1 ? 'ein unfertiges JPG' : weg + ' unfertige JPG'} entfernt; die iPhone-Fotos liegen unverändert im Ordner – bei Bedarf noch einmal umwandeln.`);
+    return hinweise;
+  });
+}
+/** Eigenes JPG wieder entfernen: der Zwischenname (eindeutig, nur von diesem Lauf) immer, auch leer oder halb geschrieben;
+    der Endname nur, solange er noch genau unsere Bytes enthält (nie eine fremde Datei löschen). */
+async function heicJpgWeg(dir, name, blob){
+  try{
+    if (!name.startsWith(HEIC_TMP) && !(await sameBytes(await (await dir.getFileHandle(name)).getFile(), blob))) return;
+    assertOriginalsWritable(); await dir.removeEntry(name);
+  }catch(_){}
+}
+async function heicEines(it, dienst, belegt, tmp){
+  assertOriginalsWritable();
+  const dir = S.dir, name = it.name;
+  const bytes = await (await (await dir.getFileHandle(name)).getFile()).arrayBuffer();
+  const pruef = await sha256(bytes);
+  const originale = () => dir.getDirectoryHandle(ORIGINALE_DIR, { create: true });   // erst anlegen, wenn wirklich abgelegt wird
+  // schon umgewandelt (Abbruch nach dem Speichern, vor dem Ablegen des Originals)? → nur noch ablegen
+  const ie = projGet('imageExtensions', {});
+  const schon = Object.keys(ie).find(n => ie[n] && ie[n].heic && ie[n].heic.original === name && ie[n].heic.sha256 === pruef && belegt.has(nameKey(n)));
+  if (schon){
+    const sub = await originale(), ablage = await freeName(sub, name);
+    await transferLocked(dir, sub, name, ablage);
+    if (ie[schon].heic.ablage !== ORIGINALE_DIR + '/' + ablage){ ie[schon] = { ...ie[schon], heic: { ...ie[schon].heic, ablage: ORIGINALE_DIR + '/' + ablage } }; projSet('imageExtensions', ie); }
+    return { von: name, nach: schon, ablage, nurAbgelegt: true };
+  }
+  const r = await dienst.umwandeln(bytes);
+  const stamm = name.slice(0, name.length - it.ext.length);
+  let ziel = stamm + '.jpg';
+  for (let k = 2; belegt.has(nameKey(ziel)); k++) ziel = `${stamm}_${k}.jpg`;
+  await assertNameOk(dir, tmp); await assertNameOk(dir, ziel);
+  const blob = new Blob([r.jpeg], { type: 'image/jpeg' });
+  let liegt = null, stand = null;
+  try{
+    // 1. JPG unter Zwischennamen
+    if (await exists(dir, tmp)) throw new Error(`Der Zwischenname „${tmp}“ ist belegt – nichts verändert`);
+    assertOriginalsWritable();
+    const th = await dir.getFileHandle(tmp, { create: true }); liegt = tmp;
+    const w = await th.createWritable();
+    try{ await w.write(blob); await w.close(); }catch(e){ try{ await w.abort(); }catch(_){} throw e; }
+    // 2. zurücklesen: bytegleich und als Bild lesbar
+    const zurueck = await (await dir.getFileHandle(tmp)).getFile();
+    if (!(await sameBytes(zurueck, blob))) throw new Error('Das JPG ließ sich nicht unverändert zurücklesen');
+    let bmp;
+    try{ bmp = await createImageBitmap(zurueck, { resizeWidth: 256, resizeQuality: 'low' }); }catch(e){ throw new Error('Das geschriebene JPG lässt sich nicht öffnen'); }
+    const passt = Math.abs(bmp.height - 256 * r.hoehe / r.breite) <= 1.5; bmp.close && bmp.close();
+    if (!passt) throw new Error('Das geschriebene JPG hat nicht die erwarteten Maße');
+    // 3. Projektdaten umstellen und speichern, solange das JPG noch den Zwischennamen trägt: der Nachweis nennt ihn („zwischen“).
+    //    Die Projektdatei ist damit das Protokoll – bricht FotoKit vor Schritt 4 ab, bringt das nächste Öffnen das JPG auf den
+    //    Endnamen (heicResteBeimOeffnen); ohne gespeicherten Nachweis wird der Zwischenname dort entfernt.
+    belegt.add(nameKey(ziel));
+    const sub = await originale(), ablage = await freeName(sub, name);
+    stand = heicStand();
+    heicDatenUmstellen(it, name, ziel, { original: name, ablage: ORIGINALE_DIR + '/' + ablage, sha256: pruef, bytes: bytes.byteLength, umgewandelt: new Date().toISOString(),
+      decoder: r.decoder, qualitaet: r.qualitaet, breite: r.breite, hoehe: r.hoehe, exif: r.exif, farbprofil: r.icc > 0, fotokit: APP_VERSION, zwischen: tmp });
+    const gespeichert = await flushProject();
+    if (gespeichert === false || P.failed) throw new Error('Die Projektdaten konnten nicht gespeichert werden');
+    // 4. Endname
+    await transferLocked(dir, dir, tmp, ziel); liegt = ziel;
+    heicZwischenErledigt(ziel);   // nur im Speicher – geht mit der nächsten Speicherung in die Datei
+    // 5. Original unverändert ablegen
+    await transferLocked(dir, sub, name, ablage);
+    liegt = null;
+    return { von: name, nach: ziel, ablage, ms: r.ms };
+  }catch(e){
+    if (stand){ heicStandZurueck(stand, it, name); await flushProject(); }
+    if (liegt){
+      // eigenes JPG weg – unter dem Zwischennamen und (falls es ihn schon trägt) unter dem Endnamen, dort nur mit genau unseren Bytes
+      await heicJpgWeg(dir, tmp, blob); await heicJpgWeg(dir, ziel, blob);
+      if (!(await exists(dir, ziel).catch(() => true))) belegt.delete(nameKey(ziel));
+    }
+    throw e;
+  }
+}
+async function heicUmwandeln(liste){
+  const gesamt = liste.length, fertig = [], fehler = [], t0 = Date.now();
+  S.busy = true; recompute();
+  showDialog(`<h3>iPhone-Fotos werden umgewandelt …</h3><progress id="prog" max="${gesamt}" value="0"></progress>
+    <p class="m" id="heicStand" aria-live="polite">1 von ${gesamt}</p><p class="hint">Die Originale bleiben unverändert und kommen nach „${esc(FOTOS_DIR)}/${ORIGINALE_DIR}“.</p>`);
+  const dienst = heicDienst();
+  try{
+    await originaleSperre(async () => {
+      const belegt = new Set();
+      for await (const h of S.dir.values()) belegt.add(nameKey(h.name));
+      const stempel = Date.now().toString(36);
+      for (let i = 0; i < gesamt; i++){
+        const it = liste[i];
+        $('heicStand').textContent = `${i + 1} von ${gesamt}: ${it.name}`;
+        try{ fertig.push(await heicEines(it, dienst, belegt, `${HEIC_TMP}${stempel}_${i}.jpg`)); }
+        catch(e){
+          logProblem(`HEIC umwandeln ${it.name}: ${e.message}`);
+          if (e.ganzerLauf){ fehler.push(e.message); break; }   // kein Decoder – die übrigen Fotos gar nicht erst anfassen
+          fehler.push(`${it.name}: ${e.message}`); if (P.readOnly) break;
+        }
+        $('prog').value = i + 1;
+      }
+    });
+  }catch(e){ fehler.push(e.message); }
+  finally{ dienst.ende(); closeDialog(); S.busy = false; }
+  if (fertig.length){ scheduleProjSave(); await flushProject(); }
+  await loadItems();
+  return { fertig, fehler, ms: Date.now() - t0 };
+}
+async function heicUmwandelnStarten(){
+  if (!S.dir || S.busy || S.changing) return null;
+  if (P.readOnly){ banner('err', esc(PROTECTED_PROJECT)); return null; }
+  if (!heicFotos().length) return null;
+  let r = null;
+  await withSavedProject('Das Umwandeln der iPhone-Fotos', async () => { r = await heicUmwandeln(heicFotos()); });
+  if (!r) return null;
+  const n = r.fertig.length, ziel = `„${esc(FOTOS_DIR)}/${ORIGINALE_DIR}“`;
+  const zeit = r.ms >= 1000 ? ` (${Math.round(r.ms / 1000)} s)` : '';
+  if (r.fehler.length) banner('err', `${n ? `${n} ${heicWort(n)} umgewandelt, ` : ''}${r.fehler.length} nicht: ${r.fehler.slice(0, 3).map(esc).join(' · ')}${r.fehler.length > 3 ? ' …' : ''} – ${r.fehler.length === 1 ? 'dieses liegt' : 'diese liegen'} unverändert in „${esc(FOTOS_DIR)}“.`);
+  else banner('ok', `✓ ${n} ${heicWort(n)} in JPG umgewandelt${zeit} – im Ordner geprüft. Aufnahmedatum, Gerät und GPS sind übernommen; die Originale liegen unverändert in ${ziel}.`);
+  heicKarte();
+  return r;
+}
+/** E2: vor „Bilddokumentation erstellen“ einmal nachfragen, statt Platzhalter ins PDF zu setzen */
+function guardHeic(next){
+  return (...a) => {
+    const n = S.items.filter(it => istHeic(it) && !it.discard).length;
+    if (!n || P.readOnly) return next(...a);
+    showDialog(`<h3>${n} ${heicWort(n)} noch nicht umgewandelt</h3>
+      <p id="dHeic">${n === 1 ? 'Ein Foto in der Doku ist' : `${n} Fotos in der Doku sind`} im iPhone-Format (HEIC). In der Bilddokumentation ${n === 1 ? 'stünde es' : 'stünden sie'} nur als Platzhalter.
+      FotoKit kann ${n === 1 ? 'es' : 'sie'} jetzt in JPG umwandeln; die Originale bleiben unverändert in „${esc(FOTOS_DIR)}/${ORIGINALE_DIR}“.</p>
+      <div class="btns"><button id="dCancel">Abbrechen</button><span class="spacer"></span><button id="dOhne">Ohne Umwandeln weiter</button><button class="primary" id="dOk">${n} ${heicWort(n)} umwandeln</button></div>`);
+    $('dCancel').onclick = closeDialog;
+    $('dOhne').onclick = () => { closeDialog(); next(...a); };
+    $('dOk').onclick = async () => { closeDialog(); const r = await heicUmwandelnStarten(); if (r && !r.fehler.length) next(...a); };
+    $('dOk').focus();
+  };
 }
 
 /* ---------- open folder ---------- */
@@ -2236,7 +2490,11 @@ async function pumpThumbs(){
 async function makeThumb(it){
   const box = it.el.querySelector('.thumb');
   const ext = it.ext.slice(1).toLowerCase();
-  if (!PREVIEWABLE.includes(ext)){ box.textContent = ext.toUpperCase(); return; }
+  if (!PREVIEWABLE.includes(ext)){
+    if (HEIC_EXT.includes(ext)){ box.textContent = 'iPhone-Foto – noch nicht umgewandelt'; box.classList.add('heic'); }
+    else box.textContent = ext.toUpperCase();
+    return;
+  }
   try{
     const f = await it.handle.getFile();
     let url;
@@ -2268,6 +2526,7 @@ function buildName(it, nr){
 }
 function recompute(){
   readCfgFromUI();
+  heicKarte();   // iPhone-Fotos im Ordner? (2.3.0)
   // sections: an image without its own section inherits the one above it
   let cur = ''; const secs = new Set();
   S.view.forEach(it => {
@@ -2429,7 +2688,7 @@ async function loadPreview(it){
   if (S.pvUrl){ URL.revokeObjectURL(S.pvUrl); S.pvUrl = null; }
   const ext = it.ext.slice(1).toLowerCase();
   box.setAttribute('aria-busy', 'false');
-  if (!PREVIEWABLE.includes(ext)){ img.alt = 'Keine Vorschau für ' + ext.toUpperCase(); return; }
+  if (!PREVIEWABLE.includes(ext)){ img.alt = HEIC_EXT.includes(ext) ? 'iPhone-Foto (HEIC) – noch nicht umgewandelt, keine Vorschau' : 'Keine Vorschau für ' + ext.toUpperCase(); return; }
   img.alt = 'Vorschau wird geladen …';
   box.setAttribute('aria-busy', 'true');
   try{
@@ -2804,9 +3063,10 @@ async function umbenennenPruefen(){
       hinweise.push(`⚠ Ein Umbenennen${wann} war unterbrochen; FotoKit konnte es nicht vollständig zurücksetzen (${res.zurueck} zurück, ${res.probleme.length} Probleme, z. B. ${esc(res.probleme[0])}). Das Protokoll bleibt liegen, beim nächsten Öffnen versucht FotoKit es erneut. Fotos mit dem Namensanfang „${TMP_PREFIX}“ fehlen so lange in der Liste.`);
     }
   }
+  hinweise.push(...await heicResteBeimOeffnen(foto));   // abgebrochenes HEIC-Umwandeln (2.3.0)
   // vorläufige Namen ohne Protokoll (Umbenennen unterbrochen vor FotoKit 1.33): die Fotos fehlen in der Liste – das nicht verschweigen
   const lose = [];
-  try{ for await (const h of foto.values()) if (h.kind === 'file' && (h.name.startsWith(TMP_PREFIX) || h.name.startsWith('~umb_'))) lose.push(h.name); }catch(e){}
+  try{ for await (const h of foto.values()) if (h.kind === 'file' && (h.name.startsWith(TMP_PREFIX) || h.name.startsWith('~umb_')) && !h.name.startsWith(HEIC_TMP)) lose.push(h.name); }catch(e){}
   if (lose.length) hinweise.push(`⚠ Im Fotoordner liegen ${lose.length} Datei${lose.length === 1 ? '' : 'en'} mit vorläufigem Namen (z. B. „${esc(lose[0])}“) – ein früheres Umbenennen wurde unterbrochen. ` +
     `Diese Fotos fehlen in der Liste, ihre Beschreibungen hängen noch an den alten Namen. Bitte im Ordner ansehen und von Hand zurückbenennen; „Fotos neu einlesen“ findet sie danach wieder.`);
   return hinweise.join('<br>');
@@ -4271,7 +4531,7 @@ function openInfo(){
       <tr><td>Projektzentrale</td><td>${S.proj ? `Projekt „${esc(S.proj.name)}“ – gemeinsame Projektdaten in „${PJ_FILE}“ im Projektordner` : 'Projekte lassen sich direkt aus der Projektzentrale öffnen; wird ein Projektordner („26.0123 Köln“) gewählt, wird dessen „Fotos“ verwendet.'}</td></tr>
       <tr><td>Persönlich</td><td>In diesem Browser: Sachverständiger, Standardanweisung, Export-Einstellungen.</td></tr>
       <tr><td>Originale</td><td>Werden nur umbenannt bzw. nach „${DISCARD_DIR}“ verschoben, nie verändert. Drehen und Verkleinern betrifft nur ZIP- und PDF-Kopien.</td></tr>
-      <tr><td>Grenzen</td><td>HEIC-Fotos (iPhone) kann Chrome nicht lesen – Kamera auf „Maximale Kompatibilität“ stellen. Im PDF werden Zeichen wie → oder CO₂ als „->“ bzw. „CO2“ geschrieben.</td></tr>
+      <tr><td>Grenzen</td><td>iPhone-Fotos (HEIC) wandelt FotoKit auf Klick in JPG um (Original nach „Fotos/_Originale“); bis dahin haben sie keine Vorschau und stehen im PDF nur als Platzhalter. Im PDF werden Zeichen wie → oder CO₂ als „->“ bzw. „CO2“ geschrieben.</td></tr>
     </table>
     <div class="m"><b>Änderungen</b><br>${CHANGELOG.map(([v, d, t]) => `<b>${v}</b> (${d}): ${esc(t)}`).join('<br>')}</div></div>
     <div class="btns"><button id="iProblem">Problem melden …</button><span class="spacer"></span><button class="primary" id="iClose">Schließen</button></div>`);
@@ -5110,7 +5370,7 @@ const HELP_HTML = `
   <li><b>Originale bleiben unverändert.</b> Sie werden höchstens umbenannt bzw. nach <code>_aussortiert</code> verschoben (nur mit „Dateien umbenennen“). Drehen und Verkleinern betrifft nur PDF und ZIP.</li>
   <li><b><code>_Bildumbenenner.json</code> nicht löschen oder umbenennen.</b> Darin stehen alle Beschreibungen, Abschnitte und Proben – so kann jeder Kollege am Projekt weiterarbeiten.</li>
   <li><b>Möglichst nicht zu zweit im selben Projekt.</b> Passiert es doch, führt FotoKit die Änderungen zusammen; bei einem Konflikt bleibt die eigene Fassung und die App zeigt es an.</li>
-  <li><b>iPhone-Fotos (HEIC)</b> kann der Browser nicht lesen. Am iPhone: Einstellungen → Kamera → Formate → „Maximale Kompatibilität“.</li>
+  <li><b>iPhone-Fotos (HEIC) wandelt FotoKit um:</b> Liegen HEIC-Fotos in <code>Fotos</code>, steht über den Fotos „n iPhone-Fotos umwandeln“. Ein Klick macht aus jedem ein echtes JPG (volle Auflösung, Aufnahmedatum, Gerät und GPS bleiben); das Original kommt unverändert nach <code>Fotos/_Originale</code>. Beschreibung, Probe und Abschnitt wandern mit. Am iPhone muss dafür nichts umgestellt werden. Live-Photo-Videos (<code>.MOV</code>) und <code>.AAE</code>-Dateien bleiben liegen.</li>
   <li><b>Speichern:</b> Eingaben werden automatisch in <code>_Bildumbenenner.json</code> gespeichert (und zusätzlich im Browser gesichert). Fehler beim Speichern stehen rot unten neben „Mehr …“.</li>
   <li><b>Wenn etwas nicht klappt:</b> „Problem melden“ in der Fehlermeldung (oder „Mehr …“ › „Sicherungen und Programmstand“ › „Version und Build“) kopiert einen Bericht – in eine E-Mail einfügen und kurz sagen, was passiert ist.</li>
 </ul>`;
@@ -5212,7 +5472,8 @@ $('btnInfo').title = 'Geladen: ' + APP_VERSION + ' / ' + APP_BUILD;
 updateStatus('Programmstand wird gleich online geprüft …');
 document.title = `${APP_NAME} ${APP_VERSION}`;
 $('btnZip').onclick = guardStorno(openZipDialog);
-$('btnPdf').onclick = guardStorno(openPdfDialog);
+$('btnPdf').onclick = guardHeic(guardStorno(openPdfDialog));   // erst iPhone-Fotos (2.3.0), dann stornierte Proben
+$('btnHeic').onclick = () => heicUmwandelnStarten();
 $('btnVersions').onclick = openPhotoVersions;
 $('btnOpen2').onclick = pickFolder;
 $('btnImport').onclick = fotoUebernahmeDialog;
