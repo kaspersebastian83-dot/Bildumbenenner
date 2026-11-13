@@ -2,11 +2,16 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **2.3.1** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **2.3.2** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
 Die Webadresse, die Projektdatei `_Bildumbenenner.json` und die gespeicherten Einstellungen behalten den alten Namen – so funktionieren bestehende Projekte, Lesezeichen und installierte Apps weiter. Die aktuelle Version steht oben links in der blauen Kopfzeile (Klick darauf: Änderungen, Problem melden). Daneben öffnet „? Kurzanleitung“ (oder F1) die Kurzanleitung – auch zum Ausdrucken.
+
+## Neu in 2.3.2 · 13.11.2026 – Speichern hängt nicht mehr still
+
+- Hält ein anderes Spektron-Fenster (Projektzentrale oder ein zweites FotoKit) das Projekt gerade belegt, wartet FotoKit beim Speichern der gemeinsamen Projektdaten (`_Projekt.json`) höchstens 20 s und meldet dann: „Das Projekt ist gerade in einem anderen Spektron-Fenster belegt – bitte das andere Fenster schließen und erneut versuchen.“ Bisher hing das Speichern ohne Meldung (beim Projektwechsel oder „Neu einlesen“ blieb das Fenster gesperrt). Nachzug zu Projektzentrale 1.48.0.
+- Dann wird nichts geschrieben. Die Eingaben bleiben im Fenster und gehen mit dem nächsten Speichern mit, das man selbst auslöst – FotoKit schreibt nicht später von allein. Ebenso beim Wiederherstellen einer Projektfassung.
 
 ## Neu in 2.3.1 · 12.11.2026 – weniger Arbeitsspeicher beim Umwandeln
 
@@ -126,7 +131,7 @@ Zum erneuten Öffnen über die URL benötigen die Apps wie bisher den passenden 
 
 Originalbilder werden **nur umbenannt** bzw. nach `_aussortiert/` verschoben – nie verändert. Drehen und Verkleinern betrifft nur die Kopien im ZIP/PDF. Rückgängig ist nach jedem Umbenennen möglich.
 
-Ordnerwechsel, „Neu einlesen“ und App-Updates warten auf die Speicherung aller ausstehenden Änderungen, einschließlich der gemeinsamen Projektdaten. Schlägt sie fehl, bleibt das bisherige Projekt mit den Eingaben geöffnet. Nach Prüfen des Projektordners mit **„Erneut speichern“** wiederholen und anschließend den Wechsel erneut auslösen. Beim Schließen oder Neuladen über den Browser warnt FotoKit auch vor noch laufenden Schreibvorgängen; ein erzwungenes Schließen oder das Bestätigen von „Seite verlassen“ kann ungesicherte Änderungen weiterhin verwerfen.
+Ordnerwechsel, „Neu einlesen“ und App-Updates warten auf die Speicherung aller ausstehenden Änderungen, einschließlich der gemeinsamen Projektdaten. Schlägt sie fehl, bleibt das bisherige Projekt mit den Eingaben geöffnet. Nach Prüfen des Projektordners mit **„Erneut speichern“** wiederholen und anschließend den Wechsel erneut auslösen. Ist das Projekt gerade in einem anderen Spektron-Fenster belegt, meldet FotoKit das nach höchstens 20 s (ab 2.3.2) – dann das andere Fenster schließen und erneut speichern. Beim Schließen oder Neuladen über den Browser warnt FotoKit auch vor noch laufenden Schreibvorgängen; ein erzwungenes Schließen oder das Bestätigen von „Seite verlassen“ kann ungesicherte Änderungen weiterhin verwerfen.
 
 Nach Umbenennen oder Rückgängig werden Speicherfehler ebenfalls angezeigt. Die Dateinamen können dann bereits geändert sein; die zugehörigen Bildinformationen bleiben in der geöffneten Sitzung erhalten. **„Erneut speichern“** sichert sie unter den aktuellen Dateinamen, ohne die Dateiaktion zu wiederholen. Erst nach erfolgreicher Speicherung erscheint die Erfolgsmeldung.
 
@@ -160,6 +165,7 @@ Für Betreuer: Nach jeder HTML-Änderung `node tools/build-identity.cjs` ausfüh
 node tests/laborwerte.cjs   # Laborwerte der Ergebnistabelle: Zahlen und Qualifikatoren wie in PlanKit
 node tests/bildnummerierung-browser.cjs [chromium|webkit]   # 5/50/150 Bilder: echte Aktionen und gespeicherte PDF-/CSV-/ZIP-Inhalte
 node tests/projektdaten-browser.cjs [chromium|webkit]   # _Projekt.json: Neu-Lesen beim Fensterwechsel, Sperre beim Speichern (braucht Playwright)
+node tests/sperre-belegt-browser.cjs [chromium]   # Projekt in anderem Fenster belegt: Meldung nach dem Limit, nichts geschrieben, Eingabe bleibt (braucht Playwright)
 node tests/projektkontext-browser.cjs [chromium|webkit]   # Zentrale, manuelle Wechsel, Fehler/Verzögerungen, unbekannter Ordner, Zuordnung und URL/Navigation
 node tests/leiste-browser.cjs [chromium|webkit]   # Leiste mit Projekt, Arbeitsschritten und „Weiter“ (braucht Playwright)
 node tests/sortierung-export-browser.cjs [chromium|webkit]   # Projektzuordnung, Abschnittssortierung, PDF-Dateinamen

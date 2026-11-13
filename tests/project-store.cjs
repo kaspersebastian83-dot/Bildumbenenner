@@ -7,6 +7,8 @@ const name='26.0101 Fiktives Projekt', initial={format:'mosaik-projekt',version:
 const defer=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{promise,resolve};};
 const missing=()=>Object.assign(Error('missing'),{name:'NotFoundError'});
 let checks=0;
+// Eine nie gewährte Sperre lässt die Ereignisschleife leerlaufen – Node endet dann still mit 0. Das zählt als Fehler.
+let fertig=false;process.on('exit',()=>{if(!fertig&&!process.exitCode){console.error('Test nicht zu Ende gelaufen (wartet eine Sperre endlos?)');process.exitCode=1;}});
 class Directory{
   constructor(dir,io={}){this.dir=dir;this.io=io;this.kind='directory';this.name=path.basename(dir);}
   async getDirectoryHandle(n,o={}){const d=path.join(this.dir,n);if(o.create)await fs.mkdir(d,{recursive:true});try{if(!(await fs.stat(d)).isDirectory())throw Error('not directory');}catch(e){if(e.code==='ENOENT')throw missing();throw e;}return new Directory(d,this.io);}
@@ -134,5 +136,38 @@ async function all(d){const r={};async function walk(p){for(const e of await fs.
    for(let i=0;i<42;i++)await app.save(new Directory(d),{objekt:'Stand '+i});
    const v=await app.ProjectStore.versions(new Directory(d));assert.equal(v.items.length,42,'all old distinct versions found, no arbitrary truncation/deletion');
  });
- console.log('OK',checks,'F3 synthetic filesystem cases for',app.app);
+ // 2.3.2 (Nachzug zu Projektzentrale 1.48.0): Sperre nie endlos – hält ein anderes Fenster sie, nach ProjectStore.WARTEN (20 s)
+ // Fehler „belegt“; fn läuft nicht, nichts wird geschrieben (auch keine Sicherung). Gilt für update und restore.
+ // Uhr 1000× schneller, Web Locks nachgebaut (wie der Browser: request mit signal, Abbruch → AbortError, Anfrage aus der Warteschlange).
+ await fixture(async d=>{
+   const helper=await fs.readFile(path.join(root,'project-store.js'),'utf8');
+   const gehalten=new Set(),warteschlange=[];
+   const locks={request(name,opt,fn){return new Promise((res,rej)=>{
+     const los=()=>{gehalten.add(name);Promise.resolve().then(fn).then(res,rej).finally(()=>{gehalten.delete(name);const n=warteschlange.findIndex(w=>w.name===name);if(n>=0)warteschlange.splice(n,1)[0].los();});};
+     if(!gehalten.has(name))return los();
+     const w={name,los};warteschlange.push(w);
+     opt&&opt.signal&&opt.signal.addEventListener('abort',()=>{const n=warteschlange.indexOf(w);if(n>=0){warteschlange.splice(n,1);rej(Object.assign(Error('aborted'),{name:'AbortError'}));}});
+   });}};
+   let gemessen=0;
+   const c=vm.createContext({crypto:webcrypto,TextEncoder,TextDecoder,Uint8Array,console,AbortController,navigator:{locks},setTimeout:(f,ms)=>{gemessen=ms;return setTimeout(f,ms/1000);},clearTimeout});
+   vm.runInContext(helper,c);const PS=c.ProjectStore;
+   assert.equal(PS.WARTEN,20000);
+   assert.equal(PS.BELEGT,'Das Projekt ist gerade in einem anderen Spektron-Fenster belegt – bitte das andere Fenster schließen und erneut versuchen.');
+   await PS.update(new Directory(d),name,data=>({...data,objekt:'ERSTE'}));   // eine Sicherung für restore
+   const vorher=await all(d);
+   let freigeben;locks.request('mosaik:projekt:'+name,{},()=>new Promise(r=>freigeben=r));
+   let lief=false;gemessen=0;
+   const e=await PS.update(new Directory(d),name,data=>{lief=true;return {...data,objekt:'SOLL NICHT'};}).then(()=>null,e=>e);
+   assert.ok(e&&e.belegt,'belegt-Fehler');assert.equal(gemessen,20000);assert.equal(e.message,PS.BELEGT);
+   assert.equal(lief,false,'fn läuft nicht ohne Sperre');assert.deepEqual(await all(d),vorher,'nichts geschrieben, keine Sicherung');
+   assert.equal(warteschlange.length,0,'abgebrochene Anfrage wartet nicht weiter (kein späteres Schreiben)');
+   const v=await PS.versions(new Directory(d));gemessen=0;
+   const r=await PS.restore(new Directory(d),name,v.items[0],v.current).then(()=>null,e=>e);
+   assert.ok(r&&r.belegt,'restore: belegt-Fehler');assert.equal(gemessen,20000);assert.deepEqual(await all(d),vorher,'restore schreibt nichts');
+   freigeben();await new Promise(r=>setTimeout(r,10));
+   await PS.update(new Directory(d),name,data=>({...data,objekt:'FREI'}));assert.equal(JSON.parse(await bytes(d)).objekt,'FREI','nach Freigabe normal');
+   const f=await PS.update(new Directory(d),name,()=>{throw Object.assign(Error('eigener'),{name:'AbortError'});}).then(()=>null,e=>e);
+   assert.ok(f&&!f.belegt,'ein Fehler in fn ist kein „belegt“');
+ });
+ console.log('OK',checks,'F3 synthetic filesystem cases for',app.app);fertig=true;
 })().catch(e=>{console.error(e);process.exitCode=1;});
