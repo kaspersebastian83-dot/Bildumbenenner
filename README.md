@@ -2,11 +2,16 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **2.3.2** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **2.3.3** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
 Die Webadresse, die Projektdatei `_Bildumbenenner.json` und die gespeicherten Einstellungen behalten den alten Namen – so funktionieren bestehende Projekte, Lesezeichen und installierte Apps weiter. Die aktuelle Version steht oben links in der blauen Kopfzeile (Klick darauf: Änderungen, Problem melden). Daneben öffnet „? Kurzanleitung“ (oder F1) die Kurzanleitung – auch zum Ausdrucken.
+
+## Neu in 2.3.3 · 13.11.2026 – mehr Platz für die Fotos
+
+- Kopfband oben in der kompakten Form der Spektron-Leiste (56 statt 84 px), Leiste unten 61 statt 85 px, Überschrift, „Fotos übernehmen“ und „In der Doku“ enger. Bei 1440 × 830 px sind 573 statt 470 px Höhe für die Kacheln sichtbar; das Vorschaubild rechts wird auf kleinen Bildschirmen größer.
+- Nur Aussehen: Bedienung, Texte, Dateien unverändert. Die gemeinsamen Blöcke (MOSAIK-LEISTE, SPEKTRON-LOOK) sind nicht geändert – FotoKit nutzt die vorhandene Option `kompakt`.
 
 ## Neu in 2.3.2 · 13.11.2026 – Speichern hängt nicht mehr still
 
