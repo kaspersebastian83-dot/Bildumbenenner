@@ -13,6 +13,8 @@ const playwright = require('playwright');
 const ui = require('./fk-ui.cjs');
 const browserName = process.argv[2] || 'chromium';
 const root = path.join(__dirname, '..');
+// Version der App aus index.html (nicht fest im Test: sonst bricht jeder Versionssprung den Test)
+const APP_VERSION = fs.readFileSync(path.join(root, 'index.html'), 'utf8').match(/const APP_VERSION = '([\d.]+)'/)[1];
 const heic = fs.readFileSync(path.join(__dirname, 'fixtures', 'testbild.heic'));
 const heicSha = crypto.createHash('sha256').update(heic).digest('hex');
 let browser, server;
@@ -181,10 +183,10 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
   for (const [jpg, heicName] of [['IMG_0001.jpg', 'IMG_0001.HEIC'], ['IMG_0002_2.jpg', 'IMG_0002.heic']]) {
     const h = pd.bilder[jpg].heic;
     assert.deepEqual({ ...h, umgewandelt: typeof h.umgewandelt }, { original: heicName, ablage: '_Originale/' + heicName, sha256: heicSha, bytes: heic.length, umgewandelt: 'string',
-      decoder: 'libheif-js 1.23.5', qualitaet: 92, breite: 96, hoehe: 128, exif: true, farbprofil: true, fotokit: '2.3.1' }, jpg);
+      decoder: 'libheif-js 1.23.5', qualitaet: 92, breite: 96, hoehe: 128, exif: true, farbprofil: true, fotokit: APP_VERSION }, jpg);
     assert.ok(!Number.isNaN(Date.parse(h.umgewandelt)));
   }
-  assert.equal(pd.version, '2.3.1');
+  assert.equal(pd.version, APP_VERSION);
   console.log(`OK ${browserName}: Nachweis „heic“ je JPG (Original, Ablage, SHA-256, Zeit, Decoder), Beschreibung und Abschnitt gewandert`);
 
   // Abbruch nach dem Speichern, vor dem Ablegen: HEIC liegt noch in „Fotos“, sein JPG mit Nachweis schon da → nur noch ablegen, kein zweites JPG
