@@ -508,11 +508,12 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '2.3.1';
+const APP_VERSION = '2.3.2';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:abeeb1cd446fba453eb91b2cf4377e5f0d9a8a10325a713774460db60c07881e';
-const APP_DATE = '2026-11-12';
+const APP_BUILD = 'sha256:ea6d180093edf710e2eeb6ce47637398ac832fe110ce78d21400a3e9be3f8699';
+const APP_DATE = '2026-11-13';
 const CHANGELOG = [
+  ['2.3.2', '13.11.2026', 'Speichern hängt nicht mehr still, wenn ein anderes Spektron-Fenster (Projektzentrale oder ein zweites FotoKit) das Projekt gerade belegt: Nach höchstens 20 s sagt FotoKit „Das Projekt ist gerade in einem anderen Spektron-Fenster belegt – bitte das andere Fenster schließen und erneut versuchen.“ Es wird dann nichts geschrieben; die Eingaben bleiben im Fenster und gehen mit dem nächsten Speichern („Erneut speichern“, Projektwechsel …) mit. Gleiches gilt beim Wiederherstellen einer Projektfassung.'],
   ['2.3.1', '12.11.2026', 'iPhone-Fotos umwandeln braucht weniger Arbeitsspeicher: Je Foto dekodiert jetzt ein eigener Hintergrundprozess (Web Worker) nur das Bild und wird beendet, bevor ein zweiter das JPG erstellt – so wird der Speicher des Decoders frei, bevor das JPG entsteht, und jedes Foto beginnt mit frischem Speicher. Bei einem 48-MP-Foto sinkt die Speicherspitze im Browser etwa von 1,2 auf 0,7 GB, bei 12 MP von 0,34 auf 0,2 GB. Ergebnis, Reihenfolge, Nachweis, Namen, Qualität und Metadaten unverändert.'],
   ['2.3.0', '12.11.2026', 'iPhone-Fotos (HEIC/HEIF) wandelt FotoKit jetzt in echte JPG um: Liegen HEIC-Fotos im Ordner „Fotos“, steht über den Fotos „n iPhone-Fotos umwandeln“ (ebenso direkt nach „Fotos übernehmen“; vor „Bilddokumentation erstellen“ fragt FotoKit einmal nach, statt Platzhalter ins PDF zu setzen). Nie ohne Klick. Jedes Foto wird ein JPG mit gleichem Namen (IMG_0001.HEIC → IMG_0001.jpg, gibt es den schon: IMG_0001_2.jpg), volle Auflösung, Qualität 92 %, richtig gedreht; Aufnahmedatum, Gerät, GPS und Farbprofil werden übernommen. Das Original kommt unverändert nach „Fotos/_Originale“ – erst nachdem das JPG geschrieben, zurückgelesen und die Projektdatei gespeichert ist; geht etwas schief, bleibt das HEIC liegen und kein halbes JPG. Beschreibung, Probe, Abschnitt, „Weg“ und Reihenfolge wandern zum JPG. In _Bildumbenenner.json steht je JPG, aus welchem Original es stammt (Name, Ablage, SHA-256, Zeitpunkt, Decoder). Live-Photo-Videos (.MOV), .AAE-Dateien, HEIC in Unterordnern und im geschützten Projektmodus bleiben unangetastet. Der Decoder (libheif, 2 MB) wird nur beim Umwandeln geladen und geht auch offline. Die Hinweise „Maximale Kompatibilität“ entfallen.'],
   ['2.2.0', '11.11.2026', 'Chlorid genau 10 µg/cm² (Audit m7, Entscheidung 4): ein Wert von genau 10 µg/cm² (bzw. 100 mg/m²) liegt in der Ergebnistabelle jetzt „im Bereich“ der korrosionschemisch relevanten Größenordnung (VdS 2357: 5–10 µg/cm²), „oberhalb“ erst darüber; genau 5 bleibt „im Bereich“. Die Skalen-Übersicht zeigt „> 10 µg/cm²“. Gleich in ResultKit, PlanKit und BerichtKit (KORROSION-CHLORID v2). Eine in PlanKit angepasste Chlorid-Skala mit denselben Grenzen folgt derselben Regel, eine mit anderen Grenzen zählt ab ihren „ab“-Werten. Dateiformat unverändert.'],
@@ -1379,7 +1380,7 @@ const FOTOS_DIR = 'Fotos';
 const PJ_FILE = '_Projekt.json';
 // Bildumbenenner field ↔ _Projekt.json field
 const PJ_MAP = [['objekt', 'objekt'], ['ereignis', 'schadenereignis'], ['sdatum', 'schadendatum'], ['ort', 'ortstermin'], ['sv', 'sachverstaendiger']];
-const PJ = { data: null, sent: {}, shown: null, pending: {}, timer: null, writing: Promise.resolve(true), writes: 0, failed: false };
+const PJ = { data: null, sent: {}, shown: null, pending: {}, timer: null, writing: Promise.resolve(true), writes: 0, failed: false, grund: '' };   // grund: Meldung „Projekt belegt“ (2.3.2)
 
 async function findSubdir(dir, name){
   const want = name.normalize('NFC').toLowerCase();
@@ -1503,12 +1504,12 @@ function mountPJRecovery(){
   if (!S.proj) return;
   const proj=S.proj;
   PJ.recoveryRefresh=ProjectStore.recoveryButton($('pjRecovery'),proj.pjDir||proj.dir,proj.name,{
-    before: async()=>{ await flushPJ(); if(S.proj!==proj || PJ.failed || Object.keys(PJ.pending).length || P.readOnly) throw Error('Bitte offene Eingaben zuerst speichern oder das Projekt bewusst neu öffnen. Geschützte Projekte bleiben unverändert.'); },
+    before: async()=>{ await flushPJ(); if(S.proj!==proj || PJ.failed || Object.keys(PJ.pending).length || P.readOnly) throw Error(PJ.failed && PJ.grund ? PJ.grund : 'Bitte offene Eingaben zuerst speichern oder das Projekt bewusst neu öffnen. Geschützte Projekte bleiben unverändert.'); },
     after: async()=>{ if(S.proj===proj){ await loadPJ(); mountPJRecovery(); banner('ok','Die ausgewählte vollständige Projektfassung wurde wiederhergestellt.'); } }
   });
 }
 async function loadPJ(){
-  PJ.data = null; PJ.sent = {}; PJ.shown = null; PJ.pending = {}; PJ.failed = false;
+  PJ.data = null; PJ.sent = {}; PJ.shown = null; PJ.pending = {}; PJ.failed = false; PJ.grund = '';
   if (!S.proj) return '';
   try{ PJ.data = await readPJ(S.proj.pjDir || S.proj.dir); }
   catch(e){ return `„${PJ_FILE}“ ist nicht lesbar (${esc(e.message)}) – gemeinsame Projektdaten werden in dieser Sitzung nicht übernommen.`; }
@@ -1549,11 +1550,15 @@ function flushPJ(){
         return o;
       }, {data:PJ.data,keys:Object.keys(patch)});
       if (S.proj === proj){ PJ.data = o; PJ.recoveryRefresh?.(); }
+      PJ.grund = '';
       if (PJ.failed){ PJ.failed = false; if (!P.failed) hideBanner(); }
       return true;
     }catch(e){
+      // Die Eingaben bleiben offen (pending) und gehen mit dem nächsten Speichern, das der Nutzer auslöst, mit –
+      // kein Nachschreiben im Hintergrund. Projekt belegt (anderes Fenster hält die Sperre länger als ProjectStore.WARTEN): sagen, nicht hängen.
       PJ.pending = Object.assign({}, patch, PJ.pending);
-      if (!PJ.failed){ PJ.failed = true; saveError(`Gemeinsame Projektdaten („${PJ_FILE}“) konnten nicht gespeichert werden: ${esc(e.message)}.`); }
+      PJ.grund = e && e.belegt ? e.message : '';
+      if (!PJ.failed){ PJ.failed = true; saveError(PJ.grund ? `Gemeinsame Projektdaten („${PJ_FILE}“) nicht gespeichert: ${esc(PJ.grund)}` : `Gemeinsame Projektdaten („${PJ_FILE}“) konnten nicht gespeichert werden: ${esc(e.message)}.`); }
       return false;
     }finally{
       PJ.writes--; completePendingSave();
@@ -1600,7 +1605,7 @@ async function withSavedProject(action, next){
         const shared = await flushPJ();
         ok = own !== false && shared !== false && !P.failed && !PJ.failed;
         if (!ok){
-          saveError(`Die Änderungen konnten nicht gespeichert werden. ${action} wurde deshalb abgebrochen.`);
+          saveError(`Die Änderungen konnten nicht gespeichert werden${PJ.failed && PJ.grund ? ': ' + esc(PJ.grund) : '.'} ${action} wurde deshalb abgebrochen.`);
           return false;
         }
         // Merging, timers or an already queued write may have added work while

@@ -88,6 +88,8 @@ jobs:
           node tests/n3-offline-browser.cjs ${{ matrix.browser }}
       - name: Project data (_Projekt.json) in the real browser
         run: node tests/ci-wiederholen.cjs tests/projektdaten-browser.cjs ${{ matrix.browser }}
+      - name: Project lock held by another window – message after the limit, nothing written, input kept
+        run: node tests/ci-wiederholen.cjs tests/sperre-belegt-browser.cjs ${{ matrix.browser }}
       - name: Independent F3 sessions and explicit recovery (synthetic shared disk)
         run: node tests/ci-wiederholen.cjs tests/project-store-browser.cjs ${{ matrix.browser }}
       - name: F6 unknown JSON fields, editing, retry, exports and future-version protection

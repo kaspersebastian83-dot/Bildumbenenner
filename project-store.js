@@ -82,7 +82,21 @@
       for(const n of names.slice(KEEP)) { try{ await archive.removeEntry(n); }catch(_){} }
     }catch(_){ /* tidying is best-effort; the main file is already saved */ }
   }
-  function locked(name, fn){ return root.navigator?.locks ? root.navigator.locks.request('mosaik:projekt:'+name,fn) : fn(); }
+  // Never wait forever for the project lock (another window may hold it): give up after WARTEN ms
+  // with a clear message (belegt: true); fn does not run then. Same pattern as spektron-umzug.js.
+  const WARTEN = 20000;
+  const BELEGT = 'Das Projekt ist gerade in einem anderen Spektron-Fenster belegt – bitte das andere Fenster schließen und erneut versuchen.';
+  function locked(name, fn){
+    const L = root.navigator?.locks;
+    if(!L) return fn();
+    const opt = {}; let uhr = null, gestartet = false;
+    if(typeof AbortController !== 'undefined'){ const ac = new AbortController(); opt.signal = ac.signal; uhr = setTimeout(() => ac.abort(), WARTEN); }
+    return L.request('mosaik:projekt:'+name, opt, () => { gestartet = true; clearTimeout(uhr); return fn(); }).catch(e => {
+      clearTimeout(uhr);
+      if(!gestartet && e && (e.name === 'AbortError' || e.name === 'TimeoutError')) throw Object.assign(Error(BELEGT), {belegt:true});
+      throw e;
+    });
+  }
   async function update(dir,name,build,expected){
     return locked(name,async()=>{
       const base=await read(dir);
@@ -169,6 +183,6 @@
     };
     count(); return count;
   }
-  root.ProjectStore=Object.freeze({read,update,versions,restore,recoveryButton,FILE,ARCHIVE});
+  root.ProjectStore=Object.freeze({read,update,versions,restore,recoveryButton,FILE,ARCHIVE,WARTEN,BELEGT});
   if(typeof module!=='undefined') module.exports=root.ProjectStore;
 })(globalThis);
