@@ -5,6 +5,7 @@
 //  • „nach Abschnitt (Begehung)“: Abschnitte in der Reihenfolge ihres ersten Vorkommens, geerbte Abschnitte werden fest eingetragen,
 //    Bildnummern laufen neu, Reihenfolge danach „manuell“, „Rückgängig“ stellt alles wieder her
 //  • PDF: „Bilddokumentation_<Nr>_<Ort>_<JJJJ-MM-TT>.pdf“ im Ordner Fotos, zweites PDF am selben Tag → „… (2).pdf“
+// FotoKit 2.4.0: Sortierung „nach Probe“ mit Rückgängig; Fotos nachreichen nach der Bilddokumentation (Hinweis „Jetzt einlesen“).
 // FotoKit 2.0: Projekt im Kopfband statt #projBadge, Projektdaten im Dialog „Bilddokumentation erstellen“ (#btnMeta entfallen),
 //   Eingaben in der Fotokarte (#fDesc/#fSec) für das gewählte Foto, Sortierung über „Mehr …“ › „Sortierung …“.
 // Ordner werden im Origin Private File System nachgebildet, showDirectoryPicker wird ersetzt. WebKit kann keine Ordner beschreiben – dort nur Laden.
@@ -145,6 +146,20 @@ const PROJ = '26.0177 Bad Teststadt';
   await ui.sortieren(page, 'section');
   await page.waitForFunction(() => /Nach Abschnitt sortiert/.test(document.getElementById('banner').textContent));
 
+  // 2b) 2.4.0 „nach Probe“: erste Probe zählt, P2 vor P10, ohne Probe ans Ende, gleiche Probe behält die Reihenfolge; Eingaben bleiben
+  const proben = ['P10', '', 'p2, P3', 'P2', ''];   // jetzige Reihenfolge: Bild 1, 2, 4, 5, 3
+  for (let i = 0; i < 5; i++) if (proben[i]) await ui.feld(page, 'probe', i).fill(proben[i]);
+  const vorProbe = await liste();
+  await ui.sortieren(page, 'probe');
+  await page.waitForFunction(() => /Nach Probe sortiert/.test(document.getElementById('banner').textContent));
+  const nachProbe = await liste();
+  assert.deepEqual(nachProbe.map(r => r[0]), ['Bild 4', 'Bild 5', 'Bild 1', 'Bild 2', 'Bild 3'], 'nach Probe: P2 (zweimal, Reihenfolge bleibt), P10, ohne Probe am Ende');
+  assert.deepEqual(nachProbe.map(r => r[2]), vorProbe.map(r => r[2]), 'Bildnummern laufen fortlaufend weiter');
+  assert.equal(await page.locator('#sort').inputValue(), 'manual', 'danach von Hand');
+  assert.match(await page.locator('#banner').textContent(), /3 Proben, 2 Fotos ohne Probe am Ende/);
+  await page.locator('#bUndoProbe').click();
+  assert.deepEqual(await liste(), vorProbe, 'Rückgängig stellt die Reihenfolge wieder her, Eingaben unverändert');
+
   // 3) PDF zweimal → zweiter Name mit „(2)“, nichts überschrieben
   const heute = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
   const soll = `Bilddokumentation_26.0177_Bad Teststadt_${heute}`;
@@ -161,6 +176,29 @@ const PROJ = '26.0177 Bad Teststadt';
   const da = await pdfs();
   assert.deepEqual(da.map(x => x[0]), [`${soll} (2).pdf`, `${soll}.pdf`].sort(), 'zweites PDF bekommt „(2)“');
   assert.ok(da.every(x => x[1] > 1000), 'beide PDFs vollständig');
+  assert.match(await page.locator('#banner').textContent(), /Fotos nachreichen\?/, 'nach dem PDF steht, wie man Fotos nachreicht');
+
+  // 4) 2.4.0 Fotos nachreichen: ein neues Foto im Ordner → beim Zurückkommen Hinweis mit „Jetzt einlesen“ (nie ohne Klick),
+  //    Eingaben und Reihenfolge bleiben, das neue Foto kommt ans Ende; dieselben Fotos werden nicht zweimal gemeldet
+  const vorNeu = await liste();
+  await page.evaluate(async proj => {
+    const f = await (await (await (await navigator.storage.getDirectory()).getDirectoryHandle('Archiv')).getDirectoryHandle(proj)).getDirectoryHandle('Fotos');
+    const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), c => c.charCodeAt(0));
+    const w = await (await f.getFileHandle('IMG_0006.png', { create: true })).createWritable(); await w.write(png); await w.close();
+  }, PROJ);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.waitForSelector('#bNeueFotos');
+  assert.match(await page.locator('#banner').textContent(), /1 neues Foto im Ordner .*noch nicht in der Liste/);
+  assert.equal(await rows.count(), 5, 'ohne Klick wird nichts eingelesen');
+  await page.locator('#bNeueFotos').click();
+  await page.waitForFunction(() => document.querySelectorAll('#list .row').length === 6 && !/Lese Ordner/.test(document.getElementById('banner').textContent));
+  const ohneRand = l => l.map(r => r.map(v => v.trim()));   // Abschnitte werden beim Speichern ohne Rand-Leerzeichen abgelegt (wie bisher)
+  assert.deepEqual(ohneRand(await liste()), ohneRand(vorNeu), 'Beschreibungen, Abschnitte, Reihenfolge und Bildnummern der bisherigen Fotos bleiben');
+  await ui.foto(page, 5);
+  assert.equal(await page.locator('#fDesc').inputValue(), '', 'neues Foto am Ende, noch ohne Beschreibung');
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('#bNeueFotos').count(), 0, 'nichts mehr zu melden');
 
   assert.deepEqual(errors, []);
   await browser.close(); server.close();
