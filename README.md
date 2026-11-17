@@ -2,11 +2,17 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **2.3.3** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **2.4.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
 Die Webadresse, die Projektdatei `_Bildumbenenner.json` und die gespeicherten Einstellungen behalten den alten Namen – so funktionieren bestehende Projekte, Lesezeichen und installierte Apps weiter. Die aktuelle Version steht oben links in der blauen Kopfzeile (Klick darauf: Änderungen, Problem melden). Daneben öffnet „? Kurzanleitung“ (oder F1) die Kurzanleitung – auch zum Ausdrucken.
+
+## Neu in 2.4.0 · 17.11.2026 – nach Probe sortieren, Fotos nachreichen
+
+- **Sortierung „nach Probe“** („Mehr …“ › „Sortierung …“): ordnet die Fotos einmalig nach ihrer Probe – numerisch (P2 vor P10), bei mehreren Proben („P3, P4“) zählt die erste, Bohrkern-IDs über die LabelKit-Zuordnung. Fotos ohne Probe kommen ans Ende; gleiche Probe behält ihre Reihenfolge, Weg-Fotos bleiben an ihrem Platz. Danach gilt „von Hand“ (wie nach Abschnitt), mit „Rückgängig“. Eingaben werden nicht verändert.
+- **Fotos nachreichen** (Rückmeldung: nach der ersten Bilddokumentation sollten weitere Fotos dazu): Liegen beim Zurückkommen ins Fenster Fotos in `Fotos`, die noch nicht in der Liste sind, meldet FotoKit „n neue Fotos … noch nicht in der Liste“ mit **„Jetzt einlesen“** (dasselbe wie „Mehr …“ › „Fotos neu einlesen“). Nie ohne Klick; verdeckt keine Fehler- oder Info-Meldung und meldet dieselben Fotos nur einmal. Beschreibungen, Proben, Abschnitte und Reihenfolge bleiben, die neuen Fotos kommen ans Ende. Danach die Bilddokumentation neu erstellen – die neue PDF ist die, die BerichtKit als Anlage nimmt. Die Meldung „PDF erstellt“ nennt diesen Weg.
+- Dateiformat, Dateinamen und gespeicherte Einstellungen unverändert.
 
 ## Neu in 2.3.3 · 13.11.2026 – mehr Platz für die Fotos
 
@@ -96,9 +102,9 @@ Die App läuft vollständig im Browser auf dem eigenen Rechner. **Fotos, Projekt
 
 ## Ablauf
 
-1. **Projekt öffnen …** (oder den Ordner hineinziehen) – oder das Projekt in der [Projektzentrale](https://kaspersebastian83-dot.github.io/Projektzentrale/) anklicken: „Fotos bearbeiten“ öffnet direkt den Ordner `Fotos`. Wird ein ganzer Projektordner gewählt (`26.0123 Köln`), arbeitet die App ebenfalls in dessen `Fotos`. Wird nur `Fotos` gewählt, findet die App das Projekt über den Archivordner der Projektzentrale – sonst oben „Projekt zuordnen …“ (ab 1.8). Neue Fotos wie bisher in diesen Ordner kopieren und mit **„Fotos neu einlesen“** einlesen.
+1. **Projekt öffnen …** (oder den Ordner hineinziehen) – oder das Projekt in der [Projektzentrale](https://kaspersebastian83-dot.github.io/Projektzentrale/) anklicken: „Fotos bearbeiten“ öffnet direkt den Ordner `Fotos`. Wird ein ganzer Projektordner gewählt (`26.0123 Köln`), arbeitet die App ebenfalls in dessen `Fotos`. Wird nur `Fotos` gewählt, findet die App das Projekt über den Archivordner der Projektzentrale – sonst oben „Projekt zuordnen …“ (ab 1.8). Neue Fotos wie bisher in diesen Ordner kopieren – auch nach einer schon erstellten Bilddokumentation. Beim Zurückkommen ins Fenster meldet FotoKit sie mit **„Jetzt einlesen“** (ab 2.4.0; sonst „Mehr …“ › „Fotos neu einlesen“).
 2. Pro Bild **Beschreibung** eingeben, optional **Abschnitt** (z. B. „Küche“ – gilt für die folgenden Bilder mit) und **Probe-Nr.** (z. B. „P1“). `Enter` springt zum nächsten Bild.
-3. Unbrauchbare Bilder **aussortieren** (`Alt+X`), Reihenfolge per **Drag & Drop** oder Sortierung **„nach Abschnitt (Begehung)“** (Abschnitte in der Reihenfolge ihres ersten Vorkommens, Bildnummern passen sich an), schiefe Bilder **drehen** (`Alt+R`).
+3. Unbrauchbare Bilder **aussortieren** (`Alt+X`), Reihenfolge per **Drag & Drop** oder Sortierung **„nach Abschnitt (Begehung)“** (Abschnitte in der Reihenfolge ihres ersten Vorkommens, Bildnummern passen sich an) oder **„nach Probe“** (ab 2.4.0), schiefe Bilder **drehen** (`Alt+R`).
 4. **Projektdaten** eintragen (Projektnummer, Anlage, Objekt, Schadenereignis, Ortstermin …) – aus der Projektzentrale vorbelegt, Auftraggeber und Schaden-Nr. werden zur Ansicht angezeigt.
 5. **Bilddokumentation erstellen …** öffnet die bisherigen PDF-Optionen (Deckblatt, 2 Bilder pro Seite, Probenahmestellen-Tabelle, Aufteilung in Dateien ≤ 14 MB). **Umbenennen** bleibt eine eigene Aktion für Originaldateien; **ZIP exportieren** erzeugt Bilder + Anweisung für eine KI + Prüfsummen. Dateiname: `Bilddokumentation_<Projektnummer>_<Ort>_<JJJJ-MM-TT>.pdf` (Teile `…_Teil_1_von_2.pdf`, ZIP gleich); gibt es die Datei schon, wird `(2)` angehängt statt überschrieben.
 

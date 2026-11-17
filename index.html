@@ -430,6 +430,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
     <option value="date">Aufnahmedatum</option>
     <option value="manual">manuell</option>
     <option value="section">nach Abschnitt (Begehung)</option>
+    <option value="probe">nach Probe</option>
   </select>
 </div>
 
@@ -510,11 +511,12 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '2.3.3';
+const APP_VERSION = '2.4.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:ae666451f4275ccf19b4c6c3553779210471a6f07b2753c3a06d8d065f676156';
-const APP_DATE = '2026-11-13';
+const APP_BUILD = 'sha256:5af0fecd818b5909bc179eabcdb6cc9a79fdef1657fd65fbeeaedf4ebea28721';
+const APP_DATE = '2026-11-17';
 const CHANGELOG = [
+  ['2.4.0', '17.11.2026', 'Sortierung „nach Probe“ (Mehr … › Sortierung …): ordnet die Fotos einmalig nach ihrer Probe – P2 vor P10, bei mehreren Proben zählt die erste, Fotos ohne Probe kommen ans Ende; gleiche Probe behält ihre Reihenfolge, Weg-Fotos bleiben an ihrem Platz. Danach gilt die Reihenfolge „von Hand“, mit „Rückgängig“. Fotos nachreichen: Liegen beim Zurückkommen ins Fenster Fotos im Ordner, die noch nicht in der Liste sind (z. B. nach der ersten Bilddokumentation nachgereicht), meldet FotoKit „n neue Fotos“ mit „Jetzt einlesen“ – nie ohne Klick; Beschreibungen, Proben und Reihenfolge bleiben, die neuen Fotos kommen ans Ende. Nach „PDF erstellt“ steht, wie man Fotos nachreicht.'],
   ['2.3.3', '13.11.2026', 'Mehr Platz für die Fotos: Das Kopfband oben und die Leiste unten sind schmaler, Überschrift, „Fotos übernehmen“ und die Zeile „In der Doku“ rücken enger zusammen. Auf einem üblichen Bildschirm sind dadurch rund 100 Pixel mehr Höhe für die Kacheln frei (etwa eine halbe Reihe); das Vorschaubild rechts wird auf kleinen Bildschirmen größer. Bedienung und Inhalte unverändert.'],
   ['2.3.2', '13.11.2026', 'Speichern hängt nicht mehr still, wenn ein anderes Spektron-Fenster (Projektzentrale oder ein zweites FotoKit) das Projekt gerade belegt: Nach höchstens 20 s sagt FotoKit „Das Projekt ist gerade in einem anderen Spektron-Fenster belegt – bitte das andere Fenster schließen und erneut versuchen.“ Es wird dann nichts geschrieben; die Eingaben bleiben im Fenster und gehen mit dem nächsten Speichern („Erneut speichern“, Projektwechsel …) mit. Gleiches gilt beim Wiederherstellen einer Projektfassung.'],
   ['2.3.1', '12.11.2026', 'iPhone-Fotos umwandeln braucht weniger Arbeitsspeicher: Je Foto dekodiert jetzt ein eigener Hintergrundprozess (Web Worker) nur das Bild und wird beendet, bevor ein zweiter das JPG erstellt – so wird der Speicher des Decoders frei, bevor das JPG entsteht, und jedes Foto beginnt mit frischem Speicher. Bei einem 48-MP-Foto sinkt die Speicherspitze im Browser etwa von 1,2 auf 0,7 GB, bei 12 MP von 0,34 auf 0,2 GB. Ergebnis, Reihenfolge, Nachweis, Namen, Qualität und Metadaten unverändert.'],
@@ -988,7 +990,7 @@ async function refreshPJ(){
   if (applyPJ(meta)) metaNurImSpeicher(meta);
   if (!$('banner').classList.contains('err')) banner('ok', 'Projektdaten wurden geändert (Projektzentrale oder Kollege) und neu übernommen.');
 }
-window.addEventListener('focus', () => { checkExternal(); refreshPJ(); void zweiOrteZeigen(); });   // K1: Zeile auch beim Zurückkommen neu prüfen
+window.addEventListener('focus', () => { checkExternal(); refreshPJ(); void zweiOrteZeigen(); void neueFotosPruefen(); });   // K1: Zeile auch beim Zurückkommen neu prüfen; 2.4.0: neue Fotos im Ordner
 
 function applyMergedToItems(orderChanged){
   const d = P.data, disc = new Set(d.discard);
@@ -1078,6 +1080,31 @@ document.addEventListener('visibilitychange', () => {
     flushDrafts(); saveExtra(); flushProject(); flushPJ();
   }
 });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) void neueFotosPruefen(); });
+/* 2.4.0 (Rückmeldung „Fotos nachreichen“): Kommt man ins Fenster zurück, schaut FotoKit nach, ob im Ordner Fotos liegen, die noch
+   nicht in der Liste sind – z. B. nach der ersten Bilddokumentation nachgereicht. Nur ein Hinweis mit „Jetzt einlesen“ (wie „Mehr …“ ›
+   „Fotos neu einlesen“); eingelesen wird nie ohne Klick. Verdeckt keine Fehler- oder Info-Meldung (nur eine leere oder eine
+   Erfolgsmeldung) und meldet dieselben Fotos nicht zweimal. Lesefehler bleiben still – der Hinweis ist eine Bequemlichkeit. */
+let neueFotosGemeldet = '';
+async function neueFotosPruefen(){
+  if (!S.dir || !S.items || S.busy || S.changing || $('btnReload').disabled || $('overlay').classList.contains('show')) return;
+  const dir = S.dir, bekannt = new Set(S.items.map(it => it.name)), neu = [];
+  try{
+    for await (const h of dir.values()){
+      if (h.kind !== 'file') continue;
+      const ext = extOf(h.name).slice(1).toLowerCase();
+      if (IMG_EXT.includes(ext) && !h.name.startsWith(TMP_PREFIX) && !h.name.startsWith('~umb_') && !bekannt.has(h.name)) neu.push(h.name);
+    }
+  }catch(e){ return; }
+  if (S.dir !== dir || S.busy || S.changing) return;
+  const sig = neu.sort().join('\n');
+  if (!neu.length){ neueFotosGemeldet = ''; return; }
+  const b = $('banner');
+  if (sig === neueFotosGemeldet || (b.classList.contains('show') && !b.classList.contains('ok'))) return;
+  neueFotosGemeldet = sig;
+  banner('info', `📷 ${neu.length === 1 ? '1 neues Foto' : neu.length + ' neue Fotos'} im Ordner „${esc(folderLabel())}“, noch nicht in der Liste. Beim Einlesen bleiben alle Beschreibungen, Proben und die Reihenfolge erhalten; neue Fotos kommen ans Ende. <span class="spacer"></span><button id="bNeueFotos">Jetzt einlesen</button>`);
+  $('bNeueFotos').onclick = () => { neueFotosGemeldet = ''; $('btnReload').click(); };
+}
 
 /* ---------- settings ---------- */
 const OPT = { prefix:'oPrefix', date:'oDate', num:'oNum', start:'oStart', digits:'oDigits', sep:'oSep', spaces:'oSpaces', uml:'oUml', lower:'oLower', probe:'oProbe', discard:'oDiscard', vorschlag:'oVorschlag' };
@@ -2259,6 +2286,26 @@ function groupBySection(){
   let k = 0; S.items = S.view.map(it => it.discard ? it : act[k++]);
   void gone;
   return { undo, sections: first.size, filled };
+}
+/* 2.4.0: nach Probe – einmalig wie „nach Abschnitt“: Fotos nach ihrer (ersten) Probe, P2 vor P10 (Bohrkern-IDs über die
+   LabelKit-Zuordnung wie überall); Fotos ohne Probe kommen ans Ende. Gleiche Probe: Reihenfolge bleibt. Weg-Fotos bleiben an ihren
+   Plätzen. Ändert keine Eingaben – nur die Reihenfolge (danach „von Hand“). Gibt die Daten für „Rückgängig“ zurück. */
+function probeSchluessel(it){ return fotoProben(it.probe, BK.map)[0] || ''; }
+function groupByProbe(){
+  const undo = { order: S.view.map(it => it.name) };
+  const act = S.view.filter(it => !it.discard), key = new Map(act.map(it => [it, probeSchluessel(it)]));
+  act.sort((a, b) => { const x = key.get(a), y = key.get(b);
+    if (!x || !y) return (!x) - (!y);
+    return x.localeCompare(y, 'de', { numeric: true, sensitivity: 'base' }); });   // stabil: gleiche Probe behält ihre Reihenfolge
+  let k = 0; S.items = S.view.map(it => it.discard ? it : act[k++]);
+  const proben = new Set(act.flatMap(it => fotoProben(it.probe, BK.map)).map(v => v.toLocaleUpperCase('de')));
+  return { undo, proben: proben.size, ohne: [...key.values()].filter(v => !v).length };
+}
+function undoProbe(undo){
+  const pos = new Map(undo.order.map((n, i) => [n, i]));
+  S.items.sort((a, b) => (pos.has(a.name) ? pos.get(a.name) : Infinity) - (pos.has(b.name) ? pos.get(b.name) : Infinity));
+  buildRows(); recompute(); saveOrder(); if (S.items.length) setFocus(0, false);
+  banner('ok', '↺ Sortierung nach Probe rückgängig gemacht.');
 }
 function undoGroup(undo){
   for (const it of S.items) if (undo.sec.has(it.name)) it.sec = undo.sec.get(it.name);
@@ -4273,6 +4320,7 @@ async function doPdf(meta){
     const list = res.parts.map((p, k) => `<button class="pdfOpen" data-k="${k}" title="Im Browser öffnen">„${esc(p.name)}“</button> ${(p.blob.size / 1e6).toFixed(1).replace('.', ',')} MB, ${p.pages} S.`).join(' · ');
     banner(res.failed.length ? 'err' : 'ok', `✓ PDF erstellt (${res.parts.length} Datei${res.parts.length > 1 ? 'en' : ''}, je max. ${String(meta.pdf.maxMB).replace('.', ',')} MB) in „${esc(folderLabel())}“: ${list}` +
       (res.failed.length ? ` <b>· ${res.failed.length} Bild(er) nicht lesbar (Platzhalter eingefügt): ${res.failed.map(it => esc(it.name)).join(', ')}</b>` : '') +
+      ` <span class="fk-nachreichen">Fotos nachreichen? Einfach in den Ordner „Fotos“ legen – FotoKit meldet sie beim Zurückkommen. Danach die Bilddokumentation neu erstellen: Alles Eingetragene bleibt, die neue PDF gilt für BerichtKit.</span>` +
       `<span class="spacer"></span>${runButtonsHtml()}`);
     document.querySelectorAll('.pdfOpen').forEach(b => b.onclick = () => window.open(URL.createObjectURL(S.lastPdf[+b.dataset.k].blob), '_blank'));
     wireRunButtons();
@@ -5356,11 +5404,11 @@ const HELP_HTML = `
 </ul>
 <h4>So entsteht die Bilddokumentation</h4>
 <ol>
-  <li><b>Projekt öffnen:</b> in der Projektzentrale „Fotos“ – oder oben auf das Projekt bzw. unten „Mehr …“ › „Anderen Ordner öffnen …“. Oben im Kopfband stehen dann Projektnummer und Ort groß, daneben die sechs Schritte. Wurde nur der Ordner <code>Fotos</code> gewählt, steht über den Fotos „Projekt zuordnen …“. Neue Fotos in den Ordner kopieren und „Mehr …“ › „Fotos neu einlesen“ – das liest immer die Fotos des Projekts, an dem gerade in Spektron gearbeitet wird.</li>
+  <li><b>Projekt öffnen:</b> in der Projektzentrale „Fotos“ – oder oben auf das Projekt bzw. unten „Mehr …“ › „Anderen Ordner öffnen …“. Oben im Kopfband stehen dann Projektnummer und Ort groß, daneben die sechs Schritte. Wurde nur der Ordner <code>Fotos</code> gewählt, steht über den Fotos „Projekt zuordnen …“. Neue Fotos – auch nach einer schon erstellten Bilddokumentation – einfach in den Ordner kopieren: Beim Zurückkommen meldet FotoKit „n neue Fotos“ mit „Jetzt einlesen“ (sonst „Mehr …“ › „Fotos neu einlesen“). Alles Eingetragene bleibt, die neuen Fotos kommen ans Ende; danach die Bilddokumentation einfach neu erstellen. Einlesen liest immer die Fotos des Projekts, an dem gerade in Spektron gearbeitet wird.</li>
   <li><b>Fotos übernehmen:</b> Haben Kollegen ihre Fotos in Unterordnern von <code>Fotos</code> abgelegt (z. B. <code>Begehung Ben</code>), steht über den Fotos eine Karte „Fotos übernehmen →“. Angehakte Unterordner werden nach <code>Fotos</code> verschoben (nicht kopiert), die Dateinamen bleiben – nur bei gleichem Namen kommt das Kürzel dazu. Der Ordnername wird auf Wunsch Abschnitt; die Herkunft jeder Datei steht in <code>_Bildumbenenner.json</code>. Die leeren Unterordner bleiben stehen.</li>
   <li><b>Welche Fotos gehören in die Doku?</b> Jede Kachel hat oben links den Haken „in der Doku“. Ohne Haken ist das Foto <b>Weg</b> (abgeblendet, bleibt an seinem Platz, bekommt keine Bildnummer) – dasselbe wie der Knopf „Weg“ in der Fotokarte. Sollen nur wenige Fotos in die Doku: über den Kacheln „Keine“, dann die gewünschten anhaken. „Alle“, „Keine“ und „Umkehren“ lassen sich rückgängig machen. Nichts wird gelöscht.</li>
   <li><b>Beschreiben:</b> Foto anklicken – rechts erscheint die Fotokarte. „Was ist zu sehen?“ eintippen, <kbd>Enter</kbd> springt zum nächsten Foto. Darunter „Gehört zu Probe“ (z. B. „P1“, mehrere mit Komma; die Liste schlägt die Proben aus LabelKit vor) und „Raum / Abschnitt“ (z. B. „Küche“ – gilt für die folgenden Fotos mit und wird im PDF eine Zwischenüberschrift; im Raster steht je Abschnitt eine Trennzeile). Gelb umrandete Kacheln haben noch keine Beschreibung – unten „n Fotos ohne Beschreibung“ springt zum nächsten. In LabelKit stornierte Proben bietet FotoKit nicht an; ist ein Foto noch so einer Probe zugeordnet, steht ein Hinweis auf der Kachel und in der Karte, und vor PDF und ZIP fragt FotoKit nach – ordne es dann einer anderen Probe zu oder lege es mit „Weg“ beiseite.</li>
-  <li><b>Reihenfolge:</b> Die Reihenfolge der Kacheln ist die Reihenfolge im PDF (Bild 1, 2, 3 …). Kachel ziehen oder in der Fotokarte „◂ Früher“ / „Später ▸“. „Mehr …“ › „Sortierung …“ ordnet nach Dateiname, Aufnahmedatum oder Abschnitt (Begehung). Schiefe Fotos mit „↻ Drehen“ (gilt nur für PDF und ZIP).</li>
+  <li><b>Reihenfolge:</b> Die Reihenfolge der Kacheln ist die Reihenfolge im PDF (Bild 1, 2, 3 …). Kachel ziehen oder in der Fotokarte „◂ Früher“ / „Später ▸“. „Mehr …“ › „Sortierung …“ ordnet nach Dateiname, Aufnahmedatum, Abschnitt (Begehung) oder Probe (P1, P2 … – Fotos ohne Probe ans Ende, bei mehreren Proben zählt die erste). Schiefe Fotos mit „↻ Drehen“ (gilt nur für PDF und ZIP).</li>
   <li><b>Bilddokumentation erstellen →</b> (unten rechts): Im Dialog zuerst das <b>Deckblatt</b> – Anlagen-Nr., Objekt, Schadenereignis, Schadendatum, Ortstermin, Sachverständiger. Was in der Projektzentrale schon eingetragen ist, steht hier bereits; gelb = Pflicht (leere Felder werden im PDF weggelassen). Unter „Einstellungen“: Bildqualität (Standard reicht für Druck und Bildschirm, „E-Mail“ für kleinste Dateien, „Detail“ zum starken Hineinzoomen), Bilder je Seite, max. Dateigröße (Teile ≤ 14 MB), neuer Abschnitt auf neuer Seite, nur Fotos mit Beschreibung. Das PDF liegt danach im Ordner <code>Fotos</code> als <code>Bilddokumentation_26.0123_Köln_2026-10-19.pdf</code> (ältere Dateien werden nie überschrieben).</li>
 </ol>
 <h4>Unter „Mehr …“ (unten links)</h4>
@@ -5439,7 +5487,7 @@ function mehrOeffnen(){
   const knopf = id => () => $(id).click();
   const eintraege = [
     { id: 'mehrNamen', text: 'Dateinamen …', hidden: !offen, onclick: () => $('dlgNamen').showModal(), title: 'Wie die Fotos nach „Dateien umbenennen“ heißen (Präfix, Nummer, Probe-Nr. …)' },
-    { id: 'mehrSort', text: 'Sortierung …', hidden: !offen, onclick: openSortDialog, title: 'Nach Dateiname, Aufnahmedatum oder Abschnitt ordnen' },
+    { id: 'mehrSort', text: 'Sortierung …', hidden: !offen, onclick: openSortDialog, title: 'Nach Dateiname, Aufnahmedatum, Abschnitt oder Probe ordnen' },
     { id: 'mehrUmbenennen', text: 'Dateien umbenennen …' + (teile.length ? ` (${teile.join(', ')})` : ''), hidden: !offen, disabled: $('btnRename').disabled, onclick: knopf('btnRename'),
       title: 'Benennt die Fotos im Ordner nach der Beschreibung (z. B. 07_P2_Küche_Decke.jpg) – hilft, einzelne Fotos wiederzufinden. Rückgängig möglich.' },
     { id: 'mehrZip', text: 'ZIP für KI exportieren …', hidden: !offen, disabled: $('btnZip').disabled, onclick: knopf('btnZip'), title: 'Fotos mit neuen Namen + Anweisung/Projektdaten als ZIP' },
@@ -5457,13 +5505,13 @@ $('dlgNamenZu').onclick = () => $('dlgNamen').close();
 $('dlgSicherZu').onclick = () => $('dlgSicher').close();
 // Knöpfe, die einen eigenen Dialog (#overlay) öffnen: erst „Sicherungen und Programmstand“ schließen – sonst läge er darüber
 $('dlgSicher').addEventListener('click', e => { if (e.target.closest('#btnVersions,#btnSessionRecovery,#btnInfo')) $('dlgSicher').close(); }, true);
-/* Sortierung: drei Kacheln; „von Hand“ ergibt sich beim Ziehen oder mit Früher/Später */
+/* Sortierung: vier Kacheln; „von Hand“ ergibt sich beim Ziehen oder mit Früher/Später */
 function openSortDialog(){
   const akt = cfg.sort;
   const k = (v, t, s) => `<button type="button" class="sp-kachel flach" data-sort="${v}" aria-pressed="${akt === v}">${t}<small>${s}</small></button>`;
   showDialog(`<h3>Sortierung</h3>
     <p class="m">Die Reihenfolge ist die Reihenfolge in der Bilddokumentation (Bild 1, 2, 3 …). Einzelne Fotos verschiebst du mit „◂ Früher“ / „Später ▸“ in der Fotokarte oder durch Ziehen der Kachel – dann gilt „von Hand“.${akt === 'manual' ? ' <b>Jetzt: von Hand sortiert.</b>' : ''}</p>
-    <div class="fk-sort">${k('name', 'Dateiname', 'A → Z')}${k('date', 'Aufnahmedatum', 'älteste zuerst')}${k('section', 'Nach Abschnitt', 'Reihenfolge der Begehung')}</div>
+    <div class="fk-sort">${k('name', 'Dateiname', 'A → Z')}${k('date', 'Aufnahmedatum', 'älteste zuerst')}${k('section', 'Nach Abschnitt', 'Reihenfolge der Begehung')}${k('probe', 'Nach Probe', 'P1, P2 … – ohne Probe am Ende')}</div>
     <div class="btns"><button id="dSortZu">Schließen</button></div>`);
   $('dialog').querySelectorAll('[data-sort]').forEach(b => b.onclick = () => { closeDialog(); $('sort').value = b.dataset.sort; $('sort').dispatchEvent(new Event('change')); });
   $('dSortZu').onclick = closeDialog;
@@ -5525,6 +5573,17 @@ $('sort').onchange = () => {
       (r.filled ? ` ${r.filled} Bild(er) hatten den Abschnitt nur geerbt – er ist jetzt fest eingetragen.` : '') +
       ` Die Reihenfolge gilt jetzt „von Hand“ – Ziehen und „◂ Früher / Später ▸“ gehen weiter. <span class="spacer"></span><button id="bUndoSec">Rückgängig</button>`);
     $('bUndoSec').onclick = () => undoGroup(r.undo);
+    return;
+  }
+  if ($('sort').value === 'probe'){
+    // einmalig nach Probe ordnen, danach gilt die Reihenfolge „von Hand“ (wie nach Abschnitt)
+    recompute();
+    const r = groupByProbe();
+    cfg.sort = 'manual'; $('sort').value = 'manual'; store.set('bu-settings', cfg);
+    buildRows(); recompute(); saveOrder(); if (S.items.length) setFocus(0, false);
+    banner('ok', `Nach Probe sortiert: ${r.proben} Probe${r.proben === 1 ? '' : 'n'}${r.ohne ? `, ${r.ohne} Foto${r.ohne === 1 ? '' : 's'} ohne Probe am Ende` : ''}, Bildnummern angepasst.` +
+      ` Die Reihenfolge gilt jetzt „von Hand“ – Ziehen und „◂ Früher / Später ▸“ gehen weiter. <span class="spacer"></span><button id="bUndoProbe">Rückgängig</button>`);
+    $('bUndoProbe').onclick = () => undoProbe(r.undo);
     return;
   }
   cfg.sort = $('sort').value; store.set('bu-settings', cfg);
