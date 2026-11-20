@@ -260,6 +260,8 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 #zweiOrte[hidden]{display:none}
 #lkZeile{padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px;background:color-mix(in srgb,var(--warn) 18%,var(--panel))}
 #lkZeile[hidden]{display:none}
+#nrZeile{padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px;background:color-mix(in srgb,var(--warn) 18%,var(--panel))}
+#nrZeile[hidden]{display:none}
 #banner .repBtn{font-size:12px;padding:2px 9px;margin-left:auto}
 #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:2147483003;cursor:zoom-out}
 #lightbox.show{display:flex}
@@ -352,6 +354,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 <div id="banner"></div>
 <div id="zweiOrte" role="status" hidden></div>
 <div id="lkZeile" role="status" hidden></div>
+<div id="nrZeile" role="status" hidden></div>
 
 <div id="empty">
   <div class="drop" id="drop">
@@ -511,11 +514,12 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '2.4.0';
+const APP_VERSION = '2.5.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:5af0fecd818b5909bc179eabcdb6cc9a79fdef1657fd65fbeeaedf4ebea28721';
+const APP_BUILD = 'sha256:b2dda35bd984211928feac946367b24410736e8767f29c0eaf9e12c08a73bb3a';
 const APP_DATE = '2026-11-17';
 const CHANGELOG = [
+  ['2.5.0', '20.11.2026', 'Probennummern: Solange in LabelKit noch keine Nummer fest ist (keine Etiketten gedruckt, nichts ans Labor übergeben) und Fotos schon Proben zugeordnet sind, steht oben ein gelber Hinweis – wird in LabelKit eine Probe gelöscht oder verschoben, zeigen die Zuordnungen sonst auf andere Proben. Nur ein Hinweis, nichts gesperrt. Ist ein Foto einer Nummer zugeordnet, die es in LabelKit nicht gibt (z. B. P13 bei 12 Proben), steht „⚠ P13 nicht in LabelKit“ an der Kachel. Behoben: „Jetzt einlesen“ (neue Fotos) öffnete ein anderes Projekt, wenn vorher der Hinweis „In Spektron arbeitest du gerade an …“ gekommen war – jetzt liest der Knopf immer nur den offenen Ordner. Behoben: Die Fußzeile blieb nach dem Tippen bei „Projektspeicherung noch nicht bestätigt“, obwohl gespeichert war; jetzt steht dort „Projekt gespeichert“.'],
   ['2.4.0', '17.11.2026', 'Sortierung „nach Probe“ (Mehr … › Sortierung …): ordnet die Fotos einmalig nach ihrer Probe – P2 vor P10, bei mehreren Proben zählt die erste, Fotos ohne Probe kommen ans Ende; gleiche Probe behält ihre Reihenfolge, Weg-Fotos bleiben an ihrem Platz. Danach gilt die Reihenfolge „von Hand“, mit „Rückgängig“. Fotos nachreichen: Liegen beim Zurückkommen ins Fenster Fotos im Ordner, die noch nicht in der Liste sind (z. B. nach der ersten Bilddokumentation nachgereicht), meldet FotoKit „n neue Fotos“ mit „Jetzt einlesen“ – nie ohne Klick; Beschreibungen, Proben und Reihenfolge bleiben, die neuen Fotos kommen ans Ende. Nach „PDF erstellt“ steht, wie man Fotos nachreicht.'],
   ['2.3.3', '13.11.2026', 'Mehr Platz für die Fotos: Das Kopfband oben und die Leiste unten sind schmaler, Überschrift, „Fotos übernehmen“ und die Zeile „In der Doku“ rücken enger zusammen. Auf einem üblichen Bildschirm sind dadurch rund 100 Pixel mehr Höhe für die Kacheln frei (etwa eine halbe Reihe); das Vorschaubild rechts wird auf kleinen Bildschirmen größer. Bedienung und Inhalte unverändert.'],
   ['2.3.2', '13.11.2026', 'Speichern hängt nicht mehr still, wenn ein anderes Spektron-Fenster (Projektzentrale oder ein zweites FotoKit) das Projekt gerade belegt: Nach höchstens 20 s sagt FotoKit „Das Projekt ist gerade in einem anderen Spektron-Fenster belegt – bitte das andere Fenster schließen und erneut versuchen.“ Es wird dann nichts geschrieben; die Eingaben bleiben im Fenster und gehen mit dem nächsten Speichern („Erneut speichern“, Projektwechsel …) mit. Gleiches gilt beim Wiederherstellen einer Projektfassung.'],
@@ -1103,7 +1107,7 @@ async function neueFotosPruefen(){
   if (sig === neueFotosGemeldet || (b.classList.contains('show') && !b.classList.contains('ok'))) return;
   neueFotosGemeldet = sig;
   banner('info', `📷 ${neu.length === 1 ? '1 neues Foto' : neu.length + ' neue Fotos'} im Ordner „${esc(folderLabel())}“, noch nicht in der Liste. Beim Einlesen bleiben alle Beschreibungen, Proben und die Reihenfolge erhalten; neue Fotos kommen ans Ende. <span class="spacer"></span><button id="bNeueFotos">Jetzt einlesen</button>`);
-  $('bNeueFotos').onclick = () => { neueFotosGemeldet = ''; $('btnReload').click(); };
+  $('bNeueFotos').onclick = () => { neueFotosGemeldet = ''; if (!$('btnReload').disabled) ordnerNeuEinlesen(); };   // nur diesen Ordner (A1)
 }
 
 /* ---------- settings ---------- */
@@ -2636,6 +2640,7 @@ function recompute(){
     kachelZeigen(it, sp);
   });
   abschnitteZeichnen(secs.size > 0);
+  nrZeileZeigen();   // Audit 2026-11 A4
   const moves = moving ? discarded : 0;
   const ohne = S.view.filter(it => !it.discard && !it.desc.trim()).length, drin = S.view.length - discarded;
   const teile = [];
@@ -2673,7 +2678,8 @@ function kachelZeigen(it, sp){
   const p = it.probe.trim(), pT = !p ? '' : /^p?\d+[a-z]?$/i.test(p) ? 'Probe ' + p.replace(/^p/i, '') : (/[,;\/]/.test(p) ? 'Proben ' : 'Probe ') + p;
   const ts = el.querySelector('.tsub'), tsT = [pT, it.name].filter(Boolean).join(' · ');
   if (ts.textContent !== tsT){ ts.textContent = tsT; ts.title = `${it.name}${it.orig && it.orig !== it.name ? ' · Original: ' + it.orig : ''} · ${fmtDate(it.date)}`; }
-  const so = el.querySelector('.tnote.storno'), soT = sp.length ? `⚠ ${undListe(sp)} storniert` : '';
+  const ub = sp.length || it.discard ? [] : unbekannteProben(it.probe);
+  const so = el.querySelector('.tnote.storno'), soT = sp.length ? `⚠ ${undListe(sp)} storniert` : ub.length ? `⚠ ${undListe(ub)} nicht in LabelKit` : '';
   if (so.textContent !== soT){ so.textContent = soT; so.hidden = !soT; }
   const co = el.querySelector('.tnote.conflict'), coT = it.conflict && !it.discard ? '⚠ Dateiname doppelt' : '';
   if (co.textContent !== coT){ co.textContent = coT; co.hidden = !coT; co.title = it.final; }
@@ -2744,7 +2750,7 @@ function karteFuellen(neu){
   const stT = !it ? '' : it.secEff ? `Abschnitt: ${it.secEff} · ${inh ? 'vom vorherigen Foto übernommen' : 'eingetragen'}` : 'Abschnitt: nicht zugeordnet';
   if ($('fSecStatus').textContent !== stT) $('fSecStatus').textContent = stT;
   $('fSecStatus').classList.toggle('geerbt', !!inh);
-  const so = $('fStorno'), soT = it && !it.discard ? stornoHinweis(stornoProben(it.probe)) : '';
+  const so = $('fStorno'), soT = it && !it.discard ? (stornoHinweis(stornoProben(it.probe)) || unbekanntHinweis(unbekannteProben(it.probe))) : '';
   if (so.textContent !== soT){ so.textContent = soT; so.hidden = !soT; }
 }
 async function loadPreview(it){
@@ -4396,7 +4402,10 @@ function recoverySaved(){
     const key = RECOVERY_PREFIX+R.id, record = JSON.parse(localStorage.getItem(key));
     if (!record) return;
     const state = recoveryState();
-    for (const k of ['drafts','extra','discard','rot','order','meta']) if (!same(state[k], P.data[k] || (['discard','order'].includes(k) ? [] : {}))) return;
+    // Reihenfolge: ohne gespeicherte Reihenfolge (nie von Hand sortiert) ergibt sie sich aus den Dateien – dann gibt es nichts zu
+    // vergleichen (Audit 2026-11 A9: sonst blieb der Stand für immer „Projektspeicherung noch nicht bestätigt“).
+    const ohneReihenfolge = !Array.isArray(P.data.order) || !P.data.order.length;
+    for (const k of ['drafts','extra','discard','rot','order','meta']) if (!(k === 'order' && ohneReihenfolge) && !same(state[k], P.data[k] || (['discard','order'].includes(k) ? [] : {}))) return;
     if (!same(state.settings, pickNaming(P.data.settings || {})) || !same(record.state, state)) return;
     record.pending = false;
     localStorage.setItem(key, JSON.stringify(record));
@@ -4748,7 +4757,7 @@ async function lkWahl(dir, nr){
 function lkZeileZeigen(text){ const el = $('lkZeile'); if (!el) return; el.textContent = text || ''; el.hidden = !text; }
 async function loadBohrkernZuordnung(){
   const hatteStorno = LK.storniert.size > 0;
-  BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.storniert = new Set(); LK.datei = '';
+  BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.storniert = new Set(); LK.datei = ''; LK.nummern = new Set(); LK.fest = false;
   // Ohne Projekt (direkt geöffneter Fotoordner): Hinweise aus dem vorigen Projekt gleich wegnehmen
   const proj = S.proj; if (!proj){ if (hatteStorno) recompute(); return; }
   try{ await lkLesen(proj); } finally { if (S.proj === proj) recompute(); }   // Storno-Hinweise in den Zeilen auffrischen
@@ -4775,7 +4784,7 @@ async function lkLesen(proj){
     if (w.fremde.length) zeile = `⚠ In „${pfad}“ liegt auch ${fremdText} – nach dem Namen nicht von Projekt ${nr}. FotoKit nimmt sie nicht.`;
     BK.map = bohrkernNummern(daten); BK.datei = w.datei.name;
     LK.storniert = new Set(); LK.proben = labelkitProben(daten, LK.storniert); LK.datei = w.datei.name;
-  }catch(e){ if (S.proj === proj){ BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.storniert = new Set(); LK.datei = ''; } }
+  }catch(e){ if (S.proj === proj){ BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.storniert = new Set(); LK.datei = ''; LK.nummern = new Set(); LK.fest = false; } }
   finally{ if (S.proj === proj) lkZeileZeigen(zeile); }
 }
 /* ---------- Beschreibung schneller: Vorschläge ----------
@@ -4789,15 +4798,16 @@ async function lkLesen(proj){
       gezählt – ihre Nummer bleibt aber vergeben (zählt bei der fortlaufenden Nummerierung mit). Ist ein Foto noch so einer
       Probe zugeordnet (oder wird die Nummer von Hand eingetippt), zeigt die Zeile einen Hinweis; FotoKit ändert, benennt
       und verschiebt dabei nichts. Storno aufgehoben → die Probe wird beim nächsten Lesen der LabelKit-Datei wieder angeboten. */
-const LK = { proben: new Map(), storniert: new Set(), datei: '' };
+const LK = { proben: new Map(), storniert: new Set(), datei: '', nummern: new Set(), fest: false };
 function labelkitProben(daten, storniert){
-  const out = new Map(), aktiv = new Set(); if (!daten || typeof daten !== 'object') return out;
+  const out = new Map(), aktiv = new Set(); LK.nummern = new Set(); LK.fest = false; if (!daten || typeof daten !== 'object') return out;
   const t = v => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
   let nr = Number.isSafeInteger(+daten.probenStartNr) && +daten.probenStartNr > 0 ? +daten.probenStartNr : 1;
   for (const [liste, teile] of [['proben', p => [p.z2, p.z3, p.z4]], ['chloridProben', p => [p.z2, p.z3, p.z4]], ['asbestProben', p => [p.z2, p.z3]], ['sonstigeProben', p => [p.z2, p.z3, p.z4]]]){
     for (const p of Array.isArray(daten[liste]) ? daten[liste] : []){
       if (!p || typeof p !== 'object'){ nr++; continue; }
       const n = Number.isSafeInteger(+p._nr) && +p._nr > 0 ? +p._nr : nr; nr = n + 1;
+      LK.nummern.add('P' + n); if (p.nrFest || p.storniert) LK.fest = true;   // Audit 2026-11 A4: vergebene Nummern, Nummern schon fest?
       if (p.storniert){ if (storniert) storniert.add('P' + n); continue; }   // Nummer bleibt vergeben, Probe wird nicht angeboten
       aktiv.add('P' + n);
       const text = teile(p).map(t).filter(Boolean).join(' ');
@@ -4807,9 +4817,25 @@ function labelkitProben(daten, storniert){
   if (storniert) for (const k of aktiv) storniert.delete(k);   // gleiche Nummer auch als gültige Probe: kein Storno-Hinweis
   return out;
 }
+/** Audit 2026-11 A4: Probennummern eines Fotos, die es in der LabelKit-Datei gar nicht gibt (Tippfehler, Probe gelöscht).
+    Nur „P<Zahl>“ wird geprüft (Bohrkern-IDs über die LabelKit-Zuordnung); ohne LabelKit-Datei nie ein Hinweis. */
+const unbekannteProben = text => LK.datei && LK.nummern.size ? fotoProben(text, BK.map).filter(p => /^P\d+$/.test(p) && !LK.nummern.has(p)) : [];
+/** Audit 2026-11 A4: Zeile, solange in LabelKit noch keine Nummer fest ist und Fotos Proben zugeordnet sind – nur Hinweis, keine Sperre. */
+function nrZeileZeigen(){
+  const el = $('nrZeile'); if (!el) return;
+  const an = !!(S.proj && LK.datei && LK.nummern.size && !LK.fest && (S.items || []).some(it => !it.discard && it.probe.trim()));
+  const t = an ? '⚠ In LabelKit sind noch keine Probennummern fest (keine Etiketten gedruckt, nichts ans Labor übergeben). Wird dort eine Probe gelöscht oder verschoben, zeigen die Zuordnungen hier auf andere Proben.' : '';
+  if (el.textContent !== t) el.textContent = t;
+  el.hidden = !an;
+}
 /** Probe-Nr. eines Fotos → die darin genannten, in LabelKit stornierten Proben („p7, P9“ → ['P7']). */
 const stornoProben = text => LK.storniert.size ? fotoProben(text).filter(p => LK.storniert.has(p)) : [];
 const undListe = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' und ' + a[a.length - 1] : a.join('');
+function unbekanntHinweis(ub){
+  if (!ub.length) return '';
+  const n = undListe(ub);
+  return `⚠ ${n} gibt es in LabelKit nicht – bitte die ${ub.length === 1 ? 'Nummer' : 'Nummern'} prüfen. Nur ein Hinweis; die Zuordnung bleibt, wie sie ist.`;
+}
 /** Hinweis in der Zeile (leer = keiner). Nur ein Hinweis – Zuordnung, Dateiname und Ordner bleiben, wie sie sind. */
 function stornoHinweis(sp){
   if (!sp.length) return '';
@@ -5552,6 +5578,11 @@ $('btnReload').onclick = async () => {
   // (ohne weiteres Warten: das Speichern der laufenden Eingaben beginnt sofort)
   const akt = S.proj && projektHinweisFuer && !gleichesProjekt(projektHinweisFuer, S.proj.name) ? projektHinweisFuer : '';
   if (akt){ hideBanner(); return openFromZentrale(akt, '(gerade in Spektron geöffnet)'); }
+  return ordnerNeuEinlesen();
+};
+/** Den offenen Ordner neu einlesen – nie ein anderes Projekt öffnen. „Jetzt einlesen“ (neue Fotos, 2.4.0) ruft nur das
+    (Audit 2026-11 A1: über $('btnReload') wechselte es zum Projekt aus dem Hinweis „In Spektron arbeitest du gerade an …“). */
+function ordnerNeuEinlesen(){
   return withSavedProject('Das erneute Einlesen', async () => {
     S.lastRun = null; hideBanner();
     const note = await loadProject(S.data || S.dir);      // picks up changes a coworker saved meanwhile
@@ -5561,7 +5592,7 @@ $('btnReload').onclick = async () => {
     loadBohrkernZuordnung();   // LabelKit-Datei neu lesen (Storno gesetzt/aufgehoben) – im Hintergrund wie beim Öffnen
     if (note) banner(P.readOnly ? 'err' : 'info', note);
   }).then(r => { fotoUebernahmeKnopf(); return r; });
-};
+}
 $('sort').onchange = () => {
   if ($('sort').value === 'section'){
     // one-off: arrange by section, then keep that order as „manuell“ (Ziehen und Früher/Später gehen weiter)

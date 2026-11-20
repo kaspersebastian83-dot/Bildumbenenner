@@ -33,6 +33,9 @@ jobs:
       - run: node tests/spektron-ordner.cjs
         env:
           SPEKTRON_ORDNER_PFLICHT: '1'
+      - run: node tests/project-store-gleich.cjs
+        env:
+          PROJEKT_STORE_PFLICHT: '1'
       - run: node tools/build-identity.cjs --check
       - run: node tests/laborwerte.cjs
       - run: node tests/bohrkern-fotos.cjs
@@ -128,3 +131,5 @@ jobs:
         run: node tests/ci-wiederholen.cjs tests/n2-speichersicherheit-browser.cjs ${{ matrix.browser }}
       - name: iPhone-Fotos (HEIC) → JPG, Originale nach _Originale, Abbrüche, Nachweis in der Projektdatei
         run: node tests/ci-wiederholen.cjs tests/heic-umwandeln-browser.cjs ${{ matrix.browser }}
+      - name: Audit 2026-11 Lauf 1 – „Jetzt einlesen“ bleibt im Projekt, Nummern noch nicht fest, unbekannte Probe, Speicherstand
+        run: node tests/ci-wiederholen.cjs tests/feld-audit-browser.cjs ${{ matrix.browser }}
