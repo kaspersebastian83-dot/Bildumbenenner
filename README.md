@@ -2,11 +2,21 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **2.4.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **2.5.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
 Die Webadresse, die Projektdatei `_Bildumbenenner.json` und die gespeicherten Einstellungen behalten den alten Namen – so funktionieren bestehende Projekte, Lesezeichen und installierte Apps weiter. Die aktuelle Version steht oben links in der blauen Kopfzeile (Klick darauf: Änderungen, Problem melden). Daneben öffnet „? Kurzanleitung“ (oder F1) die Kurzanleitung – auch zum Ausdrucken.
+
+## Neu in 2.5.0 · 20.11.2026 – Audit Feldarbeit (Lauf 1)
+
+Plan `claude/spektron-audit-2026-11-1-feld-plan.md` (Spektron-Projekt), Befunde A1, A4, A9, A11.
+- **Hinweis „Nummern noch nicht fest“ (A4):** Hat die LabelKit-Datei Proben, aber keine mit `nrFest`/`storniert`, und ist mindestens ein Foto (nicht „Weg“) einer Probe zugeordnet, zeigt `#nrZeile` unter `#lkZeile`: „⚠ In LabelKit sind noch keine Probennummern fest (keine Etiketten gedruckt, nichts ans Labor übergeben). Wird dort eine Probe gelöscht oder verschoben, zeigen die Zuordnungen hier auf andere Proben.“ Nur Hinweis – keine Sperre, keine Rückfrage vor der Bilddokumentation (Entscheidung Basti 20.11.).
+- **Unbekannte Probennummer (A4):** „P<Zahl>“, die in der LabelKit-Datei nicht vorkommt (auch nicht storniert), → Kachel „⚠ P13 nicht in LabelKit“, Fotokarte „⚠ P13 gibt es in LabelKit nicht – bitte die Nummer prüfen …“. Bohrkern-IDs über die LabelKit-Zuordnung; ohne LabelKit-Datei kein Hinweis. Zuordnung bleibt unverändert.
+- **„Jetzt einlesen“ bleibt im Projekt (A1):** Der Knopf aus 2.4.0 rief „Fotos neu einlesen“ (`btnReload`) – und das wechselt bewusst zum Projekt, das gerade in Spektron offen ist, sobald einmal „In Spektron arbeitest du gerade an …“ kam. Jetzt ruft er `ordnerNeuEinlesen()` (nur der offene Ordner). „Mehr …“ › „Fotos neu einlesen“ verhält sich wie bisher.
+- **Speicherstand (A9):** `recoverySaved` verglich die Reihenfolge auch, wenn nie von Hand sortiert wurde (`order` fehlt in der Projektdatei) – die Fußzeile blieb dann immer bei „Projektspeicherung noch nicht bestätigt“. Ohne gespeicherte Reihenfolge wird sie nicht mehr verglichen; nach dem Speichern steht „Projekt gespeichert; lokale Eingabekopie zusätzlich erhalten.“
+- **`project-store.js` (A11):** neuer Node-Test `tests/project-store-gleich.cjs` vergleicht byte-genau mit der Projektzentrale (CI holt sie schon daneben, `PROJEKT_STORE_PFLICHT`). Projektzentrale 1.51.1 übernimmt FotoKits Text „Spektron-Fenster“ – **Projektzentrale zuerst mergen**.
+- Tests: neu `tests/feld-audit-browser.cjs` (in CI). Dateiformat `_Bildumbenenner.json` unverändert.
 
 ## Neu in 2.4.0 · 17.11.2026 – nach Probe sortieren, Fotos nachreichen
 
