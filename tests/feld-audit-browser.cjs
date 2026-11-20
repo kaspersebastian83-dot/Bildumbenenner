@@ -96,6 +96,12 @@ let browser, server;
   await lkSchreiben(lk(true));
   await ui.mehr(page, 'mehrReload');
   await page.waitForFunction(() => document.getElementById('nrZeile').hidden, null, { timeout: 8000 });
+  // A4 (Codex): LabelKit-Datei ohne Proben (alle gelöscht) → P1 gibt es nicht mehr: Hinweis auch dann
+  await lkSchreiben({ ...lk(false), proben: [], chloridProben: [] });
+  await ui.mehr(page, 'mehrReload');
+  await page.waitForFunction(() => !document.querySelector('#list .row[aria-label^="IMG_1001"] .tnote.storno').hidden, null, { timeout: 8000 });
+  assert.equal(await row('IMG_1001').locator('.tnote.storno').textContent(), '⚠ P1 nicht in LabelKit');
+  assert.equal(await nrZeile(), '', 'ohne Proben in LabelKit keine Zeile „noch nicht fest“');
 
   // A1: in einer anderen App wird Projekt B geöffnet → Hinweis; zurück zu A; neues Foto in A → „Jetzt einlesen“ bleibt bei A
   await zuletzt([B, A]); await fokus();

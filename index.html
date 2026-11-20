@@ -516,8 +516,8 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.5.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:b2dda35bd984211928feac946367b24410736e8767f29c0eaf9e12c08a73bb3a';
-const APP_DATE = '2026-11-17';
+const APP_BUILD = 'sha256:31e30271a4348677a8dacb76c79bc20d86d02f4c6fa10bbd9d97c4696a35413a';
+const APP_DATE = '2026-11-20';
 const CHANGELOG = [
   ['2.5.0', '20.11.2026', 'Probennummern: Solange in LabelKit noch keine Nummer fest ist (keine Etiketten gedruckt, nichts ans Labor übergeben) und Fotos schon Proben zugeordnet sind, steht oben ein gelber Hinweis – wird in LabelKit eine Probe gelöscht oder verschoben, zeigen die Zuordnungen sonst auf andere Proben. Nur ein Hinweis, nichts gesperrt. Ist ein Foto einer Nummer zugeordnet, die es in LabelKit nicht gibt (z. B. P13 bei 12 Proben), steht „⚠ P13 nicht in LabelKit“ an der Kachel. Behoben: „Jetzt einlesen“ (neue Fotos) öffnete ein anderes Projekt, wenn vorher der Hinweis „In Spektron arbeitest du gerade an …“ gekommen war – jetzt liest der Knopf immer nur den offenen Ordner. Behoben: Die Fußzeile blieb nach dem Tippen bei „Projektspeicherung noch nicht bestätigt“, obwohl gespeichert war; jetzt steht dort „Projekt gespeichert“.'],
   ['2.4.0', '17.11.2026', 'Sortierung „nach Probe“ (Mehr … › Sortierung …): ordnet die Fotos einmalig nach ihrer Probe – P2 vor P10, bei mehreren Proben zählt die erste, Fotos ohne Probe kommen ans Ende; gleiche Probe behält ihre Reihenfolge, Weg-Fotos bleiben an ihrem Platz. Danach gilt die Reihenfolge „von Hand“, mit „Rückgängig“. Fotos nachreichen: Liegen beim Zurückkommen ins Fenster Fotos im Ordner, die noch nicht in der Liste sind (z. B. nach der ersten Bilddokumentation nachgereicht), meldet FotoKit „n neue Fotos“ mit „Jetzt einlesen“ – nie ohne Klick; Beschreibungen, Proben und Reihenfolge bleiben, die neuen Fotos kommen ans Ende. Nach „PDF erstellt“ steht, wie man Fotos nachreicht.'],
@@ -4756,10 +4756,10 @@ async function lkWahl(dir, nr){
 /** Zeile unter dem Kopf: fremde oder nicht passende LabelKit-Datei (leer = keine Zeile). */
 function lkZeileZeigen(text){ const el = $('lkZeile'); if (!el) return; el.textContent = text || ''; el.hidden = !text; }
 async function loadBohrkernZuordnung(){
-  const hatteStorno = LK.storniert.size > 0;
+  const hatteHinweise = LK.storniert.size > 0 || !!LK.datei;   // Storno-, „nicht in LabelKit“- und Nummern-Hinweise des vorigen Projekts
   BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.storniert = new Set(); LK.datei = ''; LK.nummern = new Set(); LK.fest = false;
   // Ohne Projekt (direkt geöffneter Fotoordner): Hinweise aus dem vorigen Projekt gleich wegnehmen
-  const proj = S.proj; if (!proj){ if (hatteStorno) recompute(); return; }
+  const proj = S.proj; if (!proj){ if (hatteHinweise) recompute(); return; }
   try{ await lkLesen(proj); } finally { if (S.proj === proj) recompute(); }   // Storno-Hinweise in den Zeilen auffrischen
 }
 async function lkLesen(proj){
@@ -4818,8 +4818,14 @@ function labelkitProben(daten, storniert){
   return out;
 }
 /** Audit 2026-11 A4: Probennummern eines Fotos, die es in der LabelKit-Datei gar nicht gibt (Tippfehler, Probe gelöscht).
-    Nur „P<Zahl>“ wird geprüft (Bohrkern-IDs über die LabelKit-Zuordnung); ohne LabelKit-Datei nie ein Hinweis. */
-const unbekannteProben = text => LK.datei && LK.nummern.size ? fotoProben(text, BK.map).filter(p => /^P\d+$/.test(p) && !LK.nummern.has(p)) : [];
+    Nur „P<Zahl>“ wird geprüft (Bohrkern-IDs über die LabelKit-Zuordnung); ohne LabelKit-Datei nie ein Hinweis.
+    Auch eine LabelKit-Datei ganz ohne Proben zählt (alle gelöscht → P1 gibt es nicht mehr). Nummern aus der Bohrkern-Zuordnung stammen aus
+    LabelKit selbst und gelten immer als bekannt. */
+const unbekannteProben = text => {
+  if (!LK.datei) return [];
+  const bk = new Set([].concat(...BK.map.values()));
+  return fotoProben(text, BK.map).filter(p => /^P\d+$/.test(p) && !LK.nummern.has(p) && !bk.has(p));
+};
 /** Audit 2026-11 A4: Zeile, solange in LabelKit noch keine Nummer fest ist und Fotos Proben zugeordnet sind – nur Hinweis, keine Sperre. */
 function nrZeileZeigen(){
   const el = $('nrZeile'); if (!el) return;
