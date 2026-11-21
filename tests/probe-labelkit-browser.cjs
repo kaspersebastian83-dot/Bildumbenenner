@@ -147,7 +147,23 @@ let browser, server;
   o = await gespeichert(o => (o.bilder['IMG_1001.jpg'].probeLabelKit || {}).P1 === 'EG Flur gereinigt Aufsicht', 'zweites Bestätigen');
   assert.equal(o.dokuGeaendert, dokuNach, '„Zuordnung stimmt“ ändert nichts an der Bilddoku');
 
+  // Codex auf #93: Rückstellprobe (Bohrkern) steht nicht in „Noch ohne Foto“; Texte über 120 Zeichen werden ganz verglichen
+  const RUECK = { id: 5, _nr: 4, matrix: 'Bohrkern', bkStatus: 'R', bkId: 'EG-WO-B-1', z2: 'EG Wohnen', z3: 'Bohrkern', z4: 'Rückstellprobe', nrFest: FEST };
+  const lang = ende => ({ ...H, z2: 'EG Wohnen Heizkörper ' + 'Nische unter dem Fenster '.repeat(5) + ende, _nr: 2, nrFest: FEST });
+  const fest = { ...nachher, proben: [{ ...F, z3: 'gereinigt', _nr: 1, nrFest: FEST }], sonstigeProben: [{ ...D, _nr: 3, nrFest: FEST }, RUECK] };
+  await lkSchreiben({ ...fest, chloridProben: [lang('links')] });
+  await ui.mehr(page, 'mehrReload');
+  await page.waitForFunction(() => !document.getElementById('lkAndersZeile').hidden, null, { timeout: 8000 });
+  assert.equal(await sichtbar('#ohneFoto'), '', 'Rückstellprobe P4 braucht kein Foto');
+  await waehle('IMG_1002'); await page.locator('#bLkStimmt').click();
+  o = await gespeichert(o => /Fenster links gereinigt Ansicht$/.test((o.bilder['IMG_1002.jpg'].probeLabelKit || {}).P2 || ''), 'langer Text bestätigt');
+  assert.ok(o.bilder['IMG_1002.jpg'].probeLabelKit.P2.length > 120, 'ganzer Text gemerkt');
+  await lkSchreiben({ ...fest, chloridProben: [lang('rechts')] });   // nur das Ende ändert sich
+  await ui.mehr(page, 'mehrReload');
+  await page.waitForFunction(() => !document.getElementById('lkAndersZeile').hidden, null, { timeout: 8000 });
+  assert.equal(await row('IMG_1002').locator('.tnote.storno').textContent(), '⚠ P2 in LabelKit geändert');
+
   assert.deepEqual(errors, []);
-  console.log(`OK (${browserName}): LabelKit-Beschreibung beim Zuordnen gemerkt, Hinweis nach dem Verschieben auch mit festen Nummern, „Zuordnung stimmt“, noch ohne Foto`);
+  console.log(`OK (${browserName}): LabelKit-Beschreibung beim Zuordnen gemerkt, Hinweis nach dem Verschieben auch mit festen Nummern, „Zuordnung stimmt“, noch ohne Foto (ohne Rückstellproben), lange Texte ganz verglichen`);
   await browser.close(); server.close();
 })().catch(async e => { console.error(e); try { await browser?.close(); } catch {} server?.close(); process.exit(1); });

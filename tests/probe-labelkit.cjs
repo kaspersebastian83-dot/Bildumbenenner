@@ -22,7 +22,7 @@ let n = 0; const test = async (t, fn) => { await fn(); n++; console.log('OK prob
   });
   await test('anders geformt → bleibt als unbekanntes Feld stehen, wird nicht ausgewertet', () => {
     const h = harness(datei({}));
-    for (const fremd of [['P4'], { P4: 7 }, { 'Probe 4': 'x' }, {}, 'P4', { P4: 'x'.repeat(201) }]){
+    for (const fremd of [['P4'], { P4: 7 }, { 'Probe 4': 'x' }, {}, 'P4', { P4: 'x'.repeat(501) }]){
       const vorher = datei({ 'a.jpg': { probe: 'P4', probeLabelKit: fremd } }), d = h.projFromJson(vorher);
       assert.equal(d.extra['a.jpg'].lk, undefined, JSON.stringify(fremd));
       assert.deepEqual(JSON.parse(h.projToJson(d)).bilder['a.jpg'], vorher.bilder['a.jpg'], 'unverändert: ' + JSON.stringify(fremd));

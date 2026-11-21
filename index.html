@@ -524,10 +524,10 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.6.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:a07bafea27540a5361b59fec174826e620eea6a94d88004515d0c82e89b3c9a1';
+const APP_BUILD = 'sha256:3f4342a35b73b10c909f2693530a4303e44e18f71f19a4a2f6813f21ca4ed772';
 const APP_DATE = '2026-11-21';
 const CHANGELOG = [
-  ['2.6.0', '21.11.2026', 'Probe in LabelKit verschoben: FotoKit merkt sich beim Zuordnen („Gehört zu Probe“), wie die Probe in LabelKit beschrieben war. Wurde dort vor dem Festlegen der Nummern eine Probe gelöscht oder verschoben, zeigt ein Foto sonst still auf eine andere Probe. Jetzt steht oben „⚠ Seit der Zuordnung ist in LabelKit die Probe P4 anders beschrieben …“, auf der Kachel „⚠ P4 in LabelKit geändert“ und in der Fotokarte, wie sie damals und heute heißt – auch wenn die Nummern inzwischen fest sind. Gehört das Foto noch dazu: „✓ Zuordnung stimmt“; sonst die richtige Probe eintragen. FotoKit ändert keine Zuordnung selbst. Neu über den Fotos: „Noch ohne Foto: P2, P5“ – LabelKit-Proben, denen noch kein Foto in der Doku zugeordnet ist (nur Hinweis). In der Projektdatei kommt je Foto ein zusätzliches Feld dazu, sonst bleibt alles gleich.'],
+  ['2.6.0', '21.11.2026', 'Probe in LabelKit verschoben: FotoKit merkt sich beim Zuordnen („Gehört zu Probe“), wie die Probe in LabelKit beschrieben war. Wurde dort vor dem Festlegen der Nummern eine Probe gelöscht oder verschoben, zeigt ein Foto sonst still auf eine andere Probe. Jetzt steht oben „⚠ Seit der Zuordnung ist in LabelKit die Probe P4 anders beschrieben …“, auf der Kachel „⚠ P4 in LabelKit geändert“ und in der Fotokarte, wie sie damals und heute heißt – auch wenn die Nummern inzwischen fest sind. Gehört das Foto noch dazu: „✓ Zuordnung stimmt“; sonst die richtige Probe eintragen. FotoKit ändert keine Zuordnung selbst. Neu über den Fotos: „Noch ohne Foto: P2, P5“ – LabelKit-Proben, denen noch kein Foto in der Doku zugeordnet ist (nur Hinweis; Rückstellproben von Bohrkernen zählen nicht). In der Projektdatei kommt je Foto ein zusätzliches Feld dazu, sonst bleibt alles gleich.'],
   ['2.5.0', '20.11.2026', 'Probennummern: Solange in LabelKit noch keine Nummer fest ist (keine Etiketten gedruckt, nichts ans Labor übergeben) und Fotos schon Proben zugeordnet sind, steht oben ein gelber Hinweis – wird in LabelKit eine Probe gelöscht oder verschoben, zeigen die Zuordnungen sonst auf andere Proben. Nur ein Hinweis, nichts gesperrt. Ist ein Foto einer Nummer zugeordnet, die es in LabelKit nicht gibt (z. B. P13 bei 12 Proben), steht „⚠ P13 nicht in LabelKit“ an der Kachel. Behoben: „Jetzt einlesen“ (neue Fotos) öffnete ein anderes Projekt, wenn vorher der Hinweis „In Spektron arbeitest du gerade an …“ gekommen war – jetzt liest der Knopf immer nur den offenen Ordner. Behoben: Die Fußzeile blieb nach dem Tippen bei „Projektspeicherung noch nicht bestätigt“, obwohl gespeichert war; jetzt steht dort „Projekt gespeichert“.'],
   ['2.4.0', '17.11.2026', 'Sortierung „nach Probe“ (Mehr … › Sortierung …): ordnet die Fotos einmalig nach ihrer Probe – P2 vor P10, bei mehreren Proben zählt die erste, Fotos ohne Probe kommen ans Ende; gleiche Probe behält ihre Reihenfolge, Weg-Fotos bleiben an ihrem Platz. Danach gilt die Reihenfolge „von Hand“, mit „Rückgängig“. Fotos nachreichen: Liegen beim Zurückkommen ins Fenster Fotos im Ordner, die noch nicht in der Liste sind (z. B. nach der ersten Bilddokumentation nachgereicht), meldet FotoKit „n neue Fotos“ mit „Jetzt einlesen“ – nie ohne Klick; Beschreibungen, Proben und Reihenfolge bleiben, die neuen Fotos kommen ans Ende. Nach „PDF erstellt“ steht, wie man Fotos nachreicht.'],
   ['2.3.3', '13.11.2026', 'Mehr Platz für die Fotos: Das Kopfband oben und die Leiste unten sind schmaler, Überschrift, „Fotos übernehmen“ und die Zeile „In der Doku“ rücken enger zusammen. Auf einem üblichen Bildschirm sind dadurch rund 100 Pixel mehr Höhe für die Kacheln frei (etwa eine halbe Reihe); das Vorschaubild rechts wird auf kleinen Bildschirmen größer. Bedienung und Inhalte unverändert.'],
@@ -692,7 +692,7 @@ const kanonisch = v => JSON.stringify(v, (k, x) => x && typeof x === 'object' &&
 /** E2 (Audit Lauf 5): „extra“ ohne die beim Zuordnen gemerkte LabelKit-Beschreibung (lk) – die steht nicht in der Bilddoku. */
 const ohneLk = x => Object.fromEntries(Object.entries(x || {}).map(([n, v]) => { if (!v || typeof v !== 'object') return [n, v]; const { lk, ...r } = v; return [n, r]; }));
 /** E2: Form des Feldes „probeLabelKit“ je Bild ({"P4": "EG Küche Heizkörper"}); anders geformt bleibt es als unbekanntes Feld stehen. */
-function lkGueltig(v){ return !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length > 0 && Object.entries(v).every(([k, t]) => /^P\d+$/.test(k) && typeof t === 'string' && t.length <= 200); }
+function lkGueltig(v){ return !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length > 0 && Object.entries(v).every(([k, t]) => /^P\d+$/.test(k) && typeof t === 'string' && t.length <= 500); }
 const dokuInhalt = d => kanonisch(DOKU_KINDS.map(k => k === 'discard' ? [...(d[k] || [])].sort() : k === 'extra' ? ohneLk(d[k]) : d[k] === undefined ? (k === 'order' ? [] : {}) : d[k]));
 const ohneDokuStand = x => { const r = { ...(x || {}) }; for (const k of DOKU_FELDER) delete r[k]; return r; };
 function dokuStandMischen(o, t){
@@ -4785,7 +4785,7 @@ async function lkWahl(dir, nr){
 function lkZeileZeigen(text){ const el = $('lkZeile'); if (!el) return; el.textContent = text || ''; el.hidden = !text; }
 async function loadBohrkernZuordnung(){
   const hatteHinweise = LK.storniert.size > 0 || !!LK.datei;   // Storno-, „nicht in LabelKit“- und Nummern-Hinweise des vorigen Projekts
-  BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.storniert = new Set(); LK.datei = ''; LK.nummern = new Set(); LK.fest = false; LK.aktiv = new Set();
+  BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.storniert = new Set(); LK.datei = ''; LK.nummern = new Set(); LK.fest = false; LK.aktiv = new Set(); LK.rueckstell = new Set();
   // Ohne Projekt (direkt geöffneter Fotoordner): Hinweise aus dem vorigen Projekt gleich wegnehmen
   const proj = S.proj; if (!proj){ if (hatteHinweise) recompute(); return; }
   try{ await lkLesen(proj); } finally { if (S.proj === proj) recompute(); }   // Storno-Hinweise in den Zeilen auffrischen
@@ -4813,7 +4813,7 @@ async function lkLesen(proj){
     BK.map = bohrkernNummern(daten); BK.datei = w.datei.name;
     LK.storniert = new Set(); LK.proben = labelkitProben(daten, LK.storniert); LK.datei = w.datei.name;
     lkMerkenImSpeicher();   // E2
-  }catch(e){ if (S.proj === proj){ BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.storniert = new Set(); LK.datei = ''; LK.nummern = new Set(); LK.fest = false; LK.aktiv = new Set(); } }
+  }catch(e){ if (S.proj === proj){ BK.map = new Map(); BK.datei = ''; LK.proben = new Map(); LK.storniert = new Set(); LK.datei = ''; LK.nummern = new Set(); LK.fest = false; LK.aktiv = new Set(); LK.rueckstell = new Set(); } }
   finally{ if (S.proj === proj) lkZeileZeigen(zeile); }
 }
 /* ---------- Beschreibung schneller: Vorschläge ----------
@@ -4827,9 +4827,9 @@ async function lkLesen(proj){
       gezählt – ihre Nummer bleibt aber vergeben (zählt bei der fortlaufenden Nummerierung mit). Ist ein Foto noch so einer
       Probe zugeordnet (oder wird die Nummer von Hand eingetippt), zeigt die Zeile einen Hinweis; FotoKit ändert, benennt
       und verschiebt dabei nichts. Storno aufgehoben → die Probe wird beim nächsten Lesen der LabelKit-Datei wieder angeboten. */
-const LK = { proben: new Map(), storniert: new Set(), datei: '', nummern: new Set(), fest: false, aktiv: new Set() };
+const LK = { proben: new Map(), storniert: new Set(), datei: '', nummern: new Set(), fest: false, aktiv: new Set(), rueckstell: new Set() };
 function labelkitProben(daten, storniert){
-  const out = new Map(), aktiv = new Set(); LK.nummern = new Set(); LK.fest = false; if (!daten || typeof daten !== 'object') return out;
+  const out = new Map(), aktiv = new Set(); LK.nummern = new Set(); LK.fest = false; LK.rueckstell = new Set(); if (!daten || typeof daten !== 'object') return out;
   const t = v => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
   let nr = Number.isSafeInteger(+daten.probenStartNr) && +daten.probenStartNr > 0 ? +daten.probenStartNr : 1;
   for (const [liste, teile] of [['proben', p => [p.z2, p.z3, p.z4]], ['chloridProben', p => [p.z2, p.z3, p.z4]], ['asbestProben', p => [p.z2, p.z3]], ['sonstigeProben', p => [p.z2, p.z3, p.z4]]]){
@@ -4839,8 +4839,11 @@ function labelkitProben(daten, storniert){
       LK.nummern.add('P' + n); if (p.nrFest || p.storniert) LK.fest = true;   // Audit 2026-11 A4: vergebene Nummern, Nummern schon fest?
       if (p.storniert){ if (storniert) storniert.add('P' + n); continue; }   // Nummer bleibt vergeben, Probe wird nicht angeboten
       aktiv.add('P' + n);
+      // A18 (Codex): Rückstellproben (Bohrkern) bekommen kein Foto – gleiche Regel wie bohrkernNummern
+      if (liste === 'sonstigeProben' && p.matrix === 'Bohrkern' && (String(p.bkStatus || '').trim().toUpperCase() === 'R' || String(p.notiz || '').trim() === BK_RUECKSTELL)) LK.rueckstell.add('P' + n);
       const text = teile(p).map(t).filter(Boolean).join(' ');
-      if (text) out.set('P' + n, { text: text.slice(0, 120), raum: t(p.z2) });
+      // text: gekürzt für Vorschläge; voll: ganzer Text für den Vergleich beim Zuordnen (E2, Codex: eine Änderung nach Zeichen 120 zählt auch)
+      if (text) out.set('P' + n, { text: text.slice(0, 120), voll: text.slice(0, 500), raum: t(p.z2) });
     }
   }
   if (storniert) for (const k of aktiv) storniert.delete(k);   // gleiche Nummer auch als gültige Probe: kein Storno-Hinweis
@@ -4883,7 +4886,7 @@ function lkMerken(it){
   const nrs = lkNummern(it.probe), alt = lkGueltig(it.lk) ? it.lk : {}, neu = {};
   for (const nr of nrs){
     if (typeof alt[nr] === 'string') neu[nr] = alt[nr];
-    else if (LK.datei && LK.proben.has(nr)) neu[nr] = LK.proben.get(nr).text;
+    else if (LK.datei && LK.proben.has(nr)) neu[nr] = LK.proben.get(nr).voll;
   }
   const n = Object.keys(neu).length ? neu : undefined;
   if (JSON.stringify(n) === JSON.stringify(it.lk)) return false;
@@ -4900,8 +4903,8 @@ function lkMerkenImSpeicher(){
 /** Proben eines Fotos, deren LabelKit-Text heute anders lautet als beim Zuordnen → [{nr, war, jetzt}]. */
 function lkAnders(it){
   if (!LK.datei || !it || it.discard || !lkGueltig(it.lk)) return [];
-  return lkNummern(it.probe).filter(nr => typeof it.lk[nr] === 'string' && LK.proben.has(nr) && lkSchluessel(LK.proben.get(nr).text) !== lkSchluessel(it.lk[nr]))
-    .map(nr => ({ nr, war: it.lk[nr], jetzt: LK.proben.get(nr).text }));
+  return lkNummern(it.probe).filter(nr => typeof it.lk[nr] === 'string' && LK.proben.has(nr) && lkSchluessel(LK.proben.get(nr).voll) !== lkSchluessel(it.lk[nr]))
+    .map(nr => ({ nr, war: it.lk[nr], jetzt: LK.proben.get(nr).voll }));
 }
 function lkAndersHinweis(an){
   if (!an.length) return '';
@@ -4929,7 +4932,7 @@ function ohneFotoProben(){
   const aktiv = (S.items || []).filter(it => !it.discard);
   if (!aktiv.some(it => it.probe.trim())) return [];
   const mit = new Set(aktiv.flatMap(it => fotoProben(it.probe, BK.map)));
-  return [...LK.aktiv].filter(p => !mit.has(p)).sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
+  return [...LK.aktiv].filter(p => !mit.has(p) && !LK.rueckstell.has(p)).sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
 }
 function ohneFotoZeigen(){
   const el = $('ohneFoto'); if (!el) return;
