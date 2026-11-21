@@ -52,3 +52,18 @@ for (const name of ['Mosaik Archivordner', '_Rückmeldungen', 'Fotos', '2026 Alt
 assert.ok(lese('26.0200 A Abc', personen).key > lese('26.0123 B Abc', personen).key);
 assert.ok(lese('26.0001 A', personen).key > lese('25.9999 B', personen).key);
 console.log(`OK Ordnername: ${faelle.length} Fälle, ohne Liste, keine Projektordner, Sortierung`);
+// E4 #14 (Audit Lauf 5): Block SPEKTRON-ORDNERNAME wörtlich wie in der Projektzentrale (Original), mit PROJ_RE davor. Vorher prüfte jede App nur ihre Kopie.
+// ../projektzentrale daneben (in der CI geholt); ORDNERNAME_PFLICHT=1 verlangt es.
+{
+  const pz = path.join(__dirname, '..', '..', 'projektzentrale', 'index.html');
+  // ab „const PROJ_RE“ (steht direkt vor dem Kommentar des Blocks und gehört dazu) bis zum Ende
+  const block = t => { const i = t.indexOf('const PROJ_RE'), j = t.indexOf('/* SPEKTRON-ORDNERNAME-ENDE */'); assert.ok(i > 0 && j > i && t.indexOf('/* SPEKTRON-ORDNERNAME v1', i) < j, 'Block SPEKTRON-ORDNERNAME'); return t.slice(i, j); };
+  if (fs.existsSync(pz)) {
+    const a = block(html).split('\n'), b = block(fs.readFileSync(pz, 'utf8')).split('\n'), k = a.findIndex((z, i) => z !== b[i]);
+    assert.ok(k < 0 && a.length === b.length, `SPEKTRON-ORDNERNAME weicht von der Projektzentrale ab (Zeile ${(k < 0 ? Math.min(a.length, b.length) : k) + 1} des Blocks):\n  FotoKit:         ${a[k] ?? '(Ende)'}\n  Projektzentrale: ${b[k] ?? '(Ende)'}`);
+    console.log('OK Ordnername: Block SPEKTRON-ORDNERNAME wörtlich wie in der Projektzentrale');
+  } else {
+    assert.ok(process.env.ORDNERNAME_PFLICHT !== '1', '../projektzentrale fehlt (ORDNERNAME_PFLICHT=1)');
+    console.log('SKIP Ordnername: ../projektzentrale fehlt – Block nicht verglichen');
+  }
+}
