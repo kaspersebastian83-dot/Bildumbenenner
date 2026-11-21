@@ -122,7 +122,7 @@ let browser, server;
   assert.equal(await hinweis('IMG_0002').textContent(), HINWEIS);
   assert.equal(await kachelHinweis('IMG_0002').textContent(), '⚠ P2 storniert');
   assert.match(await page.locator('#stats').textContent(), /⚠ 1 Foto bei stornierter Probe/);
-  assert.equal(await probe('IMG_0002').evaluate(e => document.getElementById(e.getAttribute('aria-describedby')).textContent), HINWEIS, 'Hinweis am Feld Probe-Nr. angesagt');
+  assert.equal(await probe('IMG_0002').evaluate(e => e.getAttribute('aria-describedby').split(' ').map(id => document.getElementById(id).textContent).join('').trim()), HINWEIS, 'Hinweis am Feld Probe-Nr. angesagt');   // 2.6.0: dazu #fLkAndersText (hier leer)
   await probe('IMG_0003').click(); await tippe('P1, p2');
   assert.match(await page.locator('#stats').textContent(), /⚠ 2 Fotos bei stornierter Probe/);
   await probe('IMG_0003').fill('P3');

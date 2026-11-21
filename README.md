@@ -2,11 +2,22 @@
 
 Projektfotos beschreiben, sortieren und umbenennen – und daraus eine Bilddokumentation als PDF (oder ein ZIP für eine KI) erstellen.
 
-**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **2.5.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
+**App öffnen:** https://kaspersebastian83-dot.github.io/Bildumbenenner/ · aktuelle Version **2.6.0** (Änderungen in der App unter der Versionsnummer) · Schritt für Schritt im [Handbuch](https://kaspersebastian83-dot.github.io/aidkit/#app-fotokit)
 
 Schritt ② der Büro-App-Suite **Spektron** (Projektzentrale, LabelKit, FotoKit, PlanKit, BelegKit, SpesenKit; Übersicht im [README der Projektzentrale](https://github.com/kaspersebastian83-dot/Projektzentrale#readme)).
 
 Die Webadresse, die Projektdatei `_Bildumbenenner.json` und die gespeicherten Einstellungen behalten den alten Namen – so funktionieren bestehende Projekte, Lesezeichen und installierte Apps weiter. Die aktuelle Version steht oben links in der blauen Kopfzeile (Klick darauf: Änderungen, Problem melden). Daneben öffnet „? Kurzanleitung“ (oder F1) die Kurzanleitung – auch zum Ausdrucken.
+
+## Neu in 2.6.0 · 21.11.2026 – Probe in LabelKit verschoben (Audit Lauf 5)
+
+Plan `claude/spektron-audit-2026-11-5-gesamt-plan.md` (Spektron-Projekt), Befunde E2, E4 (#7/#8/#9), A18 (Lauf 1).
+- **LabelKit-Beschreibung beim Zuordnen merken (E2, Entscheidung Basti 21.11.):** Vor der ersten festen Nummer nummeriert LabelKit beim Löschen und Verschieben neu (die Regel bleibt). Ein Foto „P4“ zeigte danach still auf eine andere Probe – nach dem Festlegen war auch die A4-Zeile weg. FotoKit merkt sich jetzt je Foto und Probe den LabelKit-Text (Raum, Beaufschlagung, Oberflächenart), als die Nummer dazukam. Heißt die Probe in LabelKit später anders, steht oben `#lkAndersZeile`, auf der Kachel „⚠ P4 in LabelKit geändert“ und in der Fotokarte „P4 hieß beim Zuordnen „…“, in LabelKit heißt sie jetzt „…““ mit **„✓ Zuordnung stimmt“** (merkt den heutigen Text). Gilt auch nach dem Festlegen. Verglichen wird der ganze LabelKit-Text (nicht der auf 120 Zeichen gekürzte Vorschlag), ohne Leerraum, Groß-/Kleinschreibung und Unicode-Form. FotoKit ändert nie selbst eine Zuordnung; die Bilddoku gilt durch das Merken nicht als geändert.
+  - Gemerkt wird nur, wenn die LabelKit-Datei gelesen ist: beim Zuordnen und – für schon zugeordnete Fotos aus älteren Projektdateien – beim Lesen der LabelKit-Datei (nur im Speicher, geht mit dem nächsten Speichern mit; Öffnen schreibt nichts). Was LabelKit verschoben hat, bevor FotoKit die Datei je gelesen hat, ist nicht zu erkennen – dafür bleibt die A4-Zeile.
+  - Bohrkern-IDs werden nicht gemerkt (sie kommen aus LabelKit selbst). Ist die Nummer storniert oder unbekannt, gilt der bisherige Hinweis.
+- **Projektdatei:** neues **optionales** Feld je Bild `probeLabelKit`, z. B. `"IMG_0001.jpg": {"probe": "P4", "probeLabelKit": {"P4": "EG Küche Heizkörper"}}`. Ältere FotoKit-Fassungen lassen es stehen (F6, unbekannte Felder); ein anders geformtes `probeLabelKit` bleibt unverändert stehen. Sonst ist das Format gleich.
+- **Noch ohne Foto (A18):** über den Kacheln „Noch ohne Foto: P2, P5“ – nicht stornierte LabelKit-Proben, denen kein Foto in der Doku zugeordnet ist (Weg-Fotos zählen nicht, Bohrkern-IDs über die LabelKit-Zuordnung, Rückstellproben von Bohrkernen nicht – gleiche Regel wie `bohrkernNummern`). Erst, wenn überhaupt ein Foto einer Probe zugeordnet ist; höchstens 12 Nummern, dann „und n weitere“.
+- **Kopien gegen ResultKit (E4):** neu `tests/kopien-resultkit.cjs` – SPEKTRON-SKALEN wörtlich gegen ResultKit `src/skalen-archiv.js`, LABZAHL (`labNumber`, `labQualifier`) und KORROSION-CHLORID v2 mit VdS-Referenz (`vdsSkala`, `chloridEinheit`, `stufeErreicht`, `vdsRegel`) mit festen Eingaben gegen ResultKit `src/bewertung.ts`. Die CI holt ResultKit daneben (gleichnamiger Zweig, sonst `main`; `RESULTKIT_PFLICHT`).
+- Tests: neu `tests/probe-labelkit.cjs` (Dateiformat, Zusammenführen, „Doku geändert“), `tests/probe-labelkit-browser.cjs` und `tests/kopien-resultkit.cjs` (alle in CI). `#fProbe` nennt jetzt zwei Hinweise in `aria-describedby` (`fStorno fLkAndersText`) – `tests/storno-proben-browser.cjs` liest beide.
 
 ## Neu in 2.5.0 · 20.11.2026 – Audit Feldarbeit (Lauf 1)
 
