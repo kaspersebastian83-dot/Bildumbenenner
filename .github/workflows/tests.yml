@@ -32,9 +32,16 @@ jobs:
           ZWEIG: ${{ github.head_ref }}
         # gleichnamiger Zweig in der Projektzentrale, falls es ihn gibt (Änderung in mehreren Repos), sonst main
         run: git clone --quiet --depth 1 --branch "$ZWEIG" https://github.com/kaspersebastian83-dot/projektzentrale.git ../projektzentrale 2>/dev/null || git clone --quiet --depth 1 https://github.com/kaspersebastian83-dot/projektzentrale.git ../projektzentrale
+      - name: ResultKit daneben holen (Kopien der Bewertungsregeln und Skalen vergleichen)
+        env:
+          ZWEIG: ${{ github.head_ref }}
+        run: git clone --quiet --depth 1 --branch "$ZWEIG" https://github.com/kaspersebastian83-dot/resultkit.git ../resultkit 2>/dev/null || git clone --quiet --depth 1 https://github.com/kaspersebastian83-dot/resultkit.git ../resultkit
       - run: node tests/spektron-ordner.cjs
         env:
           SPEKTRON_ORDNER_PFLICHT: '1'
+      - run: node tests/kopien-resultkit.cjs
+        env:
+          RESULTKIT_PFLICHT: '1'
       - run: node tests/project-store-gleich.cjs
         env:
           PROJEKT_STORE_PFLICHT: '1'
@@ -56,6 +63,7 @@ jobs:
       - run: node tests/bilddoku-stand.cjs
       - run: node tests/bilddoku-deckblatt.cjs
       - run: node tests/storno-proben.cjs
+      - run: node tests/probe-labelkit.cjs
       - run: node tests/heic-umwandeln.cjs
 
   browser-tests:
@@ -135,3 +143,5 @@ jobs:
         run: node tests/ci-wiederholen.cjs tests/heic-umwandeln-browser.cjs ${{ matrix.browser }}
       - name: Audit 2026-11 Lauf 1 – „Jetzt einlesen“ bleibt im Projekt, Nummern noch nicht fest, unbekannte Probe, Speicherstand
         run: node tests/ci-wiederholen.cjs tests/feld-audit-browser.cjs ${{ matrix.browser }}
+      - name: Audit 2026-11 Lauf 5 – LabelKit-Beschreibung beim Zuordnen gemerkt, Hinweis nach dem Verschieben, noch ohne Foto
+        run: node tests/ci-wiederholen.cjs tests/probe-labelkit-browser.cjs ${{ matrix.browser }}
