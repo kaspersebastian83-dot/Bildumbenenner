@@ -1,7 +1,8 @@
-// „Fotos übernehmen“: Unterordner der Mitarbeiter in „Fotos“ werden nach „Fotos“ verschoben (Namen bleiben, Kürzel nur
-// bei gleichem Namen, Ordnername als Abschnitt, Herkunft in _Bildumbenenner.json). Außerdem: „Fotos neu einlesen“ nimmt
-// das Projekt, an dem in Spektron gerade gearbeitet wird. Synthetische OPFS-Projekte, echte UI-Aktionen.
-// node tests/fotos-uebernehmen-browser.cjs [chromium]
+// 2.7.0 (bis 2.6.0: „Fotos übernehmen“, entfällt – O11): Fotos in Unterordnern der Mitarbeiter in „Fotos“ erscheinen dort, wo sie
+// liegen – eine Ebene, Schlüssel „Ordner/Datei“, nichts wird verschoben oder umbenannt, „_aussortiert“ und Ordner ohne Fotos zählen
+// nicht. Außerdem: „Fotos neu einlesen“ nimmt das Projekt, an dem in Spektron gerade gearbeitet wird. Synthetische OPFS-Projekte,
+// echte UI-Aktionen. (Mehrere Ortstermine, Projektzentrale daneben: tests/ortstermine-browser.cjs.)
+// node tests/unterordner-browser.cjs [chromium]
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -54,47 +55,30 @@ let browser, server;
   const idle = () => page.waitForFunction(() => !document.body.inert && !document.querySelector('#overlay').classList.contains('show'));
   const namen = () => page.evaluate(async () => { const o = {}; for await (const [n, h] of window.testFotos.entries()) o[n] = h.kind; return o; });
 
-  // Öffnen: oben liegt nur ein Foto, drei weitere in Unterordnern der Mitarbeiter – Knopf mit Anzahl
+  // Öffnen: oben liegt ein Foto, drei weitere in Unterordnern der Mitarbeiter – alle vier als Kacheln, an ihrem Platz
   await ui.oeffnen(page);
-  await page.waitForFunction(() => !document.body.inert && document.querySelectorAll('#list .row').length === 1);
-  await page.locator('#importCard:not([hidden]) #btnImport').waitFor();
-  assert.match(await page.locator('#btnImport').textContent(), /Fotos übernehmen \(3\)/, '„_aussortiert“ und Ordner ohne Fotos zählen nicht');
-  assert.match(await page.locator('#importText').textContent(), /noch 3 Fotos in 2 Unterordnern/);
-
-  // Dialog: zwei Unterordner, Kürzel aus dem Ordnernamen, alle angehakt
-  await page.locator('#btnImport').click(); await page.locator('#impOk').waitFor();
-  const zeilen = await page.locator('table.imp tbody tr').evaluateAll(rs => rs.map(r => [...r.querySelectorAll('td')].slice(1, 4).map(td => td.textContent)));
-  assert.deepEqual(zeilen, [['Begehung Ben', 'Ben', '2'], ['Ric', 'Ric', '1']]);
-  assert.equal(await page.locator('#impOk').textContent(), '3 Fotos übernehmen');
-  await page.locator('#impOk').click(); await idle();
-  await page.waitForFunction(() => document.querySelectorAll('#list .row').length === 4);
-
-  // verschoben, nicht kopiert; Name bleibt, bei gleichem Namen mit Kürzel; Unterordner bleiben (leer) stehen
-  const n = await namen();
-  for (const f of ['IMG_0001.jpg', 'IMG_0001_Ben.jpg', 'IMG_0002.jpg', 'A.jpg']) assert.equal(n[f], 'file', f);
-  for (const o of ['Begehung Ben', 'Ric', '_aussortiert', 'Notizen']) assert.equal(n[o], 'directory', o);
-  const leer = await page.evaluate(async () => { const o = {}; for (const name of ['Begehung Ben', 'Ric', '_aussortiert']){ const d = await window.testFotos.getDirectoryHandle(name); o[name] = []; for await (const k of d.keys()) o[name].push(k); } return o; });
-  assert.deepEqual(leer, { 'Begehung Ben': [], 'Ric': [], '_aussortiert': ['X.jpg'] });
-
-  // Abschnitt = Ordnername (das vorhandene Foto bleibt ohne)
-  // eingetragener Abschnitt je Foto steht in der Fotokarte (#fSec; geerbter Abschnitt wäre nur Platzhalter)
-  const abschnitte = {};
-  for (let i = 0; i < 4; i++){ const t = await ui.foto(page, i); abschnitte[await t.getAttribute('aria-label')] = await page.locator('#fSec').inputValue(); }
-  assert.deepEqual(abschnitte, { 'A.jpg': 'Ric', 'IMG_0001.jpg': '', 'IMG_0001_Ben.jpg': 'Begehung Ben', 'IMG_0002.jpg': 'Begehung Ben' });
-  await page.locator('#importCard[hidden]').waitFor({ state: 'attached' });
-
-  // Herkunft je Datei in _Bildumbenenner.json
+  await page.waitForFunction(() => !document.body.inert && document.querySelectorAll('#list .row').length === 4);
+  assert.deepEqual(await page.locator('#list .row').evaluateAll(r => r.map(e => e.getAttribute('aria-label'))),
+    ['IMG_0001.jpg', 'Begehung Ben/IMG_0001.jpg', 'Begehung Ben/IMG_0002.jpg', 'Ric/A.jpg'], '„_aussortiert“ und Ordner ohne Fotos zählen nicht');
+  assert.deepEqual(await page.locator('#list .fk-ordner .o-name').allTextContents(), ['direkt in „Fotos“', 'Begehung Ben', 'Ric']);
+  assert.equal(await page.locator('#importCard, #btnImport').count(), 0, 'keine Karte „Fotos übernehmen“ mehr');
+  // Beschreiben eines Unterordner-Fotos: gespeichert unter seinem Weg; im Ordner bleibt alles, wo es war
+  await ui.feld(page, 'desc', 1).fill('Keller Wand'); await page.locator('#fDesc').press('Tab');
   let gespeichert;
   for (let i = 0; i < 40; i++){
     // Projekt ab 26.0560 ohne bisherige Projektdatei: seit der Umstellung liegt sie in „_Spektron/FotoKit“ (spektron-ordner.js)
     gespeichert = await page.evaluate(async () => { try{ const d = await (await window.testProjekt.getDirectoryHandle('_Spektron')).getDirectoryHandle('FotoKit'); return JSON.parse(await (await (await d.getFileHandle('_Bildumbenenner.json')).getFile()).text()); }catch(e){ return null; } });
-    if (gespeichert?.fotoUebernahmen?.length === 2) break; await page.waitForTimeout(150);
+    if (gespeichert?.bilder?.['Begehung Ben/IMG_0001.jpg']) break; await page.waitForTimeout(150);
   }
-  assert.deepEqual(gespeichert.fotoUebernahmen.map(u => ({ ordner: u.ordner, kuerzel: u.kuerzel, dateien: u.dateien })), [
-    { ordner: 'Begehung Ben', kuerzel: 'Ben', dateien: [{ datei: 'IMG_0001_Ben.jpg', vorher: 'IMG_0001.jpg' }, { datei: 'IMG_0002.jpg' }] },
-    { ordner: 'Ric', kuerzel: 'Ric', dateien: [{ datei: 'A.jpg' }] }]);
-  assert.equal(gespeichert.bilder['IMG_0002.jpg'].abschnitt, 'Begehung Ben');
-  console.log(`OK ${browserName}: Fotos übernehmen – verschoben, Namen und Kürzel, Abschnitt, Herkunft, leere Ordner bleiben`);
+  assert.equal(gespeichert.bilder['Begehung Ben/IMG_0001.jpg'].beschreibung, 'Keller Wand');
+  assert.equal(gespeichert.fotoUebernahmen, undefined);
+  const n = await namen();
+  for (const f of ['IMG_0001.jpg']) assert.equal(n[f], 'file', f);
+  for (const o of ['Begehung Ben', 'Ric', '_aussortiert', 'Notizen']) assert.equal(n[o], 'directory', o);
+  assert.equal(n['IMG_0001_Ben.jpg'], undefined, 'nichts verschoben oder umbenannt');
+  const drin = await page.evaluate(async () => { const o = {}; for (const name of ['Begehung Ben', 'Ric', '_aussortiert']){ const d = await window.testFotos.getDirectoryHandle(name); o[name] = []; for await (const k of d.keys()) o[name].push(k); o[name].sort(); } return o; });
+  assert.deepEqual(drin, { 'Begehung Ben': ['IMG_0001.jpg', 'IMG_0002.jpg'], 'Ric': ['A.jpg'], '_aussortiert': ['X.jpg'] });
+  console.log(`OK ${browserName}: Fotos in Unterordnern – an ihrem Platz gelesen, Schlüssel mit Weg, nichts verschoben, ohne „Fotos übernehmen“`);
 
   // „Fotos neu einlesen“ nimmt das Projekt, an dem gerade gearbeitet wird (in einer anderen App gewechselt)
   if (process.env.OHNE_ARCHIV){ console.log('SKIP Archivordner im Browser-Speicher (OHNE_ARCHIV)'); }

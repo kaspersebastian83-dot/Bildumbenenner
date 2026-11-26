@@ -45,6 +45,9 @@ jobs:
       - run: node tests/project-store-gleich.cjs
         env:
           PROJEKT_STORE_PFLICHT: '1'
+      - run: node tests/ortstermine-gleich.cjs
+        env:
+          ORTSTERMINE_PFLICHT: '1'
       - run: node tools/build-identity.cjs --check
       - run: node tests/laborwerte.cjs
       - run: node tests/bohrkern-fotos.cjs
@@ -67,6 +70,7 @@ jobs:
       - run: node tests/storno-proben.cjs
       - run: node tests/probe-labelkit.cjs
       - run: node tests/heic-umwandeln.cjs
+      - run: node tests/unterordner.cjs
 
   browser-tests:
     name: Browser tests (${{ matrix.browser }})
@@ -81,6 +85,12 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - name: Projektzentrale und BerichtKit daneben holen (FotoKit 2.7.0 neben der echten Projektzentrale, BerichtKits anlagen.js)
+        env:
+          ZWEIG: ${{ github.head_ref }}
+        run: |
+          git clone --quiet --depth 1 --branch "$ZWEIG" https://github.com/kaspersebastian83-dot/projektzentrale.git ../projektzentrale 2>/dev/null || git clone --quiet --depth 1 https://github.com/kaspersebastian83-dot/projektzentrale.git ../projektzentrale
+          git clone --quiet --depth 1 --branch "$ZWEIG" https://github.com/kaspersebastian83-dot/berichtkit.git ../berichtkit 2>/dev/null || git clone --quiet --depth 1 https://github.com/kaspersebastian83-dot/berichtkit.git ../berichtkit
       # Bei einem Abbruch steht die Fehlermeldung als Hinweis am Lauf (tests/ci-fehler.cjs); erst nach dem Auschecken setzen
       - run: echo "NODE_OPTIONS=--require ${{ github.workspace }}/tests/ci-fehler.cjs" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v6
@@ -131,8 +141,12 @@ jobs:
         run: node tests/ci-wiederholen.cjs tests/zeile-geplant-browser.cjs ${{ matrix.browser }}
       - name: Consistent numbering and actual PDF, CSV and ZIP output with 5, 50 and 150 images
         run: node tests/ci-wiederholen.cjs tests/bildnummerierung-browser.cjs ${{ matrix.browser }}
-      - name: Fotos übernehmen and current project in the real browser
-        run: node tests/ci-wiederholen.cjs tests/fotos-uebernehmen-browser.cjs ${{ matrix.browser }}
+      - name: Photos in subfolders stay in place (no „Fotos übernehmen“), current project in the real browser
+        run: node tests/ci-wiederholen.cjs tests/unterordner-browser.cjs ${{ matrix.browser }}
+      - name: 2.7.0 – several site visits next to the real Projektzentrale, IDs (O13), one Bilddoku per visit, BerichtKit, R2, 2.6.0 lock and byte equality
+        run: node tests/ci-wiederholen.cjs tests/ortstermine-browser.cjs ${{ matrix.browser }}
+        env:
+          ORTSTERMINE_PFLICHT: '1'
       - name: In der Doku / Weg (one state), order without arrows
         run: node tests/ci-wiederholen.cjs tests/auswahl-browser.cjs ${{ matrix.browser }}
       - name: One-time rename offer before the PDF, LabelKit sample suggestions

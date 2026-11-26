@@ -200,23 +200,35 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
   assert.equal(pd.bilder['IMG_0001.jpg'].heic.ablage, '_Originale/IMG_0001_2.HEIC');
   console.log(`OK ${browserName}: schon umgewandelt (Nachweis passt) → nur das Original abgelegt, kein zweites JPG`);
 
-  // Dasselbe Angebot direkt nach „Fotos übernehmen“
+  // 2.7.0 (O7): HEIC in einem Unterordner – erscheint ohne „Fotos übernehmen“, wird im selben Ordner umgewandelt, das Original
+  // kommt nach „<Ordner>/_Originale“ (nicht nach „Fotos/_Originale“); Beschreibung wandert mit, Nachweis mit Weg
   await page.evaluate(async b => { const d = await window.testA.d.getDirectoryHandle('Begehung Ben', { create: true }); const w = await (await d.getFileHandle('IMG_0003.HEIC', { create: true })).createWritable(); await w.write(new Uint8Array(b)); await w.close(); }, [...heic]);
   await ui.mehr(page, 'mehrReload'); await idle();
-  await page.locator('#importCard:not([hidden]) #btnImport').click(); await page.locator('#impOk').click(); await idle();
-  await page.locator('#bHeicJetzt').waitFor();
-  assert.equal(await page.locator('#bHeicJetzt').textContent(), '1 iPhone-Foto umwandeln');
+  assert.ok((await tiles()).includes('Begehung Ben/IMG_0003.HEIC'), 'HEIC im Unterordner wird gelesen');
+  await page.locator('#heicCard:not([hidden])').waitFor();
+  assert.match(await page.locator('#heicText').textContent(), /jedes in seinem Ordner; die Originale kommen unverändert in dessen Unterordner „_Originale“/);
+  await ui.feld(page, 'desc', (await tiles()).indexOf('Begehung Ben/IMG_0003.HEIC')).fill('Keller Decke'); await page.waitForTimeout(700);
   // erst ohne Web Worker (wie bei index.html als lokale Datei): verständliche Meldung, nichts verändert
   await page.evaluate(() => { window.testWorker = window.Worker; window.Worker = function () { throw new DOMException('Worker aus file:// nicht erlaubt', 'SecurityError'); }; });
-  await page.click('#bHeicJetzt'); await idle();
+  await page.click('#btnHeic'); await idle();
   assert.match(await page.locator('#banner').textContent(), /startet den HEIC-Decoder hier nicht.*Online-Fassung.*unverändert in „Fotos“/s);
-  assert.equal((await inhalt())['IMG_0003.HEIC'], heic.length); assert.equal((await inhalt())['IMG_0003.jpg'], undefined);
+  assert.equal((await inhalt('Begehung Ben'))['IMG_0003.HEIC'], heic.length); assert.equal((await inhalt('Begehung Ben'))['IMG_0003.jpg'], undefined);
   await page.evaluate(() => { window.Worker = window.testWorker; });
   await page.click('#btnHeic'); await idle();
   assert.match(await page.locator('#banner').textContent(), /✓ 1 iPhone-Foto in JPG umgewandelt/);
-  assert.ok((await inhalt())['IMG_0003.jpg'] > 0 && (await inhalt('_Originale'))['IMG_0003.HEIC'] === heic.length);
+  assert.ok((await inhalt('Begehung Ben'))['IMG_0003.jpg'] > 0, 'JPG im selben Unterordner');
+  assert.equal((await inhalt('Begehung Ben'))['IMG_0003.HEIC'], undefined);
+  assert.equal((await inhalt('Begehung Ben/_Originale'))['IMG_0003.HEIC'], heic.length, 'Original unverändert in „<Ordner>/_Originale“');
+  assert.equal((await inhalt('_Originale'))['IMG_0003.HEIC'], undefined, 'nicht nach „Fotos/_Originale“');
+  assert.equal((await inhalt())['IMG_0003.jpg'], undefined, 'nichts nach „Fotos“ verschoben');
+  assert.ok((await tiles()).includes('Begehung Ben/IMG_0003.jpg'));
+  for (let i = 0; i < 40 && !(pd = await projektDatei())?.bilder?.['Begehung Ben/IMG_0003.jpg']?.heic; i++) await page.waitForTimeout(150);
+  const nw = pd.bilder['Begehung Ben/IMG_0003.jpg'];
+  assert.equal(nw.beschreibung, 'Keller Decke', 'Beschreibung wandert mit');
+  assert.deepEqual([nw.heic.original, nw.heic.ablage, nw.heic.sha256, nw.heic.zwischen], ['Begehung Ben/IMG_0003.HEIC', 'Begehung Ben/_Originale/IMG_0003.HEIC', heicSha, undefined]);
+  assert.equal(pd.bilder['Begehung Ben/IMG_0003.HEIC'], undefined);
   assert.equal(await decoderImFenster(), false);
-  console.log(`OK ${browserName}: Angebot direkt nach „Fotos übernehmen“; ohne Web Worker klare Meldung, nichts verändert`);
+  console.log(`OK ${browserName}: HEIC im Unterordner – dort umgewandelt, Original nach „<Ordner>/_Originale“, Nachweis mit Weg; ohne Web Worker klare Meldung`);
 
   // Geschützter Projektmodus: keine Karte, keine Nachfrage, nichts verändert
   await page.evaluate(() => { window.testZiel = window.testB.p; });

@@ -19,7 +19,7 @@ let browser, server;
 (async () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'));
   server = http.createServer((req, res) => {
-    if(['/project-store.js','/spektron-ordner.js'].includes(new URL(req.url,'http://x').pathname)){
+    if(['/project-store.js','/spektron-ordner.js','/ortstermine.js'].includes(new URL(req.url,'http://x').pathname)){
       res.writeHead(200,{'content-type':'application/javascript'});res.end(fs.readFileSync(path.join(__dirname,'..',new URL(req.url,'http://x').pathname.slice(1))));return;
     }
     res.writeHead(200, {'content-type': 'text/html; charset=utf-8'});res.end(html);

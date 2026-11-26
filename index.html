@@ -58,10 +58,10 @@ main#app{flex:1;flex-direction:column;gap:8px;min-height:0;padding:10px 32px 0} 
 .folder[hidden]{display:none}
 .folder .hint{font:12.5px var(--sans);color:var(--gelb-text);margin-left:8px}
 .folder #btnAssign{font:13px var(--sans);padding:2px 10px;margin-left:6px}
-#importCard,#heicCard{display:flex;align-items:center;gap:6px 16px;flex-wrap:wrap;padding:6px 8px 6px 16px;font-size:15px}
-#importCard .sp-knopf,#heicCard .sp-knopf{height:36px}
-#importCard[hidden],#heicCard[hidden]{display:none}
-#importCard span,#heicCard span{flex:1 1 280px}
+#heicCard{display:flex;align-items:center;gap:6px 16px;flex-wrap:wrap;padding:6px 8px 6px 16px;font-size:15px}
+#heicCard .sp-knopf{height:36px}
+#heicCard[hidden]{display:none}
+#heicCard span{flex:1 1 280px}
 .thumb.heic{padding:8px;text-align:center;font-size:13px;line-height:1.3}
 .fk-body{flex:1;display:flex;gap:20px;min-height:0}
 #listWrap{flex:1 1 auto;min-width:0;overflow:auto;padding:0 6px 24px 2px}
@@ -76,6 +76,23 @@ main#app{flex:1;flex-direction:column;gap:8px;min-height:0;padding:10px 32px 0} 
 .fk-abschnitt{grid-column:1/-1;display:flex;align-items:center;gap:10px;margin:8px 2px 0;font-size:13px;font-weight:700;color:var(--muted)}
 .fk-abschnitt:first-child{margin-top:0}
 .fk-abschnitt::after{content:"";flex:1;height:1px;background:var(--line)}
+/* 2.7.0: Kopfzeile je Foto-Ordner (Unterordner von „Fotos“), bei mehreren Ortsterminen mit Termin bzw. Rückfrage (gelb) */
+.fk-ordner{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin:14px 0 0;padding:6px 10px;border-radius:8px;background:var(--panel2);font-size:13.5px}
+.fk-ordner:first-child{margin-top:0}
+.fk-ordner .o-name{font-weight:700}
+.fk-ordner .o-zahl,.fk-ordner small{color:var(--muted)}
+.fk-ordner select{height:30px;padding:2px 6px;font-size:13px}
+.fk-ordner button{height:30px;padding:0 12px;font-size:13px}
+.fk-ordner.offen{background:color-mix(in srgb,var(--warn) 18%,var(--panel));border:2px solid var(--gelb)}
+.fk-ordner .o-frage{font-weight:600}
+.row.ohne-termin{border:2px dashed var(--gelb);margin:1px}
+#terminWahl{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:0 0 8px;font-size:14px}
+#terminWahl[hidden]{display:none}
+#terminWahl .tw-lbl{color:var(--muted);margin-right:2px}
+#terminWahl button{height:34px;padding:0 12px;font-size:14px}
+#terminWahl button[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:700}
+#terminZeile{font-size:13px;padding:6px 10px;margin:0 0 8px;border-radius:8px;background:color-mix(in srgb,var(--warn) 18%,var(--panel))}
+#terminZeile[hidden]{display:none}
 /* Foto-Kachel */
 .row{position:relative;display:flex;flex-direction:column;min-width:0;background:var(--panel);border:3px solid transparent;border-radius:12px;overflow:hidden;box-shadow:var(--sp-schatten);cursor:pointer;outline:none}
 .row:focus-visible{outline:3px solid var(--text);outline-offset:2px}
@@ -229,7 +246,6 @@ label.pflicht-offen>input,label.pflicht-offen>select,label.pflicht-offen>textare
 .pdfOpen{padding:2px 8px;font-size:12.5px}
 .dialog .form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .dialog .form label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
-.dialog table.imp{border-collapse:collapse;width:100%;margin:10px 0;font-size:13px}.dialog table.imp th,.dialog table.imp td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line)}.dialog table.imp th{color:var(--muted);font-weight:600}
 .dialog .form input{color:var(--text)}
 .dialog .chk{display:flex;align-items:center;gap:6px;font-size:13px}
 .dialog.wide{width:min(900px,96vw)}
@@ -262,6 +278,8 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 #lkZeile[hidden]{display:none}
 #nrZeile{padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px;background:color-mix(in srgb,var(--warn) 18%,var(--panel))}
 #nrZeile[hidden]{display:none}
+#ordnerZeile{padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px;background:color-mix(in srgb,var(--warn) 18%,var(--panel))}
+#ordnerZeile[hidden]{display:none}
 #lkAndersZeile{padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px;background:color-mix(in srgb,var(--warn) 18%,var(--panel))}
 #lkAndersZeile[hidden]{display:none}
 #ohneFoto{font-size:13px;color:var(--muted);padding:2px 0 6px}
@@ -361,6 +379,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 <div id="lkZeile" role="status" hidden></div>
 <div id="nrZeile" role="status" hidden></div>
 <div id="lkAndersZeile" role="status" hidden></div>
+<div id="ordnerZeile" role="status" hidden></div>
 
 <div id="empty">
   <div class="drop" id="drop">
@@ -378,10 +397,11 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
     <span class="unter">Foto anklicken → beschreiben → Probe zuordnen. Was nicht gebraucht wird: „Weg“.</span>
     <span class="folder" id="folderName" hidden></span>
   </div>
-  <div id="importCard" class="sp-karte" hidden><span id="importText"></span><button id="btnImport" class="sp-knopf sp-knopf-app">Fotos übernehmen →</button></div>
   <div id="heicCard" class="sp-karte" hidden><span id="heicText"></span><button id="btnHeic" class="sp-knopf sp-knopf-app">iPhone-Fotos umwandeln</button></div>
   <div class="fk-body">
     <section id="listWrap" aria-label="Fotos">
+      <div id="terminWahl" role="group" aria-label="Ortstermin" hidden></div>
+      <div id="terminZeile" role="status" hidden></div>
       <div id="pickBar" hidden role="group" aria-label="Fotos für die Bilddokumentation">
         <span class="cnt" id="pickCount" aria-live="polite"></span>
         <button id="pickAll" title="Alle Fotos in die Doku (Weg aufheben)">Alle</button>
@@ -495,6 +515,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 
 <script src="spektron-ordner.js"></script>
 <script src="project-store.js"></script>
+<script src="ortstermine.js"></script>
 <script>
 (() => {
 'use strict';
@@ -522,11 +543,12 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 
 /* ---------- version ---------- */
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
-const APP_VERSION = '2.6.0';
+const APP_VERSION = '2.7.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:3f4342a35b73b10c909f2693530a4303e44e18f71f19a4a2f6813f21ca4ed772';
-const APP_DATE = '2026-11-21';
+const APP_BUILD = 'sha256:1deb0e381ea981b8ebae2ee714a2af048152d955cab90f83f0b5920f9621fcab';
+const APP_DATE = '2026-11-26';
 const CHANGELOG = [
+  ['2.7.0', '26.11.2026', 'Mehrere Ortstermine, Fotos bleiben in ihren Unterordnern: FotoKit liest jetzt auch die Fotos in den Unterordnern von „Fotos“ (eine Ebene, z. B. „Bilder Stefan“, „fotos ka 20.08“) – sie bleiben dort liegen und behalten ihren Namen; Ordner mit „_“ oder „.“ vorn zählen nicht. Über den Kacheln steht je Ordner eine Zeile. Hat das Projekt mehr als einen Ortstermin (Projektzentrale „+ Weiterer Ortstermin“), fragt FotoKit je Ordner einmal, zu welchem Termin er gehört – Vorschlag aus dem Datum im Ordnernamen, sonst aus dem Aufnahmedatum; nie ohne Klick. Passt das Datum zu keinem Termin, legt „Anlegen“ ihn in den Projektdaten an (nur den Termin, mit derselben Kennungsregel wie die Projektzentrale). Über den Fotos „Termin 1 · Termin 2 · Alle“, Fotos ohne Termin sind gelb. „Bilddokumentation erstellen“ fragt zuerst „Für welchen Termin?“, das Deckblatt nennt Datum und Bezeichnung des Termins, die PDF trägt das Termindatum im Namen, und FotoKit merkt sich je Termin eine Bilddokumentation – eine neue für Termin 2 lässt die von Termin 1 aktuell. Fotos in Unterordnern werden nicht umbenannt und nie nach „_aussortiert“ verschoben („Weg“ ist dort nur eine Markierung); iPhone-Fotos dort werden im selben Ordner umgewandelt, das Original kommt nach „<Ordner>/_Originale“. „Fotos übernehmen“ entfällt. Ein Projekt ohne Unterordner und mit einem Termin sieht aus wie bisher. Ältere FotoKit-Fassungen ändern eine Projektdatei von 2.7.0 nicht (geschützter Modus).'],
   ['2.6.0', '21.11.2026', 'Probe in LabelKit verschoben: FotoKit merkt sich beim Zuordnen („Gehört zu Probe“), wie die Probe in LabelKit beschrieben war. Wurde dort vor dem Festlegen der Nummern eine Probe gelöscht oder verschoben, zeigt ein Foto sonst still auf eine andere Probe. Jetzt steht oben „⚠ Seit der Zuordnung ist in LabelKit die Probe P4 anders beschrieben …“, auf der Kachel „⚠ P4 in LabelKit geändert“ und in der Fotokarte, wie sie damals und heute heißt – auch wenn die Nummern inzwischen fest sind. Gehört das Foto noch dazu: „✓ Zuordnung stimmt“; sonst die richtige Probe eintragen. FotoKit ändert keine Zuordnung selbst. Neu über den Fotos: „Noch ohne Foto: P2, P5“ – LabelKit-Proben, denen noch kein Foto in der Doku zugeordnet ist (nur Hinweis; Rückstellproben von Bohrkernen zählen nicht). In der Projektdatei kommt je Foto ein zusätzliches Feld dazu, sonst bleibt alles gleich.'],
   ['2.5.0', '20.11.2026', 'Probennummern: Solange in LabelKit noch keine Nummer fest ist (keine Etiketten gedruckt, nichts ans Labor übergeben) und Fotos schon Proben zugeordnet sind, steht oben ein gelber Hinweis – wird in LabelKit eine Probe gelöscht oder verschoben, zeigen die Zuordnungen sonst auf andere Proben. Nur ein Hinweis, nichts gesperrt. Ist ein Foto einer Nummer zugeordnet, die es in LabelKit nicht gibt (z. B. P13 bei 12 Proben), steht „⚠ P13 nicht in LabelKit“ an der Kachel. Behoben: „Jetzt einlesen“ (neue Fotos) öffnete ein anderes Projekt, wenn vorher der Hinweis „In Spektron arbeitest du gerade an …“ gekommen war – jetzt liest der Knopf immer nur den offenen Ordner. Behoben: Die Fußzeile blieb nach dem Tippen bei „Projektspeicherung noch nicht bestätigt“, obwohl gespeichert war; jetzt steht dort „Projekt gespeichert“.'],
   ['2.4.0', '17.11.2026', 'Sortierung „nach Probe“ (Mehr … › Sortierung …): ordnet die Fotos einmalig nach ihrer Probe – P2 vor P10, bei mehreren Proben zählt die erste, Fotos ohne Probe kommen ans Ende; gleiche Probe behält ihre Reihenfolge, Weg-Fotos bleiben an ihrem Platz. Danach gilt die Reihenfolge „von Hand“, mit „Rückgängig“. Fotos nachreichen: Liegen beim Zurückkommen ins Fenster Fotos im Ordner, die noch nicht in der Liste sind (z. B. nach der ersten Bilddokumentation nachgereicht), meldet FotoKit „n neue Fotos“ mit „Jetzt einlesen“ – nie ohne Klick; Beschreibungen, Proben und Reihenfolge bleiben, die neuen Fotos kommen ans Ende. Nach „PDF erstellt“ steht, wie man Fotos nachreicht.'],
@@ -609,7 +631,8 @@ const verCmp = (a, b) => { const x = verNum(a), y = verNum(b); for (let i = 0; i
 const $ = id => document.getElementById(id);
 const IMG_EXT = ['jpg','jpeg','png','webp','gif','bmp','tif','tiff','heic','heif'];
 const PREVIEWABLE = ['jpg','jpeg','png','webp','gif','bmp'];
-const S = { dir:null, proj:null, onlyDesc:false, items:[], view:[], otherNames:new Set(), focus:-1, lastRun:null, busy:false, changing:false, pvToken:0, pvUrl:null };
+const S = { dir:null, proj:null, onlyDesc:false, items:[], view:[], otherNames:new Set(), focus:-1, lastRun:null, busy:false, changing:false, pvToken:0, pvUrl:null,
+  unlesbar:new Set(), tiefer:[], herkunft:new Map(), ansicht:'alle' };   // 2.7.0: nicht lesbare/tiefere Unterordner, Herkunft (O8), gezeigter Termin
 const DISCARD_DIR = '_aussortiert';
 const TMP_PREFIX = 'umb-tmp_';
 
@@ -637,6 +660,68 @@ const store = {
     }
   }
 };
+/* ---------- 2.7.0: Schlüssel mit Weg, Ortstermine (nur rechnen – Oberfläche im Abschnitt „Fotos in Unterordnern“) ---------- */
+const dateiVon = k => String(k).slice(String(k).lastIndexOf('/') + 1);   // Dateiname zum Schlüssel
+const OT = window.Ortstermine || null;   // fehlt nur bei veraltetem Offline-Zwischenspeicher – dann gilt ein Termin
+const ordnerAus = n => !n || n.startsWith('_') || n.startsWith('.');
+const fotoSchluessel = (ordner, datei) => ordner ? ordner + '/' + datei : datei;
+const ordnerVon = k => { const i = String(k).indexOf('/'); return i < 0 ? '' : String(k).slice(0, i); };
+/** R2: Einträge eines Unterordners, der beim Einlesen nicht lesbar war, bleiben beim Neuaufbau aus den Fotos unangetastet. */
+const unlesbarerSchluessel = k => { const o = ordnerVon(k); return !!o && !!S.unlesbar && S.unlesbar.has(o); };
+function unlesbareMischen(neu, alt){
+  if (!S.unlesbar || !S.unlesbar.size || !alt) return neu;
+  for (const [k, v] of Object.entries(alt)) if (unlesbarerSchluessel(k) && !(k in neu)) neu[k] = v;
+  return neu;
+}
+const unlesbareListe = (neu, alt) => !S.unlesbar || !S.unlesbar.size ? neu : [...neu, ...(Array.isArray(alt) ? alt : []).filter(k => unlesbarerSchluessel(k) && !neu.includes(k))];
+
+/** Ortstermine des Projekts: Termin 1 aus „ortstermin“ (+ Bezeichnung, Wer), weitere aus „weitereOrtstermine“ (Reihenfolge = Nummer). */
+let terminMemo = { d: undefined, l: null };
+function termine(){
+  const d = S.proj && PJ.data ? PJ.data : null;
+  if (terminMemo.l && terminMemo.d === d) return terminMemo.l;
+  const txt = v => typeof v === 'string' ? v.trim() : '';
+  const l = [{ id: 't1', nr: 1, datum: txt(d && d.ortstermin), bezeichnung: txt(d && d.ortsterminBezeichnung), wer: txt(d && d.ortsterminWer) }];
+  if (d && OT) OT.liste(d).forEach((t, i) => l.push({ id: String(t.id), nr: i + 2, datum: txt(t.datum), bezeichnung: txt(t.bezeichnung), wer: txt(t.wer) }));
+  terminMemo = { d, l };
+  return l;
+}
+const mehrereTermine = () => termine().length > 1;
+const terminNach = id => termine().find(t => t.id === id) || null;
+/** O8: aus welchem Unterordner „Fotos übernehmen“ (bis 2.6.0) ein Foto direkt in „Fotos“ geholt hat (fotoUebernahmen, nur lesen) */
+function herkunftLesen(){
+  const m = new Map(), l = P.data && P.data.extensions && P.data.extensions.fotoUebernahmen;
+  if (Array.isArray(l)) for (const u of l) if (u && typeof u.ordner === 'string' && u.ordner && Array.isArray(u.dateien))
+    for (const f of u.dateien) if (f && typeof f.datei === 'string') m.set(f.datei, u.ordner);
+  return m;
+}
+function ordnerTermine(){ const o = P.data && P.data.extensions && P.data.extensions.ordnerTermine; return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; }
+/** Termin eines Fotos (Kennung) oder null = noch keiner (gelb). Ein Termin: immer t1, ohne Frage (E5). Ein in der
+    Projektzentrale entfernter Termin gilt nicht mehr – das Foto ist dann wieder ohne Termin (O12). */
+function terminVon(it){
+  if (!mehrereTermine()) return 't1';
+  const gilt = id => typeof id === 'string' && terminNach(id) ? id : null;
+  const ot = ordnerTermine();
+  if (it.ordner) return gilt(ot[it.ordner] && ot[it.ordner].termin);
+  const eigen = P.data && P.data.imageExtensions && P.data.imageExtensions[it.name];
+  if (eigen && eigen.termin !== undefined) return gilt(eigen.termin);
+  if (S.herkunft && S.herkunft.get(it.name)) return null;
+  return gilt(ot[''] && ot[''].termin);
+}
+/** Welche Termin-Dokus eine Änderung an Doku-Inhalten betrifft (Kennungen; null = Foto ohne Termin). undefined = alle. */
+function betroffeneTermine(kind, vorher, nachher){
+  if (!mehrereTermine() || kind === 'meta') return undefined;
+  const fotos = new Map(S.items.map(it => [it.name, it])), tv = k => { const it = fotos.get(k); return it ? terminVon(it) : null; };
+  if (kind === 'order'){
+    const ids = [], teil = (l, id) => JSON.stringify((Array.isArray(l) ? l : []).filter(k => tv(k) === id));
+    for (const t of termine()) if (teil(vorher, t.id) !== teil(nachher, t.id)) ids.push(t.id);
+    return ids;
+  }
+  if (kind === 'discard'){ const a = new Set(vorher || []), b = new Set(nachher || []); return [...a].filter(k => !b.has(k)).concat([...b].filter(k => !a.has(k))).map(tv); }
+  const a = vorher || {}, b = nachher || {};
+  return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).map(tv);
+}
+
 function projGet(kind, d){ return P.data && P.data[kind] !== undefined ? clone(P.data[kind]) : d; }
 /** Audit m3: Projektdaten aus _Projekt.json (beim Öffnen, beim Zurückkommen ins Fenster) nur im Speicher übernehmen – mit
     „Doku geändert“, wie projSet. Geschrieben wird erst beim nächsten Speichern, das der Nutzer auslöst; Öffnen und Ansehen
@@ -651,7 +736,7 @@ function projSet(kind, v){
   const vorher = P.data[kind];
   P.data[kind] = clone(v);
   // E2: die gemerkte LabelKit-Beschreibung steht nicht in der Bilddoku – ändert sie sich allein, bleibt die PDF aktuell
-  if (DOKU_KINDS.includes(kind) && !(kind === 'extra' && kanonisch(ohneLk(vorher)) === kanonisch(ohneLk(v)))) dokuGeaendert();
+  if (DOKU_KINDS.includes(kind) && !(kind === 'extra' && kanonisch(ohneLk(vorher)) === kanonisch(ohneLk(v)))) dokuGeaendert(betroffeneTermine(kind, vorher, v));
   scheduleProjSave();
 }
 /* Stand der Bilddokumentation für BerichtKit (Anlagen): „bilddoku“ = zuletzt erstellte PDF (Dateien, Zeit, Anlagen-Nr.),
@@ -668,25 +753,62 @@ function nachZeit(iso){
 }
 /** „Doku geändert“: immer nach der vermerkten PDF – sonst gälte eine veraltete PDF als aktuell. */
 const dokuZeit = ext => nachZeit(ext && ext.bilddoku && ext.bilddoku.erstellt);
-function dokuGeaendert(){ const ext = P.data.extensions || {}; P.data.extensions = { ...ext, dokuGeaendert: dokuZeit(ext) }; }
-/** Fotos neu eingelesen (neue/entfernte Dateien, Fotos übernommen): Bestand anders als bei der PDF → Doku geändert (einmal) */
+/** „Doku geändert“. 2.7.0, nur bei mehreren Terminen: je Termin (dokuGeaendertJe, dazu immer „alle“) – betroffen = Kennungen der
+    Termine, deren Doku die Änderung betrifft (fehlt = alle; null = Foto ohne Termin, nur „alle“). Das alte Feld dokuGeaendert
+    (BerichtKit bis Stufe 4) meint die zuletzt erstellte Doku (bilddoku) und wird nur gesetzt, wenn die Änderung deren Termin betrifft.
+    Ein Termin: wie bis 2.6.0. */
+function dokuGeaendert(betroffen){
+  const ext = P.data.extensions || {};
+  if (!mehrereTermine()){ P.data.extensions = { ...ext, dokuGeaendert: dokuZeit(ext) }; return; }
+  const ids = betroffen ? [...new Set(betroffen.filter(Boolean))] : termine().map(t => t.id);
+  const docs = ext.bilddokus && typeof ext.bilddokus === 'object' ? ext.bilddokus : {}, je = { ...(ext.dokuGeaendertJe || {}) };
+  for (const id of [...ids, 'alle']) je[id] = nachZeit(docs[id] && docs[id].erstellt);
+  const neu = { ...ext, dokuGeaendertJe: je }, bt = ext.bilddoku && ext.bilddoku.termin;
+  if (!bt || bt === 'alle' || ids.includes(bt)) neu.dokuGeaendert = dokuZeit(ext);
+  P.data.extensions = neu;
+}
+/** Fotos neu eingelesen (neue/entfernte Dateien): Bestand anders als bei der PDF → Doku geändert (einmal). 2.7.0: „bestand“ nennt
+    nur die Fotos direkt in „Fotos“ (damit vergleicht BerichtKit bis 1.23 – mit Wegen meldete es die Doku „veraltet“), die Fotos in
+    Unterordnern stehen in „bestandUnterordner“; Fotos eines gerade nicht lesbaren Ordners zählen nicht als entfernt (R2). */
 function dokuBestandPruefen(){
   const ext = P.data && P.data.extensions, b = ext && ext.bilddoku;
-  if (!b || !Array.isArray(b.bestand) || P.readOnly) return;
-  if (ext.dokuGeaendert && ext.dokuGeaendert > b.erstellt) return;   // schon veraltet
-  const damals = new Set(b.bestand), jetzt = S.items.map(it => it.name);
-  if (jetzt.length !== damals.size || jetzt.some(n => !damals.has(n))) dokuGeaendert();   // m3: nur im Speicher – geht mit dem nächsten Speichern in die Datei
+  if (!ext || P.readOnly) return;
+  const anders = (liste, jetzt) => { const damals = new Set(liste.filter(n => !unlesbarerSchluessel(n))); return jetzt.length !== damals.size || jetzt.some(n => !damals.has(n)); };
+  if (b && Array.isArray(b.bestand) && !(ext.dokuGeaendert && ext.dokuGeaendert > b.erstellt)){   // sonst schon veraltet
+    const direkt = S.items.filter(it => !it.ordner).map(it => it.name), unter = S.items.filter(it => it.ordner).map(it => it.name);
+    if (anders(b.bestand, direkt) || anders(Array.isArray(b.bestandUnterordner) ? b.bestandUnterordner : [], unter))   // m3: nur im Speicher
+      P.data.extensions = { ...P.data.extensions, dokuGeaendert: dokuZeit(P.data.extensions) };
+  }
+  const docs = ext.bilddokus;
+  if (!mehrereTermine() || !docs || typeof docs !== 'object') return;
+  for (const [id, d] of Object.entries(docs)){
+    const je = P.data.extensions.dokuGeaendertJe || {};
+    if (!d || !Array.isArray(d.bestand) || (je[id] && je[id] > d.erstellt) || (id !== 'alle' && !terminNach(id))) continue;
+    if (anders(d.bestand, S.items.filter(it => id === 'alle' || terminVon(it) === id).map(it => it.name)))
+      P.data.extensions = { ...P.data.extensions, dokuGeaendertJe: { ...je, [id]: nachZeit(d.erstellt) } };
+  }
 }
-function bilddokuVermerken(dateien, anlage){
+/** wahl (2.7.0, nur bei mehreren Terminen): Kennung des Termins der Doku oder 'alle' – dann zusätzlich bilddokus[wahl]. */
+function bilddokuVermerken(dateien, anlage, wahl){
   if (!P.data) return;
   // „erstellt“ immer nach der letzten Änderung, die in diese PDF eingeflossen ist – sonst gälte eine frische PDF als veraltet
   // (z. B. „Doku geändert“ von einem Rechner mit vorgehender Uhr, oder knapp nach einer PDF eines solchen Rechners gesetzt).
-  const ext = P.data.extensions || {};
-  P.data.extensions = { ...ext, bilddoku: { dateien: [...dateien], erstellt: nachZeit(ext.dokuGeaendert), anlage: String(anlage || '').trim(), version: APP_VERSION,
-    bestand: S.items.map(it => it.name) } };
+  const ext = P.data.extensions || {}, unter = S.items.filter(it => it.ordner).map(it => it.name);
+  const b = { dateien: [...dateien], erstellt: nachZeit(ext.dokuGeaendert), anlage: String(anlage || '').trim(), version: APP_VERSION,
+    bestand: S.items.filter(it => !it.ordner).map(it => it.name) };
+  if (unter.length) b.bestandUnterordner = unter;
+  const neu = { ...ext, bilddoku: b };
+  if (mehrereTermine() && wahl){
+    b.termin = wahl;
+    const t = wahl === 'alle' ? null : terminNach(wahl), je = ext.dokuGeaendertJe || {};
+    neu.bilddokus = { ...(ext.bilddokus && typeof ext.bilddokus === 'object' ? ext.bilddokus : {}), [wahl]: { dateien: [...dateien], erstellt: nachZeit(je[wahl]),
+      anlage: b.anlage, version: APP_VERSION, bestand: S.items.filter(it => wahl === 'alle' || terminVon(it) === wahl).map(it => it.name),
+      ...(t ? { termin: { datum: t.datum, bezeichnung: t.bezeichnung } } : {}) } };
+  }
+  P.data.extensions = neu;
   scheduleProjSave();
 }
-const DOKU_FELDER = ['bilddoku', 'dokuGeaendert'];
+const DOKU_FELDER = ['bilddoku', 'dokuGeaendert', 'bilddokus', 'dokuGeaendertJe', 'ordnerTermine'];   // eigener Abgleich (dokuStandMischen, ordnerTermineMischen)
 /** Doku-Inhalte vergleichbar (Schlüsselreihenfolge und Reihenfolge von „aussortiert“ egal, fehlend = leer) */
 const kanonisch = v => JSON.stringify(v, (k, x) => x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map(n => [n, x[n]])) : x);
 /** E2 (Audit Lauf 5): „extra“ ohne die beim Zuordnen gemerkte LabelKit-Beschreibung (lk) – die steht nicht in der Bilddoku. */
@@ -698,8 +820,31 @@ const ohneDokuStand = x => { const r = { ...(x || {}) }; for (const k of DOKU_FE
 function dokuStandMischen(o, t){
   o = o || {}; t = t || {}; const r = {};
   const g = [o.dokuGeaendert, t.dokuGeaendert].filter(v => typeof v === 'string' && v).sort().pop(); if (g) r.dokuGeaendert = g;
-  const b = [o.bilddoku, t.bilddoku].filter(v => v && typeof v === 'object').sort((x, y) => String(x.erstellt || '').localeCompare(String(y.erstellt || ''))).pop(); if (b) r.bilddoku = clone(b);
+  const neuer = (x, y) => [x, y].filter(v => v && typeof v === 'object').sort((a, b) => String(a.erstellt || '').localeCompare(String(b.erstellt || ''))).pop();
+  const b = neuer(o.bilddoku, t.bilddoku); if (b) r.bilddoku = clone(b);
+  // 2.7.0: je Termin – die neuere Doku, die spätere Änderung (zwei Fenster mit Dokus verschiedener Termine stören sich nicht, R6)
+  const obj = v => v && typeof v === 'object' && !Array.isArray(v) ? v : null;
+  if (obj(o.bilddokus) || obj(t.bilddokus)){ const a = obj(o.bilddokus) || {}, c = obj(t.bilddokus) || {}; r.bilddokus = {};
+    for (const k of [...new Set([...Object.keys(a), ...Object.keys(c)])]) { const x = neuer(a[k], c[k]); if (x) r.bilddokus[k] = clone(x); } }
+  if (obj(o.dokuGeaendertJe) || obj(t.dokuGeaendertJe)){ const a = obj(o.dokuGeaendertJe) || {}, c = obj(t.dokuGeaendertJe) || {}; r.dokuGeaendertJe = {};
+    for (const k of [...new Set([...Object.keys(a), ...Object.keys(c)])]) { const x = [a[k], c[k]].filter(v => typeof v === 'string' && v).sort().pop(); if (x) r.dokuGeaendertJe[k] = x; } }
   return r;
+}
+/** 2.7.0: Termin-Zuordnung der Ordner je Ordner abgleichen (nicht als ein Feld – sonst sperrte jede gleichzeitige Zuordnung in zwei
+    Fenstern das Speichern, R6). Nur derselbe Ordner unterschiedlich zugeordnet ist ein Widerspruch. */
+function ordnerTermineMischen(b, o, t, out){
+  const f = x => x && x.ordnerTermine && typeof x.ordnerTermine === 'object' && !Array.isArray(x.ordnerTermine) ? x.ordnerTermine : null;
+  if (!f(o) && !f(t)) return {};
+  const bb = f(b) || {}, oo = f(o) || {}, tt = f(t) || {}, r = {};
+  const nur = v => v && typeof v === 'object' ? v.termin : v;   // Zeitpunkt „am“ zählt nicht als Unterschied
+  for (const k of new Set([...Object.keys(bb), ...Object.keys(oo), ...Object.keys(tt)])){
+    let v;
+    if (same(oo[k], bb[k])) v = tt[k];
+    else if (same(tt[k], bb[k]) || same(tt[k], oo[k]) || same(nur(tt[k]), nur(oo[k]))) v = oo[k];
+    else { v = oo[k]; out.conflicts.add(`Termin-Zuordnung „${k || 'direkt in Fotos'}“`); }
+    if (v !== undefined) r[k] = clone(v);
+  }
+  return { ordnerTermine: r };
 }
 
 function projToJson(d = P.data){
@@ -940,7 +1085,8 @@ function mergeExternal(theirs){
   const b = P.base || projFromJson({}), o = P.data, out = { theirs: new Set(), conflicts: new Set() };
   const m = {};
   for (const kind of ['drafts', 'rot', 'extra', 'orig', 'hash', 'meta', 'imageExtensions']) m[kind] = mergeMap(b[kind], o[kind], theirs[kind], kind, out);
-  m.extensions = { ...mergeMap(ohneDokuStand(b.extensions), ohneDokuStand(o.extensions), ohneDokuStand(theirs.extensions), 'extensions', out), ...dokuStandMischen(o.extensions, theirs.extensions) };
+  m.extensions = { ...mergeMap(ohneDokuStand(b.extensions), ohneDokuStand(o.extensions), ohneDokuStand(theirs.extensions), 'extensions', out), ...dokuStandMischen(o.extensions, theirs.extensions),
+    ...ordnerTermineMischen(b.extensions, o.extensions, theirs.extensions, out) };
   m.settings = theirs.settings || o.settings ? mergeMap(b.settings, o.settings, theirs.settings, 'settings', out) : null;
   m.discard = Object.keys(mergeMap(asSet(b.discard), asSet(o.discard), asSet(theirs.discard), 'discard', out));
   const orderChanged = !same(o.order, b.order) ? false : !same(theirs.order, o.order);
@@ -953,13 +1099,17 @@ function mergeExternal(theirs){
   /* Doku-Stand über beide Fenster: Bringt das Zusammenführen Doku-Inhalte der anderen Seite herein, ist eine hier erstellte PDF
      nicht mehr aktuell; bleibt eigener Doku-Inhalt übrig, den die andere Seite nicht hatte, fehlt er in deren neuer PDF.
      In beiden Fällen gilt die Doku jetzt als geändert – Zeitstempel allein sagen nichts darüber, woraus eine PDF gebaut wurde. */
-  if (dokuInhalt(m) !== dokuInhalt(o) || (dokuInhalt(m) !== dokuInhalt(theirs) && !same(theirs.extensions && theirs.extensions.bilddoku, b.extensions && b.extensions.bilddoku)))
+  if (dokuInhalt(m) !== dokuInhalt(o) || (dokuInhalt(m) !== dokuInhalt(theirs) && !same(theirs.extensions && theirs.extensions.bilddoku, b.extensions && b.extensions.bilddoku))){
     m.extensions.dokuGeaendert = dokuZeit(m.extensions);
+    if (mehrereTermine()){ const docs = m.extensions.bilddokus || {}, je = { ...(m.extensions.dokuGeaendertJe || {}) };   // 2.7.0: welcher Termin, sagt der Abgleich nicht – alle
+      for (const id of [...termine().map(t => t.id), 'alle']) je[id] = nachZeit(docs[id] && docs[id].erstellt); m.extensions.dokuGeaendertJe = je; }
+  }
   P.data = m;
+  S.herkunft = herkunftLesen();
   applyMergedToItems(orderChanged);
   out.theirs.delete('');
   const known = new Set(S.items.map(it => it.name));
-  const unknown = [...new Set([...Object.keys(theirs.drafts || {}), ...Object.keys(theirs.orig || {}), ...(theirs.order || [])])].filter(n => !known.has(n) && !(n in (b.drafts || {})) && !(n in (b.orig || {})) && !(b.order || []).includes(n));
+  const unknown = [...new Set([...Object.keys(theirs.drafts || {}), ...Object.keys(theirs.orig || {}), ...(theirs.order || [])])].filter(n => !known.has(n) && !unlesbarerSchluessel(n) && !(n in (b.drafts || {})) && !(n in (b.orig || {})) && !(b.order || []).includes(n));
   const nT = out.theirs.size, nC = out.conflicts.size;
   if (unknown.length){
     banner('err', `Jemand anderes hat in diesem Projekt Bilder umbenannt oder hinzugefügt (z. B. „${esc(unknown[0])}“). <b>Bitte „Neu einlesen“</b>, bevor du weiterarbeitest – deine Eingaben bleiben erhalten. <span class="spacer"></span><button id="bMergeReload">Neu einlesen</button>`);
@@ -1003,7 +1153,9 @@ async function refreshPJ(){
   try{ fresh = await readPJ(proj.pjDir || proj.dir); }catch(e){ return; }
   if (S.changing || S.proj !== proj || Object.keys(PJ.pending).length) return;
   const changed = PJ_MAP.some(([, pk]) => (fresh[pk] || '').trim() !== (PJ.sent[pk] || ''));
+  const termineVorher = JSON.stringify(termine());
   PJ.data = fresh;
+  if (S.dir && JSON.stringify(termine()) !== termineVorher) termineNeuZeichnen();   // 2.7.0: Termin in der Projektzentrale angelegt/geändert/entfernt
   if (!changed) return;
   for (const [, pk] of PJ_MAP) PJ.sent[pk] = (fresh[pk] || '').trim();
   const meta = projGet('meta', {});
@@ -1109,11 +1261,15 @@ let neueFotosGemeldet = '';
 async function neueFotosPruefen(){
   if (!S.dir || !S.items || S.busy || S.changing || $('btnReload').disabled || $('overlay').classList.contains('show')) return;
   const dir = S.dir, bekannt = new Set(S.items.map(it => it.name)), neu = [];
+  const istNeu = n => IMG_EXT.includes(extOf(n).slice(1).toLowerCase()) && !n.startsWith(TMP_PREFIX) && !n.startsWith('~umb_');
   try{
     for await (const h of dir.values()){
+      if (h.kind === 'directory' && !ordnerAus(h.name)){   // 2.7.0: auch in den Unterordnern (eine Ebene)
+        try{ for await (const x of h.values()) if (x.kind === 'file' && istNeu(x.name) && !bekannt.has(fotoSchluessel(h.name, x.name))) neu.push(fotoSchluessel(h.name, x.name)); }catch(e){}
+        continue;
+      }
       if (h.kind !== 'file') continue;
-      const ext = extOf(h.name).slice(1).toLowerCase();
-      if (IMG_EXT.includes(ext) && !h.name.startsWith(TMP_PREFIX) && !h.name.startsWith('~umb_') && !bekannt.has(h.name)) neu.push(h.name);
+      if (istNeu(h.name) && !bekannt.has(h.name)) neu.push(h.name);
     }
   }catch(e){ return; }
   if (S.dir !== dir || S.busy || S.changing) return;
@@ -1184,7 +1340,7 @@ function saveExtra(){
   if (!S.dir) return;
   const o = {};
   S.items.forEach(it => { lkMerken(it); const e = extraVon(it); if (e) o[it.name] = e; });
-  projSet('extra', o);
+  projSet('extra', unlesbareMischen(o, P.data && P.data.extra));   // R2: Einträge nicht lesbarer Unterordner bleiben
 }
 /** Abschnitt und Probe eines Fotos für „extra“ (null = nichts); E2: dazu die beim Zuordnen gemerkte LabelKit-Beschreibung. */
 function extraVon(it){
@@ -1776,109 +1932,219 @@ async function projektWechselPruefen(){
 window.addEventListener('focus', () => { projektWechselPruefen(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) projektWechselPruefen(); });
 
-/* ---------- Fotos übernehmen (Unterordner der Mitarbeiter) ----------
-   Liegen in „Fotos“ Unterordner mit Bildern (z. B. „Begehung Ben“), bietet FotoKit an, sie in „Fotos“ zu übernehmen:
-   Die Dateien werden verschoben (nicht kopiert), Namen bleiben; nur bei gleichem Namen kommt das Kürzel (bzw. der
-   Ordnername) dazu. Der Ordnername wird auf Wunsch Abschnitt der Fotos. Jede Übernahme steht mit Herkunft je Datei in
-   „_Bildumbenenner.json“ („fotoUebernahmen“). Unterordner werden nicht gelöscht; „_…“-Ordner von FotoKit bleiben außen vor. */
-const FOTO_UEBERNAHME_MAX = 3000;
-function ordnerKuerzel(name){
-  const n = name.normalize('NFC').trim(), kz = (MA_PERSONEN || []).map(p => p.ordnerKuerzel.trim()).filter(Boolean).sort((a, b) => b.length - a.length);
-  for (const k of kz){ const l = k.toLowerCase(), t = n.toLowerCase(); if (t === l || t.endsWith(' ' + l) || t.endsWith('_' + l) || t.endsWith('-' + l)) return k; }
-  const m = /(?:^|[\s_-])((?:Dr\.?\s?)?[A-ZÄÖÜ][A-Za-zÄÖÜäöüß]{1,3})$/.exec(n);
-  return m ? m[1] : '';
+/* ---------- 2.7.0: Fotos in Unterordnern und Termin je Ordner (Entscheidungen O1–O13, claude/fotokit-ortstermine-plan.md 4.2) ----------
+   FotoKit liest die Fotos direkt in „Fotos“ und in jedem Unterordner davon (eine Ebene; Ordner mit „_“ oder „.“ vorn nicht – O3).
+   Schlüssel eines Fotos (in _Bildumbenenner.json und überall im Speicher): direkt in „Fotos“ der Dateiname wie bisher, im
+   Unterordner „Ordner/Datei“ (O2 – „/“ kommt unter Windows in keinem Dateinamen vor). Die Fotos bleiben, wo sie liegen: im
+   Unterordner wird nicht umbenannt (O5), „Weg“ ist dort nur eine Markierung (O6), HEIC wird im selben Ordner umgewandelt (O7).
+   Termine: „ortstermin“ in _Projekt.json = Termin 1 (Kennung t1), weitere aus „weitereOrtstermine“ (Projektzentrale, O1).
+   Nur bei mehr als einem Termin: je Ordner eine Rückfrage, zu welchem Termin er gehört (nie still, E4/E5), gemerkt oben in
+   _Bildumbenenner.json als ordnerTermine { "<Ordner>": { termin, am, vorschlag } } ('' = direkt in „Fotos“); schon übernommene
+   Fotos (Bestand, O8) je Foto als bilder[…].termin, gefragt je Herkunft aus fotoUebernahmen. FotoKit legt einen Termin nur nach
+   Klick „Anlegen“ an (O9) – nur den Termin, nie eine Zuordnung zu einer Mitteilung – mit derselben Kennungsregel wie die
+   Projektzentrale (ortstermine.js, byte-gleich; O13). Kein Unterordner und ein Termin: alles wie in 2.6.0, keine neuen Felder.
+   „Fotos übernehmen“ (bis 2.6.0) entfällt (O11); fotoUebernahmen bleibt in der Datei und wird nur noch gelesen. */
+const terminDatum = t => OT && OT.gueltig(t.datum) ? deDate(t.datum) : 'ohne Datum';
+const terminText = t => [`Termin ${t.nr}`, terminDatum(t), t.bezeichnung].filter(Boolean).join(' · ');
+/** Gruppe = was eine Rückfrage bekommt: jeder Unterordner („o:…“); direkt in „Fotos“ je Herkunft („h:…“, nur bei mehreren
+    Terminen) und der Rest („d:“). */
+function gruppeVon(it){
+  if (it.ordner) return 'o:' + it.ordner;
+  const h = mehrereTermine() && S.herkunft.get(it.name);
+  return h ? 'h:' + h : 'd:';
 }
-async function fotoUnterordner(){
-  const out = [];
-  if (!S.dir) return out;
-  for await (const d of S.dir.values()){
-    if (d.kind !== 'directory' || d.name.startsWith('_') || d.name.startsWith('.')) continue;
-    const files = [];
-    try{
-      for await (const h of d.values()){
-        if (h.kind !== 'file' || h.name.startsWith(TMP_PREFIX) || h.name.startsWith('~umb_')) continue;
-        if (!IMG_EXT.includes(extOf(h.name).slice(1).toLowerCase())) continue;
-        const f = await h.getFile(); files.push({ name: h.name, size: f.size, lm: f.lastModified });
-        if (files.length > FOTO_UEBERNAHME_MAX) break;
-      }
-    }catch(e){ continue; }
-    files.sort((x, y) => x.name.localeCompare(y.name, 'de', { numeric: true }));
-    if (files.length) out.push({ name: d.name, handle: d, files, kuerzel: ordnerKuerzel(d.name) });
+const gruppeName = g => g === 'd:' ? `direkt in „${FOTOS_DIR}“` : g.slice(2);
+/** Datum im Ordnernamen: TT.MM, TT.MM.JJ, TT.MM.JJJJ oder JJJJ-MM-TT; ohne Jahr das übergebene. '' = keins. */
+function datumImNamen(name, jahr){
+  const n = String(name || '');
+  let m = /(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)/.exec(n), iso = m ? `${m[1]}-${m[2]}-${m[3]}` : '';
+  if (!iso && (m = /(?<![\d.])(\d{1,2})\.(\d{1,2})(?:\.(\d{4}|\d{2}))?(?!\d)/.exec(n))){
+    const j = m[3] ? (m[3].length === 2 ? '20' + m[3] : m[3]) : String(jahr || '');
+    if (/^\d{4}$/.test(j)) iso = `${j}-${pad(+m[2], 2)}-${pad(+m[1], 2)}`;
   }
-  return out.sort((a, b) => a.name.localeCompare(b.name, 'de', { numeric: true }));
+  return OT && OT.gueltig(iso) ? iso : '';
 }
-async function fotoUebernahmeKnopf(){
-  const b = $('btnImport'); if (!b) return;
-  let n = 0, f = 0;
-  try{ if (S.dir && !P.readOnly){ const o = await fotoUnterordner(); n = o.length; f = o.reduce((a, x) => a + x.files.length, 0); } }catch(e){}
-  // Arbeitsschritt, nicht selten: als Karte in der Mitte über den Fotos
-  $('importCard').hidden = !n;
-  $('importText').textContent = n ? `In „${FOTOS_DIR}“ liegen noch ${f} ${f === 1 ? 'Foto' : 'Fotos'} in ${n} ${n === 1 ? 'Unterordner' : 'Unterordnern'} von Kollegen.` : '';
-  b.textContent = `Fotos übernehmen (${f}) →`;
-  b.title = n ? `${n} Unterordner in „${FOTOS_DIR}“ mit zusammen ${f} Fotos – in „${FOTOS_DIR}“ übernehmen` : '';
+const haeufigst = l => { const z = new Map(); let b = null, n = 0; for (const v of l){ const k = (z.get(v) || 0) + 1; z.set(v, k); if (k > n){ b = v; n = k; } } return b; };
+/** Vorschlag für eine Gruppe (E4): Datum im Ordnernamen (Jahr aus den Aufnahmedaten, sonst aus Termin 1), sonst der häufigste
+    Aufnahmetag; nur Dateidaten → „unsicher“ (R5). */
+function gruppenVorschlag(gid, items){
+  const t1 = termine()[0], datiert = items.filter(it => it.date && Number.isFinite(it.date.getTime()));
+  const jahr = haeufigst(datiert.filter(it => it.dateSrc !== 'Dateidatum').map(it => it.date.getFullYear()))
+    || (OT && OT.gueltig(t1.datum) ? +t1.datum.slice(0, 4) : null) || haeufigst(datiert.map(it => it.date.getFullYear()));
+  const ausName = gid === 'd:' ? '' : datumImNamen(gruppeName(gid), jahr);
+  if (ausName) return { datum: ausName, quelle: 'datum-im-namen' };
+  const tag = haeufigst(datiert.map(it => fmtISO(it.date)));
+  return tag ? { datum: tag, quelle: 'aufnahmedatum', unsicher: datiert.every(it => it.dateSrc === 'Dateidatum') } : null;
 }
-const zeitraum = fs => { const t = fs.map(f => f.lm).filter(Boolean).sort((a, b) => a - b); if (!t.length) return ''; const a = fmtDate(new Date(t[0])), z = fmtDate(new Date(t[t.length - 1])); return a === z ? a : `${a} – ${z}`; };
-async function fotoUebernahmeDialog(){
-  if (!S.dir || S.busy || S.changing) return;
-  if (P.readOnly){ banner('err', esc(PROTECTED_PROJECT)); return; }
-  const ordner = await fotoUnterordner();
-  if (!ordner.length){ banner('info', `In „${esc(FOTOS_DIR)}“ liegen keine Unterordner mit Fotos.`); fotoUebernahmeKnopf(); return; }
-  showDialog(`<h3>Fotos übernehmen</h3>
-    <div class="body">
-      <p>Diese Unterordner in „${esc(FOTOS_DIR)}“ enthalten Fotos. Angehakte werden nach „${esc(FOTOS_DIR)}“ <b>verschoben</b> (nicht kopiert) – die Dateinamen bleiben.
-      Gibt es einen Namen schon, kommt das Kürzel dazu (z. B. <code>IMG_1234_Ben.jpg</code>). Die leeren Unterordner bleiben stehen.</p>
-      <table class="imp"><thead><tr><th></th><th>Unterordner</th><th>Kürzel</th><th>Fotos</th><th>Zeitraum (Dateidatum)</th></tr></thead><tbody>
-      ${ordner.map((o, i) => `<tr><td><input type="checkbox" class="impChk" data-i="${i}" checked aria-label="${esc(o.name)} übernehmen"></td><td>${esc(o.name)}</td><td>${esc(o.kuerzel || '–')}</td><td>${o.files.length}${o.files.length > FOTO_UEBERNAHME_MAX ? '+' : ''}</td><td>${esc(zeitraum(o.files))}</td></tr>`).join('')}
-      </tbody></table>
-      <label class="chk"><input type="checkbox" id="impSec" checked> Ordnername als Abschnitt der Fotos eintragen (lässt sich danach je Foto ändern)</label>
-      <div class="m" id="impInfo"></div>
-    </div>
-    <div class="btns"><span class="spacer"></span><button id="impCancel">Abbrechen</button><button class="primary" id="impOk">Übernehmen</button></div>`);
-  const zaehlen = () => { const w = [...document.querySelectorAll('.impChk')].filter(c => c.checked).map(c => ordner[+c.dataset.i]); const n = w.reduce((a, o) => a + o.files.length, 0); $('impOk').disabled = !n; $('impOk').textContent = n ? `${n} Fotos übernehmen` : 'Übernehmen'; return w; };
-  document.querySelectorAll('.impChk').forEach(c => c.onchange = zaehlen); zaehlen();
-  $('impCancel').onclick = closeDialog;
-  $('impOk').onclick = async () => { const w = zaehlen(), sec = $('impSec').checked; closeDialog(); await fotoUebernehmen(w, sec); };
+/** Gruppen in Anzeige-Reihenfolge: direkt in „Fotos“ zuerst, dann nach Name; innerhalb einer Gruppe die Reihenfolge der Liste. */
+function gruppenListe(items = S.items){
+  const m = new Map();
+  for (const it of items){ const g = gruppeVon(it); if (!m.has(g)) m.set(g, []); m.get(g).push(it); }
+  return [...m.entries()].sort((a, b) => (a[0] !== 'd:') - (b[0] !== 'd:') || gruppeName(a[0]).localeCompare(gruppeName(b[0]), 'de', { numeric: true }))
+    .map(([id, its]) => ({ id, items: its }));
 }
-async function fotoUebernehmen(ordner, alsAbschnitt){
-  if (!ordner.length) return;
-  let ok = 0; const fehler = [], log = [];
-  await withSavedProject('Das Übernehmen der Fotos', async () => {
-    S.busy = true;
-    try{
-      const belegt = new Set();
-      for await (const h of S.dir.values()) belegt.add(h.name.normalize('NFC').toLowerCase());
-      const zeit = new Date().toISOString();
-      const extra = P.data.extra || (P.data.extra = {});
-      let i = 0; const gesamt = ordner.reduce((a, o) => a + o.files.length, 0);
-      for (const o of ordner){
-        const dateien = [], zusatz = (o.kuerzel || o.name).replace(/[\\/:*?"<>|.]+/g, ' ').trim().replace(/\s+/g, '_');
-        for (const f of o.files){
-          banner('info', `Fotos werden übernommen … ${++i} von ${gesamt}`);
-          const ext = extOf(f.name), stamm = f.name.slice(0, f.name.length - ext.length);
-          let ziel = f.name;
-          for (let k = 1; belegt.has(ziel.normalize('NFC').toLowerCase()); k++) ziel = `${stamm}_${zusatz}${k > 1 ? '_' + k : ''}${ext}`;   // „…_Ben.jpg“, dann „…_Ben_2.jpg“ usw.
-          try{
-            await moveBetween(o.handle, S.dir, f.name, ziel);
-            belegt.add(ziel.normalize('NFC').toLowerCase()); ok++;
-            dateien.push(ziel === f.name ? { datei: ziel } : { datei: ziel, vorher: f.name });
-            if (alsAbschnitt && !(extra[ziel] && extra[ziel].sec)) extra[ziel] = { ...(extra[ziel] || {}), sec: o.name, probe: (extra[ziel] && extra[ziel].probe) || '' };
-          }catch(e){ fehler.push(`${o.name}/${f.name}: ${e.message}`); }
-        }
-        if (dateien.length) log.push({ zeit, ordner: o.name, ...(o.kuerzel ? { kuerzel: o.kuerzel } : {}), dateien });
-      }
-      if (log.length){
-        const ext = P.data.extensions || (P.data.extensions = {});
-        ext.fotoUebernahmen = [...(Array.isArray(ext.fotoUebernahmen) ? ext.fotoUebernahmen : []), ...log];
-        dokuGeaendert();   // neue Fotos: eine vorher erstellte Bilddoku ist nicht mehr vollständig
-        scheduleProjSave();
-      }
-    }finally{ S.busy = false; }
-    await loadItems();
-  });
-  await fotoUebernahmeKnopf();
-  if (fehler.length) banner('err', `${ok} Fotos übernommen, ${fehler.length} nicht: ${fehler.slice(0, 3).map(esc).join(' · ')}${fehler.length > 3 ? ' …' : ''} – diese liegen weiter im Unterordner.`);
-  else banner('ok', `${ok} Fotos aus ${log.length} Unterordner${log.length === 1 ? '' : 'n'} übernommen. Die Herkunft jeder Datei steht in „_Bildumbenenner.json“.`);
-  heicAngebotImBanner();   // E2: dasselbe Angebot direkt nach „Fotos übernehmen“
+/** Kacheln je Gruppe zusammen (stabil). Nur eine Gruppe (z. B. kein Unterordner): Reihenfolge unverändert. */
+function gruppenOrdnen(){
+  const g = gruppenListe(); if (g.length < 2) return;
+  const neu = g.flatMap(x => x.items);
+  if (neu.some((it, i) => it !== S.items[i])) S.items = neu;
+}
+/* Auswahl „Termin 1 · Termin 2 · Alle“ über den Fotos (nur bei mehreren Terminen): zeigt nur die Fotos dieses Termins; Bildnummern,
+   Bilddokumentation, ZIP und „Dateien umbenennen“ gelten für das Gezeigte. „Alle“ zeigt auch die Fotos ohne Termin. */
+function ansichtPruefen(){ if (!mehrereTermine() || (S.ansicht !== 'alle' && !terminNach(S.ansicht))) S.ansicht = 'alle'; }
+const sichtbar = it => S.ansicht === 'alle' || terminVon(it) === S.ansicht;
+function ansichtSetzen(id){
+  if (S.busy || id === S.ansicht || (id !== 'alle' && !terminNach(id))) return;
+  if (document.activeElement === $('fDesc') && S.cur) geistVerwerfen(S.cur, $('fDesc'));
+  const f = S.cur; S.ansicht = id;
+  buildRows(); recompute();
+  const i = f ? S.view.indexOf(f) : -1;
+  if (S.view.length) setFocus(i >= 0 ? i : 0, false); else { S.focus = -1; S.cur = null; karteFuellen(true); }
+}
+function terminWahlZeigen(){
+  const el = $('terminWahl'), z = $('terminZeile');
+  if (!S.dir || !mehrereTermine()){ el.hidden = true; el.dataset.k = ''; el.innerHTML = ''; z.hidden = true; return; }
+  const zahl = id => S.items.filter(it => id === 'alle' || terminVon(it) === id).length;
+  const knopf = (id, text, title) => `<button type="button" data-ansicht="${esc(id)}" aria-pressed="${S.ansicht === id}" title="${esc(title)}">${esc(text)} <small>(${zahl(id)})</small></button>`;
+  const html = '<span class="tw-lbl">Ortstermin:</span>' +
+    termine().map(t => knopf(t.id, `Termin ${t.nr}` + (OT && OT.gueltig(t.datum) ? ' · ' + deDate(t.datum).slice(0, 6) : ''), terminText(t))).join('') +
+    knopf('alle', 'Alle', 'Fotos aller Termine, auch die noch ohne Termin');
+  if (el.dataset.k !== html){ el.dataset.k = html; el.innerHTML = html; }
+  el.hidden = false;
+  const offen = gruppenListe().filter(g => g.items.some(it => !terminVon(it)));
+  const namen = offen.slice(0, 3).map(g => '„' + esc(gruppeName(g.id)) + '“').join(', ') + (offen.length > 3 ? ' …' : '');
+  const zt = !offen.length ? '' : S.ansicht === 'alle'
+    ? `⚠ Noch ohne Ortstermin (gelb): ${namen}. Bitte in der Zeile über den Fotos des Ordners zuordnen – FotoKit ordnet nie ohne Klick zu.`
+    : `⚠ Noch ohne Ortstermin und hier nicht zu sehen: ${namen}. <button type="button" data-ansicht="alle">Alle zeigen</button>`;
+  if (z.dataset.k !== zt){ z.dataset.k = zt; z.innerHTML = zt; }
+  z.hidden = !zt;
+}
+$('terminWahl').addEventListener('click', e => { const b = e.target.closest('[data-ansicht]'); if (b) ansichtSetzen(b.dataset.ansicht); });
+$('terminZeile').addEventListener('click', e => { const b = e.target.closest('[data-ansicht]'); if (b) ansichtSetzen(b.dataset.ansicht); });
+/** Kopfzeile je Ordner über seinen Kacheln: Name und Zahl; bei mehreren Terminen der Termin (änderbar) bzw. die Rückfrage (gelb). */
+function ordnerKopf(g){
+  const n = g.items.length, name = gruppeName(g.id), art = g.id[0];
+  const titel = art === 'h' ? `übernommen aus „${esc(name)}“` : art === 'o' ? esc(name) : esc(name);
+  let html = `<span class="o-name">${titel}</span> <span class="o-zahl">· ${n} ${n === 1 ? 'Foto' : 'Fotos'}</span>`;
+  if (!mehrereTermine()) return { html, offen: false };
+  const ids = new Set(g.items.map(terminVon)), ro = P.readOnly ? ' disabled' : '';
+  const wahl = (gewaehlt, leer) => `<select data-gruppe="${esc(g.id)}" aria-label="Ortstermin für ${esc(name)}"${ro}>${leer ? `<option value="">${esc(leer)}</option>` : ''}` +
+    termine().map(t => `<option value="${esc(t.id)}"${t.id === gewaehlt ? ' selected' : ''}>${esc(terminText(t))}</option>`).join('') + '</select>';
+  if (!ids.has(null)){ const id = ids.size === 1 ? [...ids][0] : ''; return { html: html + ` · Termin: ${wahl(id, id ? '' : 'verschiedene …')}`, offen: false }; }
+  const v = gruppenVorschlag(g.id, g.items), passt = v && termine().find(t => t.datum === v.datum);
+  const quelle = !v ? '' : v.quelle === 'datum-im-namen' ? 'Datum im Ordnernamen' : v.unsicher ? 'Dateidatum der Fotos – unsicher' : 'Aufnahmedatum der Fotos';
+  const kannAnlegen = !P.readOnly && !!S.proj && !!PJ.data && !!OT && !S.ortGewechselt;
+  let frage;
+  if (passt) frage = `Ortstermin am ${esc(deDate(passt.datum))}${passt.bezeichnung ? ' (' + esc(passt.bezeichnung) + ')' : ''}? <small>(${quelle})</small> <button type="button" data-ja="${esc(g.id)}" data-termin="${esc(passt.id)}" data-quelle="${esc(v.quelle)}"${ro}>Ja</button>`;
+  else if (v) frage = `Neuer Ortstermin am ${esc(deDate(v.datum))}? <small>(${quelle} – passt zu keinem Termin des Projekts)</small> <button type="button" data-anlegen="${esc(g.id)}" data-datum="${esc(v.datum)}" data-quelle="${esc(v.quelle)}"${kannAnlegen ? '' : ' disabled title="Nur mit lesbaren Projektdaten und außerhalb des geschützten Modus"'}>Anlegen</button>`;
+  else frage = 'Zu welchem Ortstermin?';
+  return { html: html + ` <span class="o-frage">– ${frage}</span> ${wahl('', 'anderer …')}`, offen: true };
+}
+let ordnerSig = null;
+function ordnerZeichnen(){
+  const gr = [];
+  if (S.items.some(it => it.ordner) || mehrereTermine()) for (const it of S.view){
+    const id = gruppeVon(it), g = gr[gr.length - 1];
+    if (g && g.id === id) g.items.push(it); else gr.push({ id, items: [it], erstes: it });
+  }
+  const koepfe = gr.map(g => ({ g, k: ordnerKopf(g) }));
+  const sig = koepfe.map(({ g, k }) => g.erstes.name + '|' + k.offen + '|' + k.html).join('\n');
+  if (sig === ordnerSig) return;
+  ordnerSig = sig;
+  $('list').querySelectorAll('.fk-ordner').forEach(d => d.remove());
+  for (const { g, k } of koepfe){
+    const d = document.createElement('div');
+    d.className = 'fk-ordner' + (k.offen ? ' offen' : ''); d.setAttribute('role', 'group'); d.setAttribute('aria-label', 'Ordner ' + gruppeName(g.id));
+    d.innerHTML = k.html;
+    const vor = g.erstes.el.previousElementSibling;
+    (vor && vor.classList.contains('fk-abschnitt') ? vor : g.erstes.el).before(d);
+  }
+}
+$('list').addEventListener('click', e => {
+  const b = e.target.closest('.fk-ordner button'); if (!b) return;
+  e.stopPropagation();
+  if (b.dataset.ja) gruppeZuordnen(b.dataset.ja, b.dataset.termin, b.dataset.quelle || 'hand');
+  else if (b.dataset.anlegen) terminAnlegen(b.dataset.anlegen, b.dataset.datum, b.dataset.quelle || 'hand');
+});
+$('list').addEventListener('change', e => { const s = e.target.closest('.fk-ordner select'); if (s && s.value) gruppeZuordnen(s.dataset.gruppe, s.value, 'hand'); });
+/** Zuordnung einer Gruppe zu einem Termin – nur nach Klick. Unterordner und „direkt“: ordnerTermine; Herkunft (Bestand): je Foto. */
+function gruppeZuordnen(gid, id, vorschlag){
+  if (P.readOnly || !P.data || S.busy || !terminNach(id)) return;
+  const items = S.items.filter(it => gruppeVon(it) === gid); if (!items.length) return;
+  const vorher = items.map(terminVon);
+  if (gid.startsWith('h:')){
+    const ie = projGet('imageExtensions', {});
+    for (const it of items) ie[it.name] = { ...(ie[it.name] || {}), termin: id };
+    projSet('imageExtensions', ie);
+  } else {
+    const ext = P.data.extensions || {};
+    P.data.extensions = { ...ext, ordnerTermine: { ...ordnerTermine(), [gid === 'd:' ? '' : gid.slice(2)]: { termin: id, am: new Date().toISOString(), vorschlag } } };
+    scheduleProjSave();
+  }
+  dokuGeaendert([...vorher, id]);   // Doku des alten und des neuen Termins
+  const f = S.cur; buildRows(); recompute();
+  const i = f ? S.view.indexOf(f) : -1;
+  if (S.view.length) setFocus(i >= 0 ? i : 0, false); else { S.focus = -1; S.cur = null; karteFuellen(true); }
+}
+/** „Anlegen“ (O9, O13): neuer Termin in _Projekt.json → weitereOrtstermine, Kennung = ortsterminZaehler + 1 (ohne Zähler aus allem,
+    was eine Kennung nennt – auch FotoKits eigene Datei – und der Zähler wird dabei angelegt). Liste und Zähler in EINEM Patch über
+    ProjectStore.update: hat ein anderes Fenster (Projektzentrale, FotoKit) eines der beiden Felder inzwischen geändert, ist das ein
+    Widerspruch – nichts wird überschrieben. Danach wird die Gruppe dem neuen Termin zugeordnet. Bezeichnung und „Wer war da“
+    bleiben leer (in der Projektzentrale einzutragen); zu welcher Mitteilung der Termin gehört, entscheidet allein die Projektzentrale. */
+async function terminAnlegen(gid, datum, vorschlag){
+  if (P.readOnly || !S.proj || !PJ.data || !OT || S.ortGewechselt || S.busy || S.changing || !OT.gueltig(datum)) return;
+  const schon = termine().find(t => t.datum === datum);
+  if (schon) return gruppeZuordnen(gid, schon.id, vorschlag);
+  const proj = S.proj;
+  S.busy = true; recompute();
+  let r = null, fehler = null;
+  try{
+    await flushPJ();   // offene Deckblatt-Eingaben zuerst (eigene Felder, eigener Patch)
+    const lauf = PJ.writing.then(async () => {
+      if (S.proj !== proj || S.ortGewechselt) throw new Error('Das Projekt wurde gewechselt.');
+      const basis = PJ.data;
+      const fk = OT.zaehler(basis) ? null : JSON.parse(projToJson(clone(P.data)));
+      const id = OT.naechsteKennung(basis, fk);
+      const liste = OT.bereinigt([...(Array.isArray(basis.weitereOrtstermine) ? basis.weitereOrtstermine : []), { id, datum, bezeichnung: '', wer: '' }]);
+      const patch = { weitereOrtstermine: liste, ortsterminZaehler: OT.zaehlerNach(basis, id) };
+      const o = await ProjectStore.update(proj.pjDir || proj.dir, proj.name, cur => ({ ...cur, ...patch, format: 'mosaik-projekt', version: 1, hinweis: PJ_HINWEIS,
+        projektnummer: proj.nr, schadenort: String(cur?.schadenort || '').trim() || proj.ort, geaendert: new Date().toISOString(), geaendertMit: APP_NAME + ' ' + APP_VERSION }),
+        { data: basis, keys: Object.keys(patch) });
+      return { o, id };
+    });
+    PJ.writing = lauf.then(() => true, () => true);   // die Warteschlange der Projektdaten bricht nie ab
+    r = await lauf;
+    if (S.proj === proj){ PJ.data = r.o; PJ.recoveryRefresh?.(); }
+  }catch(e){ fehler = e; logProblem('Ortstermin anlegen: ' + e.message); }
+  finally{ S.busy = false; }
+  if (S.proj !== proj) return;
+  if (fehler){
+    try{ PJ.data = await readPJ(proj.pjDir || proj.dir); }catch(_){}
+    buildRows(); recompute();
+    banner('err', `Ortstermin am ${esc(deDate(datum))} nicht angelegt: ${esc(fehler.belegt ? fehler.message : /gleichzeitig|während des Speicherns geändert/.test(fehler.message)
+      ? 'Die Ortstermine wurden inzwischen in einem anderen Fenster geändert (z. B. in der Projektzentrale). Nichts wurde überschrieben.' : fehler.message)} FotoKit hat die Projektdaten neu gelesen – bitte die Zuordnung prüfen.`);
+    return;
+  }
+  const t = terminNach(r.id);
+  gruppeZuordnen(gid, r.id, vorschlag);
+  banner('ok', `Ortstermin am ${esc(deDate(datum))} als <b>${esc(t ? 'Termin ' + t.nr : r.id)}</b> in den Projektdaten angelegt und „${esc(gruppeName(gid))}“ zugeordnet. Bezeichnung und „Wer war da“ in der Projektzentrale eintragen.`);
+}
+/** Termine haben sich geändert (Projektzentrale, anderes Fenster): Ansicht, Kopfzeilen und Kacheln neu, gewähltes Foto bleibt. */
+function termineNeuZeichnen(){
+  if (S.busy || S.changing) return;
+  const f = S.cur; buildRows(); recompute();
+  const i = f ? S.view.indexOf(f) : -1;
+  if (S.view.length) setFocus(i >= 0 ? i : 0, false); else { S.focus = -1; S.cur = null; karteFuellen(true); }
+}
+/** Gelbe Zeile: nicht lesbare Unterordner (R2) und tiefere Ordner (O3, nur Hinweis). */
+function ordnerZeileZeigen(){
+  const el = $('ordnerZeile'); if (!el) return;
+  const t = [];
+  for (const o of S.unlesbar) t.push(`⚠ Der Ordner „${esc(o)}“ in „${FOTOS_DIR}“ ist gerade nicht lesbar (Netzlaufwerk, Rechte oder OneDrive „nur online“?). Seine Fotos fehlen in der Liste; ihre Beschreibungen, Proben und die Termin-Zuordnung bleiben in der Projektdatei unverändert. Sobald er wieder lesbar ist: „Mehr …“ › „Fotos neu einlesen“.`);
+  for (const x of S.tiefer) t.push(`In „${esc(x.ordner)}“ liegen weitere Ordner (${x.tief.slice(0, 3).map(n => '„' + esc(n) + '“').join(', ')}${x.tief.length > 3 ? ' …' : ''}) – FotoKit liest nur eine Ebene unter „${FOTOS_DIR}“, Fotos dort erscheinen nicht.`);
+  const html = t.join('<br>');
+  if (el.innerHTML !== html) el.innerHTML = html;
+  el.hidden = !t.length;
 }
 
 /* ---------- iPhone-Fotos (HEIC/HEIF) umwandeln (2.3.0, Plan „fotokit-heic-plan“ E1–E9) ----------
@@ -1899,7 +2165,7 @@ async function fotoUebernehmen(ordner, alsAbschnitt){
    das FotoKit-Fassungen ab F6 (1.9) unverändert mitführen und beim Umbenennen mitnehmen (docs/F6-unknown-fields.md).
    Der Decoder (vendor/libheif-bundle.js, 2 MB) wird erst beim Umwandeln geladen, nur im Web Worker heic-worker.js – im Fenster
    selbst verbietet die Sicherheitsregel (CSP, kein 'wasm-unsafe-eval') WebAssembly, und das bleibt so. Startet kein Worker
-   (index.html als lokale Datei), sagt FotoKit das und lässt die HEIC liegen. .MOV/.AAE (Live Photo), HEIC in Unterordnern
+   (index.html als lokale Datei), sagt FotoKit das und lässt die HEIC liegen. .MOV/.AAE (Live Photo), HEIC in „_…“-Unterordnern
    (auch _aussortiert) und TIFF bleiben unangetastet; im geschützten Projektmodus wird nichts umgewandelt. */
 const HEIC_EXT = ['heic', 'heif'];
 const istHeic = it => HEIC_EXT.includes(it.ext.slice(1).toLowerCase());
@@ -1914,16 +2180,12 @@ function heicKarte(){
   const n = S.dir && !P.readOnly ? heicFotos().length : 0;
   c.hidden = !n;
   if (!n) return;
+  const unter = heicFotos().some(it => it.ordner);   // 2.7.0 (O7): im Unterordner bleibt alles in diesem Ordner
   $('heicText').textContent = `In „${FOTOS_DIR}“ ${n === 1 ? 'liegt 1 iPhone-Foto' : `liegen ${n} iPhone-Fotos`} (HEIC). Word, die Windows-Fotoanzeige und die Bilddokumentation können sie oft nicht öffnen. ` +
-    `FotoKit wandelt sie in JPG um (Aufnahmedatum, Gerät und GPS bleiben); die Originale kommen unverändert nach „${FOTOS_DIR}/${ORIGINALE_DIR}“.`;
+    (unter ? `FotoKit wandelt sie in JPG um (Aufnahmedatum, Gerät und GPS bleiben), jedes in seinem Ordner; die Originale kommen unverändert in dessen Unterordner „${ORIGINALE_DIR}“.`
+      : `FotoKit wandelt sie in JPG um (Aufnahmedatum, Gerät und GPS bleiben); die Originale kommen unverändert nach „${FOTOS_DIR}/${ORIGINALE_DIR}“.`);
   $('btnHeic').textContent = `${n} ${heicWort(n)} umwandeln`;
   $('btnHeic').disabled = S.busy;
-}
-function heicAngebotImBanner(){
-  const n = P.readOnly ? 0 : heicFotos().length;
-  if (!n || !$('banner').classList.contains('ok')) return;
-  $('banner').insertAdjacentHTML('beforeend', ` <span class="spacer"></span>Darunter ${n === 1 ? '1 iPhone-Foto' : n + ' iPhone-Fotos'} (HEIC). <button id="bHeicJetzt">${n} ${heicWort(n)} umwandeln</button>`);
-  $('bHeicJetzt').onclick = () => heicUmwandelnStarten();
 }
 
 /* Decoder im Web Worker, je Foto zwei Worker nacheinander (2.3.1, Arbeitsspeicher): der erste dekodiert nur und gibt die Pixel
@@ -1969,7 +2231,7 @@ const HEIC_KINDS = ['drafts', 'extra', 'orig', 'rot', 'hash', 'imageExtensions',
 const heicStand = () => Object.fromEntries(HEIC_KINDS.map(k => [k, clone(P.data[k])]));
 function heicStandZurueck(stand, it, name){
   for (const k of HEIC_KINDS){ if (stand[k] === undefined) delete P.data[k]; else P.data[k] = clone(stand[k]); }
-  ROT = clone(P.data.rot || {}); it.name = name; it.final = name;
+  ROT = clone(P.data.rot || {}); it.name = name; it.final = name; it.datei = dateiVon(name);
   scheduleProjSave();
 }
 function heicDatenUmstellen(it, von, nach, nachweis){
@@ -1979,8 +2241,8 @@ function heicDatenUmstellen(it, von, nach, nachweis){
   const ie = projGet('imageExtensions', {}), e = ie[von] || {}; delete ie[von]; ie[nach] = { ...e, heic: nachweis }; projSet('imageExtensions', ie);
   const ds = projGet('discard', []); if (ds.includes(von)) projSet('discard', ds.map(n => n === von ? nach : n));
   const od = projGet('order', []); if (od.includes(von)) projSet('order', od.map(n => n === von ? nach : n));
-  it.name = nach; it.final = nach;   // ein Zusammenführen mitten im Lauf (flushDrafts/saveExtra) liest die Namen aus der Liste
-  dokuGeaendert(); scheduleProjSave();
+  it.name = nach; it.final = nach; it.datei = dateiVon(nach);   // ein Zusammenführen mitten im Lauf (flushDrafts/saveExtra) liest die Namen aus der Liste
+  dokuGeaendert(mehrereTermine() ? [terminVon(it)] : undefined); scheduleProjSave();
 }
 /** Nachweis ohne „zwischen“: das JPG trägt jetzt seinen Endnamen (nur im Speicher, wie metaNurImSpeicher). */
 function heicZwischenErledigt(jpg){
@@ -1996,17 +2258,24 @@ function heicZwischenErledigt(jpg){
 async function heicResteBeimOeffnen(foto){
   if (P.readOnly) return [];
   return originaleSperre(async () => {
-    const reste = [], hinweise = [];
-    try{ for await (const h of foto.values()) if (h.kind === 'file' && h.name.startsWith(HEIC_TMP)) reste.push(h.name); }catch(e){ return []; }
+    const reste = [], hinweise = [];   // { dir, ordner, n } – 2.7.0 (O7): auch in den Unterordnern (Nachweis „zwischen“ dort mit Weg)
+    try{
+      for await (const h of foto.values()){
+        if (h.kind === 'file' && h.name.startsWith(HEIC_TMP)) reste.push({ dir: foto, ordner: '', n: h.name });
+        else if (h.kind === 'directory' && !h.name.startsWith('_') && !h.name.startsWith('.')){
+          try{ const d = await foto.getDirectoryHandle(h.name); for await (const x of d.values()) if (x.kind === 'file' && x.name.startsWith(HEIC_TMP)) reste.push({ dir: d, ordner: h.name, n: x.name }); }catch(e){}
+        }
+      }
+    }catch(e){ return []; }
     const ie = (P.data && P.data.imageExtensions) || {};
     let weg = 0, fertig = 0;
-    for (const n of reste){
-      const jpg = Object.keys(ie).find(k => ie[k] && ie[k].heic && ie[k].heic.zwischen === n);
+    for (const { dir, ordner, n } of reste){
+      const zw = ordner ? ordner + '/' + n : n, jpg = Object.keys(ie).find(k => ie[k] && ie[k].heic && ie[k].heic.zwischen === zw), datei = jpg ? jpg.slice(jpg.lastIndexOf('/') + 1) : '';
       try{
-        if (jpg && !(await exists(foto, jpg))){ await transferLocked(foto, foto, n, jpg); heicZwischenErledigt(jpg); fertig++; }
-        else if (jpg) hinweise.push(`⚠ „${esc(n)}“ (umgewandeltes iPhone-Foto) bleibt liegen: der Name „${esc(jpg)}“ ist inzwischen belegt. Bitte im Ordner ansehen.`);
-        else { await foto.removeEntry(n); weg++; }
-      }catch(e){ hinweise.push(`⚠ „${esc(n)}“ (Rest eines Umwandelns) konnte nicht aufgeräumt werden: ${esc(e.message)}`); }
+        if (jpg && !(await exists(dir, datei))){ await transferLocked(dir, dir, n, datei); heicZwischenErledigt(jpg); fertig++; }
+        else if (jpg) hinweise.push(`⚠ „${esc(zw)}“ (umgewandeltes iPhone-Foto) bleibt liegen: der Name „${esc(jpg)}“ ist inzwischen belegt. Bitte im Ordner ansehen.`);
+        else { await dir.removeEntry(n); weg++; }
+      }catch(e){ hinweise.push(`⚠ „${esc(zw)}“ (Rest eines Umwandelns) konnte nicht aufgeräumt werden: ${esc(e.message)}`); }
     }
     if (fertig) hinweise.unshift(`Ein Umwandeln von iPhone-Fotos war unterbrochen. FotoKit hat ${fertig === 1 ? 'ein fertiges JPG' : fertig + ' fertige JPG'} auf den richtigen Namen gebracht; ${fertig === 1 ? 'das Original liegt' : 'die Originale liegen'} noch im Ordner – „iPhone-Fotos umwandeln“ legt ${fertig === 1 ? 'es' : 'sie'} nach „${esc(FOTOS_DIR)}/${ORIGINALE_DIR}“.`);
     if (weg) hinweise.unshift(`Ein Umwandeln von iPhone-Fotos war unterbrochen. FotoKit hat ${weg === 1 ? 'ein unfertiges JPG' : weg + ' unfertige JPG'} entfernt; die iPhone-Fotos liegen unverändert im Ordner – bei Bedarf noch einmal umwandeln.`);
@@ -2021,20 +2290,24 @@ async function heicJpgWeg(dir, name, blob){
     assertOriginalsWritable(); await dir.removeEntry(name);
   }catch(_){}
 }
-async function heicEines(it, dienst, belegt, tmp){
+/* 2.7.0 (O7): ein HEIC im Unterordner wird in genau diesem Ordner umgewandelt, das Original kommt nach „<Ordner>/_Originale“.
+   Namen (JPG, Zwischenname, Ablage) gelten je Ordner; im Nachweis stehen Original, Ablage und Zwischenname mit dem Weg ab „Fotos“
+   („Bilder A/IMG_0001.HEIC“, „Bilder A/_Originale/…“). Direkt in „Fotos“ alles wie bisher. */
+async function heicEines(it, dienst, belegtJe, tmp){
   assertOriginalsWritable();
-  const dir = S.dir, name = it.name;
+  const dir = it.dir || S.dir, name = it.datei || it.name, key = it.name, ordner = it.ordner || '', weg = ordner ? ordner + '/' : '';
+  const belegt = await belegtJe(ordner, dir);
   const bytes = await (await (await dir.getFileHandle(name)).getFile()).arrayBuffer();
   const pruef = await sha256(bytes);
   const originale = () => dir.getDirectoryHandle(ORIGINALE_DIR, { create: true });   // erst anlegen, wenn wirklich abgelegt wird
   // schon umgewandelt (Abbruch nach dem Speichern, vor dem Ablegen des Originals)? → nur noch ablegen
   const ie = projGet('imageExtensions', {});
-  const schon = Object.keys(ie).find(n => ie[n] && ie[n].heic && ie[n].heic.original === name && ie[n].heic.sha256 === pruef && belegt.has(nameKey(n)));
+  const schon = Object.keys(ie).find(n => ie[n] && ie[n].heic && ie[n].heic.original === key && ie[n].heic.sha256 === pruef && ordnerVon(n) === ordner && belegt.has(nameKey(dateiVon(n))));
   if (schon){
     const sub = await originale(), ablage = await freeName(sub, name);
     await transferLocked(dir, sub, name, ablage);
-    if (ie[schon].heic.ablage !== ORIGINALE_DIR + '/' + ablage){ ie[schon] = { ...ie[schon], heic: { ...ie[schon].heic, ablage: ORIGINALE_DIR + '/' + ablage } }; projSet('imageExtensions', ie); }
-    return { von: name, nach: schon, ablage, nurAbgelegt: true };
+    if (ie[schon].heic.ablage !== weg + ORIGINALE_DIR + '/' + ablage){ ie[schon] = { ...ie[schon], heic: { ...ie[schon].heic, ablage: weg + ORIGINALE_DIR + '/' + ablage } }; projSet('imageExtensions', ie); }
+    return { von: key, nach: schon, ablage, nurAbgelegt: true };
   }
   const r = await dienst.umwandeln(bytes);
   const stamm = name.slice(0, name.length - it.ext.length);
@@ -2063,19 +2336,19 @@ async function heicEines(it, dienst, belegt, tmp){
     belegt.add(nameKey(ziel));
     const sub = await originale(), ablage = await freeName(sub, name);
     stand = heicStand();
-    heicDatenUmstellen(it, name, ziel, { original: name, ablage: ORIGINALE_DIR + '/' + ablage, sha256: pruef, bytes: bytes.byteLength, umgewandelt: new Date().toISOString(),
-      decoder: r.decoder, qualitaet: r.qualitaet, breite: r.breite, hoehe: r.hoehe, exif: r.exif, farbprofil: r.icc > 0, fotokit: APP_VERSION, zwischen: tmp });
+    heicDatenUmstellen(it, key, weg + ziel, { original: key, ablage: weg + ORIGINALE_DIR + '/' + ablage, sha256: pruef, bytes: bytes.byteLength, umgewandelt: new Date().toISOString(),
+      decoder: r.decoder, qualitaet: r.qualitaet, breite: r.breite, hoehe: r.hoehe, exif: r.exif, farbprofil: r.icc > 0, fotokit: APP_VERSION, zwischen: weg + tmp });
     const gespeichert = await flushProject();
     if (gespeichert === false || P.failed) throw new Error('Die Projektdaten konnten nicht gespeichert werden');
     // 4. Endname
     await transferLocked(dir, dir, tmp, ziel); liegt = ziel;
-    heicZwischenErledigt(ziel);   // nur im Speicher – geht mit der nächsten Speicherung in die Datei
+    heicZwischenErledigt(weg + ziel);   // nur im Speicher – geht mit der nächsten Speicherung in die Datei
     // 5. Original unverändert ablegen
     await transferLocked(dir, sub, name, ablage);
     liegt = null;
-    return { von: name, nach: ziel, ablage, ms: r.ms };
+    return { von: key, nach: weg + ziel, ablage, ms: r.ms };
   }catch(e){
-    if (stand){ heicStandZurueck(stand, it, name); await flushProject(); }
+    if (stand){ heicStandZurueck(stand, it, key); await flushProject(); }
     if (liegt){
       // eigenes JPG weg – unter dem Zwischennamen und (falls es ihn schon trägt) unter dem Endnamen, dort nur mit genau unseren Bytes
       await heicJpgWeg(dir, tmp, blob); await heicJpgWeg(dir, ziel, blob);
@@ -2092,13 +2365,16 @@ async function heicUmwandeln(liste){
   const dienst = heicDienst();
   try{
     await originaleSperre(async () => {
-      const belegt = new Set();
-      for await (const h of S.dir.values()) belegt.add(nameKey(h.name));
+      const belegt = new Map();   // je Ordner (2.7.0): belegte Namen, einmal gelesen, beim Umwandeln mitgeführt
+      const belegtJe = async (ordner, dir) => {
+        if (!belegt.has(ordner)){ const b = new Set(); for await (const h of dir.values()) b.add(nameKey(h.name)); belegt.set(ordner, b); }
+        return belegt.get(ordner);
+      };
       const stempel = Date.now().toString(36);
       for (let i = 0; i < gesamt; i++){
         const it = liste[i];
         $('heicStand').textContent = `${i + 1} von ${gesamt}: ${it.name}`;
-        try{ fertig.push(await heicEines(it, dienst, belegt, `${HEIC_TMP}${stempel}_${i}.jpg`)); }
+        try{ fertig.push(await heicEines(it, dienst, belegtJe, `${HEIC_TMP}${stempel}_${i}.jpg`)); }
         catch(e){
           logProblem(`HEIC umwandeln ${it.name}: ${e.message}`);
           if (e.ganzerLauf){ fehler.push(e.message); break; }   // kein Decoder – die übrigen Fotos gar nicht erst anfassen
@@ -2190,7 +2466,7 @@ async function openDir(dir, proj = null){
     // its images and UI have been accepted. A rollback discards that work.
     P.loading = true;
     try{
-      S.dir = dir; S.proj = proj; S.lastRun = null;
+      S.dir = dir; S.proj = proj; S.lastRun = null; S.ansicht = 'alle';
       S.data = await spektronOrteSetzen(dir, proj);   // Ordner der FotoKit-Datei (_Bildumbenenner.json, _FotoKit_Fassungen)
       let note = await loadProject(S.data);
       const umbNote = await umbenennenPruefen().catch(e => '⚠ Ein unterbrochenes Umbenennen konnte nicht geprüft werden: ' + esc(e.message));   // vor dem Einlesen: Fotos zurück unter ihre Namen
@@ -2209,7 +2485,6 @@ async function openDir(dir, proj = null){
       lkZeileZeigen(''); loadBohrkernZuordnung();   // LabelKit-Proben für Vorschläge und Bohrkern-Zuordnung – im Hintergrund, blockiert das Öffnen nie (Zeile zur LabelKit-Datei setzt lkLesen)
       projektHinweisFuer = '';
       if (note) banner(P.readOnly ? 'err' : 'info', note);
-      fotoUebernahmeKnopf();   // Unterordner der Mitarbeiter mit Fotos? – im Hintergrund
       void zweiOrteZeigen();   // K1: Dateien an zwei Orten? – im Hintergrund
     }catch(e){
       clearTimeout(P.timer); clearTimeout(PJ.timer);
@@ -2236,27 +2511,43 @@ async function loadItems(){
   const rot = projGet('rot', {}), hash = projGet('hash', {});
   const extra = projGet('extra', {}), orig = projGet('orig', {});
   const discards = new Set(projGet('discard', []));
-  const handles = [];
+  const istFoto = n => IMG_EXT.includes(extOf(n).slice(1).toLowerCase()) && !n.startsWith(TMP_PREFIX) && !n.startsWith('~umb_');
+  const handles = [], unterordner = [], unlesbar = new Set(), tiefer = [];   // handles: { h, dir, ordner }
   for await (const h of dir.values()){
+    if (h.kind === 'directory'){ if (!ordnerAus(h.name)) unterordner.push(h); continue; }   // 2.7.0: Unterordner von „Fotos“ (O3)
     if (h.kind !== 'file') continue;
-    const ext = extOf(h.name).slice(1).toLowerCase();
-    if (IMG_EXT.includes(ext) && !h.name.startsWith(TMP_PREFIX) && !h.name.startsWith('~umb_')) handles.push(h);
+    if (istFoto(h.name)) handles.push({ h, dir, ordner: '' });
     else otherNames.add(h.name.toLowerCase());
   }
+  // 2.7.0: eine Ebene unter „Fotos“. Ein Ordner, der sich nicht lesen lässt, fehlt ganz (keine halben Ordner) – seine Einträge in der
+  // Projektdatei bleiben unangetastet (R2, unlesbareMischen); tiefere Ordner nur als Hinweis.
+  unterordner.sort((a, b) => a.name.localeCompare(b.name, 'de', { numeric: true }));
+  for (const d of unterordner){
+    const hier = [], tief = [];
+    try{
+      for await (const h of d.values()){
+        if (h.kind === 'directory'){ if (!ordnerAus(h.name)) tief.push(h.name); continue; }
+        if (h.kind === 'file' && istFoto(h.name)) hier.push({ h, dir: d, ordner: d.name });
+      }
+      for (const x of hier) x.f = await x.h.getFile();   // OneDrive „nur online“ o. Ä.: lieber den ganzen Ordner als nicht lesbar melden
+    }catch(e){ unlesbar.add(d.name); continue; }
+    handles.push(...hier);
+    if (tief.length) tiefer.push({ ordner: d.name, tief: tief.sort((a, b) => a.localeCompare(b, 'de', { numeric: true })) });
+  }
   let n = 0;
-  for (const h of handles){
-    const f = await h.getFile();
+  for (const { h, dir: d, ordner, f: vorab } of handles){
+    const f = vorab || await h.getFile(), key = fotoSchluessel(ordner, h.name);
     const exif = /^jpe?g$/.test(extOf(h.name).slice(1).toLowerCase()) ? await readExifDate(f) : null;
-    const og = orig[h.name];
+    const og = orig[key];
     const kept = og && typeof og === 'object' && og.d && og.s !== 'Dateidatum' ? { d: new Date(og.d), s: og.s } : null;  // date from before renaming
     const fromName = exif || kept ? null : dateFromName(h.name);
     const date = exif || (kept && kept.d) || fromName || new Date(f.lastModified);
     items.push({
-      handle:h, name:h.name, ext:extOf(h.name), size:f.size,
+      handle:h, dir:d, ordner, datei:h.name, name:key, ext:extOf(h.name), size:f.size,
       date, dateSrc: exif ? 'EXIF' : kept ? kept.s : fromName ? 'Dateiname' : 'Dateidatum',
-      desc: drafts[h.name] || '', discard: discards.has(h.name),
-      sec: (extra[h.name] || {}).sec || '', probe: (extra[h.name] || {}).probe || '', lk: lkGueltig((extra[h.name] || {}).lk) ? clone(extra[h.name].lk) : undefined, orig: og ? (typeof og === 'object' ? og.o : og) : '', secEff: '',
-      thumbUrl:null, thumbState:0, el:null, final:h.name, conflict:false
+      desc: drafts[key] || '', discard: discards.has(key),
+      sec: (extra[key] || {}).sec || '', probe: (extra[key] || {}).probe || '', lk: lkGueltig((extra[key] || {}).lk) ? clone(extra[key].lk) : undefined, orig: og ? (typeof og === 'object' ? og.o : og) : '', secEff: '',
+      thumbUrl:null, thumbState:0, el:null, final:key, conflict:false
     });
     if (++n % 20 === 0) banner('info', `Lese Ordner … ${n} / ${handles.length}`);
   }
@@ -2264,6 +2555,7 @@ async function loadItems(){
   applySort(items);
   const previousItems = S.items;
   S.items = items; S.otherNames = otherNames; S.focus = -1; S.cur = null;
+  S.unlesbar = unlesbar; S.tiefer = tiefer; S.herkunft = herkunftLesen();
   dokuBestandPruefen();
   ROT = rot; HASH = hash; EXTRA = extra; ORIG = orig;
   $('list').innerHTML = '';
@@ -2276,7 +2568,8 @@ async function loadItems(){
   $('foot').style.display = 'flex';
   buildRows();
   recompute();
-  if (S.items.length) setFocus(0, false);
+  ordnerZeileZeigen();
+  if (S.view.length) setFocus(0, false);
   previousItems.forEach(it => it.thumbUrl && URL.revokeObjectURL(it.thumbUrl));
 }
 
@@ -2296,7 +2589,7 @@ function applySort(items = S.items){
    order stays. Images that only inherited their section get it written in, so they keep it after the move.
    Discarded images are left alone. Image numbers follow automatically (recompute). Returns the undo data. */
 function groupBySection(){
-  const undo = { order: S.view.map(it => it.name), sec: new Map(S.items.map(it => [it.name, it.sec])) };
+  const undo = { order: S.items.map(it => it.name), sec: new Map(S.items.map(it => [it.name, it.sec])) };
   const act = S.view.filter(it => !it.discard), gone = S.view.filter(it => it.discard);
   const first = new Map(); let cur = '', filled = 0;
   const grp = new Map();
@@ -2309,7 +2602,7 @@ function groupBySection(){
   }
   act.sort((a, b) => grp.get(a) - grp.get(b));          // stable: order within a section is kept
   // Weg-Fotos bleiben an ihren Plätzen (2.0) – nur die Fotos in der Doku werden in die freien Plätze sortiert
-  let k = 0; S.items = S.view.map(it => it.discard ? it : act[k++]);
+  let k = 0; ansichtEinsetzen(S.view.map(it => it.discard ? it : act[k++]));
   void gone;
   return { undo, sections: first.size, filled };
 }
@@ -2318,12 +2611,12 @@ function groupBySection(){
    Plätzen. Ändert keine Eingaben – nur die Reihenfolge (danach „von Hand“). Gibt die Daten für „Rückgängig“ zurück. */
 function probeSchluessel(it){ return fotoProben(it.probe, BK.map)[0] || ''; }
 function groupByProbe(){
-  const undo = { order: S.view.map(it => it.name) };
+  const undo = { order: S.items.map(it => it.name) };
   const act = S.view.filter(it => !it.discard), key = new Map(act.map(it => [it, probeSchluessel(it)]));
   act.sort((a, b) => { const x = key.get(a), y = key.get(b);
     if (!x || !y) return (!x) - (!y);
     return x.localeCompare(y, 'de', { numeric: true, sensitivity: 'base' }); });   // stabil: gleiche Probe behält ihre Reihenfolge
-  let k = 0; S.items = S.view.map(it => it.discard ? it : act[k++]);
+  let k = 0; ansichtEinsetzen(S.view.map(it => it.discard ? it : act[k++]));
   const proben = new Set(act.flatMap(it => fotoProben(it.probe, BK.map)).map(v => v.toLocaleUpperCase('de')));
   return { undo, proben: proben.size, ohne: [...key.values()].filter(v => !v).length };
 }
@@ -2341,8 +2634,17 @@ function undoGroup(undo){
   banner('ok', '↺ Sortierung nach Abschnitt rückgängig gemacht.');
 }
 function saveOrder(names){
-  projSet('order', names || S.view.map(it => it.name));
+  projSet('order', unlesbareListe(ordnungEinsetzen(names || S.view.map(it => it.name)), P.data && P.data.order));   // R2
 }
+/** 2.7.0: Reihenfolge der gezeigten Fotos in die ganze Liste einsetzen – Fotos anderer Termine behalten ihre Plätze. Wird alles
+    gezeigt (ein Termin oder „Alle“), ist das Ergebnis genau die übergebene Liste (wie bis 2.6.0). */
+function ordnungEinsetzen(namen){
+  const inAnsicht = new Set(S.view), q = [...namen], out = [];
+  for (const it of S.items){ if (!inAnsicht.has(it)) out.push(it.name); else if (q.length) out.push(q.shift()); }
+  return out.concat(q);
+}
+/** Umsortierte gezeigte Fotos zurück in die ganze Liste (gleiche Plätze, andere Termine unberührt). */
+function ansichtEinsetzen(neu){ const inAnsicht = new Set(S.view), q = [...neu]; S.items = S.items.map(it => inAnsicht.has(it) ? q.shift() : it); }
 
 /* ---------- rows ---------- */
 const io = new IntersectionObserver(entries => {
@@ -2354,8 +2656,9 @@ const io = new IntersectionObserver(entries => {
    Weg-Fotos bleiben an ihrem Platz (abgeblendet) – beim schnellen Abhaken springt nichts; Bildnummern zählen sie nicht mit. */
 function buildRows(){
   const list = $('list'); list.innerHTML = '';
-  S.view = S.items.slice();
-  abschnittSig = null;
+  ansichtPruefen(); gruppenOrdnen();   // 2.7.0: Kacheln je Ordner zusammen; nur die Fotos des gewählten Termins
+  S.view = S.items.filter(sichtbar);
+  abschnittSig = null; ordnerSig = null;
   S.view.forEach(it => {
     if (!it.el){
       const r = document.createElement('div');
@@ -2563,14 +2866,14 @@ function flushDrafts(){
   clearTimeout(draftTimer);
   if (!S.dir) return;
   const d = {}; S.items.forEach(it => { if (it.desc.trim()) d[it.name] = it.desc; });
-  projSet('drafts', d);
+  projSet('drafts', unlesbareMischen(d, P.data && P.data.drafts));   // R2
 }
 function saveDrafts(){
   clearTimeout(draftTimer);
   draftTimer = setTimeout(flushDrafts, 400);
 }
 function saveDiscards(){
-  projSet('discard', S.items.filter(it => it.discard).map(it => it.name));
+  projSet('discard', unlesbareListe(S.items.filter(it => it.discard).map(it => it.name), P.data && P.data.discard));   // R2
 }
 
 let thumbQueue = [], thumbActive = 0;
@@ -2621,9 +2924,11 @@ function buildName(it, nr){
 function recompute(){
   readCfgFromUI();
   heicKarte();   // iPhone-Fotos im Ordner? (2.3.0)
-  // sections: an image without its own section inherits the one above it
-  let cur = ''; const secs = new Set();
+  // sections: an image without its own section inherits the one above it (2.7.0: nur innerhalb desselben Ordners)
+  let cur = '', gr = null; const secs = new Set();
   S.view.forEach(it => {
+    const g = it.ordner || '';
+    if (g !== gr){ gr = g; cur = ''; }
     if (!it.discard && it.sec.trim()){ cur = it.sec.trim(); secs.add(cur); }
     it.secEff = it.discard ? it.sec.trim() : cur;
     it.secInh = !it.sec.trim() && !it.discard && !!cur;   // nur geerbt (Fotokarte zeigt „↳ Küche“)
@@ -2635,24 +2940,30 @@ function recompute(){
   if (dl.dataset.k !== [...secs].join('|')){ dl.dataset.k = [...secs].join('|'); dl.innerHTML = [...secs].map(v => `<option value="${esc(v)}">`).join(''); }
   const moving = cfg.discard === 'move';
   // Derived only: never persist a second order/number in the project format.
+  // 2.7.0: Nummern zählen je gezeigtem Termin; Fotos im Unterordner behalten ihren Namen (O5) und werden nie verschoben (O6).
+  const inAnsicht = new Set(S.view);
+  S.items.forEach(it => { if (!inAnsicht.has(it)){ it.docNr = null; it.nr = null; it.final = it.name; } });
   let docNr = 0;
   S.view.forEach(it => {
     it.docNr = it.discard ? null : ++docNr;
     it.nr = null;
-    if (!it.discard && sanitize(it.desc)){ it.nr = cfg.start + it.docNr - 1; it.final = buildName(it, it.nr); }
+    if (!it.discard && sanitize(it.desc)){ it.nr = cfg.start + it.docNr - 1; it.final = it.ordner ? it.name : buildName(it, it.nr); }
     else it.final = it.name;
   });
-  // names that will occupy the folder afterwards
-  const staying = S.view.filter(it => !(it.discard && moving));
+  // names that will occupy the folder afterwards – „doppelt“ nur innerhalb desselben Ordners (im Unterordner ändert sich kein Name)
+  const wegDamit = it => it.discard && moving && !it.ordner && inAnsicht.has(it);
+  const staying = S.items.filter(it => !it.ordner && !wegDamit(it));
   const count = new Map();
   staying.forEach(it => { const k = it.final.toLowerCase(); count.set(k, (count.get(k)||0) + 1); });
-  let changes = 0, conflicts = 0, tooLong = 0, discarded = 0, storniert = 0;
+  let changes = 0, conflicts = 0, tooLong = 0, discarded = 0, storniert = 0, moves = 0;
+  S.items.forEach(it => { if (!inAnsicht.has(it)) it.conflict = false; });
   S.view.forEach(it => {
     const sp = it.discard ? [] : stornoProben(it.probe);   // aussortierte Fotos brauchen keinen Hinweis
     if (sp.length) storniert++;
     const k = it.final.toLowerCase();
-    const gone = it.discard && moving;
-    it.conflict = !gone && (count.get(k) > 1 || (it.final !== it.name && S.otherNames.has(k)));
+    const gone = wegDamit(it);
+    if (gone) moves++;
+    it.conflict = !it.ordner && !gone && (count.get(k) > 1 || (it.final !== it.name && S.otherNames.has(k)));
     const changed = it.final !== it.name;
     if (changed) changes++;
     if (it.discard) discarded++;
@@ -2662,12 +2973,14 @@ function recompute(){
     kachelZeigen(it, sp);
   });
   abschnitteZeichnen(secs.size > 0);
+  ordnerZeichnen(); terminWahlZeigen();   // 2.7.0: Kopfzeile je Ordner, Auswahl des Termins
   nrZeileZeigen();   // Audit 2026-11 A4
   lkAndersZeileZeigen(); ohneFotoZeigen();   // Audit 2026-11 Lauf 5: E2, A18
-  const moves = moving ? discarded : 0;
   const ohne = S.view.filter(it => !it.discard && !it.desc.trim()).length, drin = S.view.length - discarded;
+  const ohneTermin = mehrereTermine() ? S.view.filter(it => !terminVon(it)).length : 0;
   const teile = [];
   if (P.readOnly) teile.push('<span>geschützter Modus – Originalfotos unverändert</span>');
+  if (ohneTermin) teile.push(`<span class="warn" title="Diese Fotos gehören noch zu keinem Ortstermin – in der gelben Zeile über ihrem Ordner zuordnen">${ohneTermin} ${ohneTermin === 1 ? 'Foto' : 'Fotos'} ohne Termin</span>`);
   if (conflicts) teile.push(`<span class="bad" title="Zwei Fotos bekämen denselben Dateinamen – Beschreibung ändern (Kachel mit rotem Rahmen). Solange gibt es keine Bilddokumentation.">${conflicts} ${conflicts === 1 ? 'Dateiname' : 'Dateinamen'} doppelt</span>`);
   if (storniert) teile.push(`<span class="warn" title="Diese Fotos sind noch Proben zugeordnet, die in LabelKit storniert sind – Hinweis auf der Kachel und in der Fotokarte">⚠ ${storniert} ${storniert === 1 ? 'Foto' : 'Fotos'} bei stornierter Probe</span>`);
   if (tooLong) teile.push(`<span class="bad">${tooLong} Namen sehr lang</span>`);
@@ -2692,6 +3005,7 @@ function recompute(){
 function kachelZeigen(it, sp){
   const el = it.el, leer = !it.discard && !it.desc.trim();
   el.classList.toggle('leer', leer);
+  el.classList.toggle('ohne-termin', mehrereTermine() && !terminVon(it));   // 2.7.0 (E5): gelb, bis jemand zuordnet
   el.classList.toggle('conflict', !!it.conflict && !it.discard);
   const nr = el.querySelector('.bildnr'), nrT = it.discard ? '' : 'Bild ' + it.docNr;
   if (nr.textContent !== nrT) nr.textContent = nrT;
@@ -3209,8 +3523,9 @@ function closeDialog(){ $('overlay').classList.remove('show'); }
 
 function plan(){
   recompute();
-  const pairs = S.view.filter(it => !it.discard && it.final !== it.name).map(it => ({ from:it.name, to:it.final }));
-  const moves = cfg.discard === 'move' ? S.view.filter(it => it.discard).map(it => ({ from:it.name })) : [];
+  // 2.7.0: nur Fotos direkt in „Fotos“ (O5, O6) – im Unterordner bleibt jeder Name, „Weg“ ist dort nur eine Markierung
+  const pairs = S.view.filter(it => !it.ordner && !it.discard && it.final !== it.name).map(it => ({ from:it.name, to:it.final }));
+  const moves = cfg.discard === 'move' ? S.view.filter(it => !it.ordner && it.discard).map(it => ({ from:it.name })) : [];
   return { pairs, moves };
 }
 
@@ -3224,8 +3539,9 @@ $('btnRename').onclick = () => {
   // Nur ein Hinweis (1.33): das Umbenennen ändert an der Probenzuordnung nichts und wird nie blockiert.
   const st = stornoFotos();
   const stornoNote = st.fotos.length ? `<p class="hint warn" id="dStornoNote">⚠ ${esc(stornoFrage(st.fotos.length, st.proben).replace(/ In der Bilddokumentation .*$/, ''))} Das Umbenennen ändert daran nichts – ordne ${st.fotos.length === 1 ? 'das Foto' : 'die Fotos'} gelegentlich einer anderen Probe zu oder lege ${st.fotos.length === 1 ? 'es' : 'sie'} mit „Weg“ beiseite.</p>` : '';
+  const unter = S.view.some(it => it.ordner) ? '<p class="hint" id="dUnterNote">Fotos in Unterordnern von „' + esc(FOTOS_DIR) + '“ behalten ihren Namen und werden nicht verschoben – „Weg“ ist dort nur eine Markierung.</p>' : '';
   showDialog(`<h3>Änderungen ausführen?</h3>
-    ${stornoNote}
+    ${stornoNote}${unter}
     <div class="list">${list}</div>
     <div class="btns"><button id="dCancel">Abbrechen</button><button class="primary" id="dOk">Jetzt ausführen</button></div>`);
   $('dCancel').onclick = closeDialog;
@@ -3382,7 +3698,9 @@ async function saveCsv(){
   const name = `Bildverzeichnis_${fmtISO(w)}_${pad(w.getHours(),2)}${pad(w.getMinutes(),2)}.csv`;
   const movedTo = new Map(run.moves.map(m => [m.from, m.to]));
   $('bCsv').disabled = true; $('bCsv').textContent = 'Berechne Prüfsummen …';
-  const hashAt = async (dir, nm) => { try{ const f = await (await dir.getFileHandle(nm)).getFile(); return await hashOfFile(dir === S.dir ? nm : DISCARD_DIR + '/' + nm, f); }catch(e){ return ''; } };
+  const hashAt = async (dir, nm) => { try{
+    const ordner = dir === S.dir ? ordnerVon(nm) : '', d = ordner ? await dir.getDirectoryHandle(ordner) : dir;   // 2.7.0: „Ordner/Datei“
+    const f = await (await d.getFileHandle(ordner ? dateiVon(nm) : nm)).getFile(); return await hashOfFile(dir === S.dir ? nm : DISCARD_DIR + '/' + nm, f); }catch(e){ return ''; } };
   const sub = run.moves.length ? await S.dir.getDirectoryHandle(DISCARD_DIR).catch(() => null) : null;
   const rows = [['Nr','Dateiname','Beschreibung','Abschnitt','Probe-Nr.','Aufnahmedatum','Ursprünglicher Dateiname','Status','SHA-256']];
   for (const r of run.rows) rows.push([r.nr, r.to, r.desc, r.sec || '', r.probe || '', r.date, r.orig || r.from, 'verwendet', await hashAt(S.dir, r.to)]);
@@ -3523,7 +3841,7 @@ function loadMeta(){
   return m;
 }
 function saveMeta(m){
-  const { sv, template, img, pdf, onlyDesc, ...project } = m;
+  const { sv, template, img, pdf, onlyDesc, terminWahl, ortText, ortLabel, ...project } = m;   // 2.7.0: Termin-Wahl gilt nur für diese PDF
   S.onlyDesc = !!onlyDesc;
   if (img) store.set('bu-zipimg', img);
   if (pdf) store.set('bu-pdf', pdf);
@@ -3547,11 +3865,15 @@ function zipSelection(onlyDesc){
 /* export names: „Bilddokumentation_26.0123_Aachen_2026-10-19.pdf“ – number and place from the project folder,
    otherwise the Projektnummer from the project data, otherwise the folder name; then the creation date */
 const winName = s => (s || '').replace(/[<>:"\/\\|?*\x00-\x1F]/g, '-').replace(/\s+/g, ' ').trim().replace(/^[.~]+|[. ]+$/g, '');
+/* 2.7.0 (O4): PDF zu einem Termin (meta.terminWahl, nur bei mehreren Terminen) mit dem Termindatum, „Alle Termine“ mit dem
+   Erstelldatum und „ - alle Termine“; ohne Wahl (ein Termin, ZIP) wie bisher das Erstelldatum. */
 function docBaseName(m){
   const generic = !S.dir || /^(fotos|bilder)$/i.test(S.dir.name);
   const parts = S.proj ? [S.proj.nr || S.proj.name, S.proj.ort]
               : [(m.proj || '').trim() || (generic ? '' : S.dir.name)];
-  return ['Bilddokumentation', ...parts.map(winName), fmtISO(new Date())].filter(Boolean).join('_');
+  const t = m && m.terminWahl && m.terminWahl !== 'alle' && mehrereTermine() ? terminNach(m.terminWahl) : null;
+  const datum = t && OT && OT.gueltig(t.datum) ? t.datum : fmtISO(new Date());
+  return ['Bilddokumentation', ...parts.map(winName), datum].filter(Boolean).join('_') + (m && m.terminWahl === 'alle' && mehrereTermine() ? ' - alle Termine' : '');
 }
 /* never overwrite an earlier export: „…_2026-10-19.pdf“ exists → „…_2026-10-19 (2).pdf“ (all parts of a split PDF get the same suffix) */
 async function freeBase(dir, base, namesOf){
@@ -3644,8 +3966,12 @@ function openMetaDialog(mode){
   const pjInfo = S.proj && PJ.data ? [['auftraggeber', 'Auftraggeber'], ['schadennummer', 'Schaden-Nr.']]
     .map(([k, l]) => `<label class="ro">${l} <small>(Projektzentrale)</small><input type="text" id="m_pz_${k}" readonly tabindex="-1" value="${esc(String(PJ.data[k] || '').trim())}" placeholder="– nicht hinterlegt –"></label>`).join('') : '';
   const sel = (id, vals) => `<select id="${id}">${vals.map(v => `<option value="${v}">${v}</option>`).join('')}</select>`;
+  // 2.7.0: bei mehreren Terminen zuerst „Für welchen Termin?“ (vorgewählt: der gezeigte) – die Wahl zeigt die Fotos dieses Termins
+  const mitTermin = forPdf && mehrereTermine();
+  const terminWahlHtml = mitTermin ? `<label class="wide fk-termin-wahl"><span>Für welchen Termin?</span><select id="pTermin">${termine().map(t => `<option value="${esc(t.id)}">${esc(terminText(t))}</option>`).join('')}<option value="alle">Alle Termine</option></select></label><div class="m" id="pTerminInfo"></div>` : '';
   showDialog(`<h3>${forZip ? 'ZIP für Bilddokumentation exportieren' : forPdf ? 'Bilddokumentation erstellen' : 'Projektdaten'}</h3>
     <div class="body">
+      ${terminWahlHtml}
       ${forPdf ? '<div class="lbl fk-dlg-lbl">Deckblatt <span id="pPflicht"></span></div>' : ''}
       <div class="form">${forPdf ? fields + pjInfo : pjInfo + fields}</div>
       ${forPdf && angebot ? `<label class="chk fk-angebot" id="pRenameBox"><input type="checkbox" id="pRename"><span><b>Vorher die Fotos im Ordner passend benennen?</b> Dann heißt z. B. Bild ${angebot.docNr} im Explorer <code>${esc(angebot.final)}</code> – so findet man einzelne Fotos schnell wieder, etwa um eines direkt in den Bericht einzufügen. Rückgängig ist möglich. Wird nur dieses eine Mal angeboten; später unter „Mehr …“ › „Dateien umbenennen“.</span></label>` : ''}
@@ -3686,6 +4012,28 @@ function openMetaDialog(mode){
   if (forZip){ $('zShrink').checked = io0.shrink; $('zEdge').value = String(io0.edge); $('zQ').value = String(io0.q); }
   if (forZip) $('zRecord').checked = io0.record !== false;
   if (forPdf){ $('pPer').value = String(po0.perPage); $('pMax').value = String(po0.maxMB); $('pSecPage').checked = !!po0.secPage; $('pDpi').value = String(pdfQuality(po0.dpi).dpi); }
+  // Ortstermin auf dem Deckblatt: Termin 1 = das Feld (schreibt wie bisher „ortstermin“); Termin ≥ 2 und „Alle“ nur Anzeige –
+  // „ortstermin“ bleibt Termin 1 (F3/R7), meta.ort ebenso (BerichtKit vergleicht damit).
+  let ortT1 = m.ort || '';
+  const wahlJetzt = () => mitTermin ? $('pTermin').value : '';
+  const terminFeld = () => {
+    if (!mitTermin) return;
+    const w = wahlJetzt(), f = $('m_ort'), lbl = f.closest('label'), t = terminNach(w);
+    if (f.dataset.termin === 't1' || f.dataset.termin === undefined){ if (!f.disabled) ortT1 = f.value.trim(); }
+    f.dataset.termin = w;
+    f.disabled = w !== 't1';
+    f.value = w === 't1' ? ortT1 : t ? t.datum : '';
+    lbl.title = w === 't1' ? '' : 'Datum aus den Projektdaten (Projektzentrale) – hier nicht änderbar';
+    const ohne = S.items.filter(it => !terminVon(it)).length;
+    $('pTerminInfo').innerHTML = (w === 'alle' ? 'Deckblatt: alle Ortstermine. ' : t ? `Deckblatt: ${esc(terminText(t))}${w === 't1' ? '' : ' (Datum aus den Projektdaten, hier nicht änderbar)'}. ` : '') +
+      (ohne ? `<span class="warn">${ohne} ${ohne === 1 ? 'Foto hat' : 'Fotos haben'} noch keinen Ortstermin${w === 'alle' ? ' – sie kommen in diese Doku mit' : ' und ' + (ohne === 1 ? 'ist' : 'sind') + ' in keiner Termin-Doku – erst zuordnen (gelbe Zeile über dem Ordner, Auswahl „Alle“)'}.</span>` : '');
+  };
+  if (mitTermin){
+    $('pTermin').value = S.ansicht === 'alle' || terminNach(S.ansicht) ? S.ansicht : 't1';
+    $('pTermin').addEventListener('change', () => { ansichtSetzen($('pTermin').value); terminFeld(); });
+    $('m_ort').addEventListener('input', () => { if (wahlJetzt() === 't1') ortT1 = $('m_ort').value.trim(); });
+    terminFeld();
+  }
   const read = () => {
     const r = { template: forPdf ? m.template : ($('m_template').value.trim() ? $('m_template').value : DEFAULT_TEMPLATE),
                 notes: forPdf ? m.notes : $('m_notes').value,
@@ -3693,6 +4041,13 @@ function openMetaDialog(mode){
                 img: forZip ? { shrink: $('zShrink').checked, edge: +$('zEdge').value, q: +$('zQ').value, record: forZip ? $('zRecord').checked : io0.record } : io0,
                 pdf: forPdf ? { perPage: +$('pPer').value, maxMB: Math.min(200, Math.max(1, +$('pMax').value || 14)), secPage: $('pSecPage').checked, dpi: +$('pDpi').value } : po0 };
     for (const [key] of META_FIELDS) r[key] = $('m_' + key + '_nb')?.getAttribute('aria-pressed') === 'true' ? UNBEKANNT : $('m_' + key).value.trim();
+    if (mitTermin){
+      const w = wahlJetzt(), t = terminNach(w);
+      r.ort = ortT1;   // nie das Datum von Termin ≥ 2 nach „ortstermin“ schreiben
+      r.terminWahl = w;
+      if (w === 'alle'){ r.ortLabel = 'Ortstermine'; r.ortText = termine().map(x => (x.id === 't1' ? deDate(ortT1) : terminDatum(x)) + (x.bezeichnung ? ` (${x.bezeichnung})` : '')).join(' · '); }
+      else if (t) r.ortText = [w === 't1' ? deDate(ortT1) : terminDatum(t), t.bezeichnung].filter(Boolean).join(' · ');
+    }
     return r;
   };
   const update = () => {
@@ -4070,8 +4425,8 @@ function pdfEstimateBytes(items, opt){
   const box = px(PDF_CW) * px(opt.perPage === 1 ? 560 : 250) * 0.55;
   return items.reduce((a, it) => a + (canRotate(it) ? Math.min(it.size, box * Q.bpp) : 0), 0);
 }
-const loadPdfOpt = () => Object.assign({}, PDF_DEFAULTS, store.get('bu-pdf', {}));
 const pdfBaseName = docBaseName;
+const loadPdfOpt = () => Object.assign({}, PDF_DEFAULTS, store.get('bu-pdf', {}));
 const pdfPartName = (base, i, n) => n > 1 ? `${base}_Teil_${i}_von_${n}.pdf` : `${base}.pdf`;
 
 /* Builds all PDF parts. Returns { parts: [{ name, blob, pages, from, to }], failed: [items] }. */
@@ -4129,7 +4484,8 @@ async function buildAnnex(meta, items, progress){
     // Schadendatum leer oder „nicht bekannt“ (gespeichert „unbekannt“): Zeile entfällt (Testlauf 26.0512).
     // „Bearbeitung“ statt „Sachverständiger“: die Person kann im Bericht auch als Messtechniker unterschreiben – neutral, passt zu beidem.
     const sdatum=String(meta.sdatum||'').trim().toLowerCase()==='unbekannt'?'':deDate(meta.sdatum);
-    const facts=[['Projektnummer',meta.proj],['Schadenereignis',meta.ereignis],['Schadendatum',sdatum],['Ortstermin',deDate(meta.ort)],
+    // 2.7.0: bei mehreren Terminen Datum und Bezeichnung des gewählten Termins (ortText), „Alle Termine“: alle (Ortstermine)
+    const facts=[['Projektnummer',meta.proj],['Schadenereignis',meta.ereignis],['Schadendatum',sdatum],[meta.ortLabel||'Ortstermin',meta.ortText!=null?meta.ortText:deDate(meta.ort)],
       ['Bearbeitung',meta.sv],['Bilder',N>1?`${range(a,b)} (gesamt ${items.length})`:`${items.length}`],['Erstellt am',fmtDate(now)]].filter(r=>r[1]);
     const colW=(PDF_CW-24)/2;
     pg.line(PDF_M,y+14,PDF_W-PDF_M,y+14,0.5,PDF_CD.rule);
@@ -4348,7 +4704,7 @@ async function doPdf(meta){
       if (sz !== p.blob.size) throw new Error(`„${p.name}“ unvollständig gespeichert (${sz} statt ${p.blob.size} Bytes).`);
       S.otherNames.add(p.name.toLowerCase());
     }
-    bilddokuVermerken(res.parts.map(p => p.name), meta.anlage);   // für BerichtKit: welche PDF, wann, mit welcher Anlagen-Nr.
+    bilddokuVermerken(res.parts.map(p => p.name), meta.anlage, meta.terminWahl);   // für BerichtKit: welche PDF, wann, mit welcher Anlagen-Nr. (2.7.0: je Termin)
     closeDialog(); S.busy = false; recompute();
     S.lastPdf = res.parts;
     const list = res.parts.map((p, k) => `<button class="pdfOpen" data-k="${k}" title="Im Browser öffnen">„${esc(p.name)}“</button> ${(p.blob.size / 1e6).toFixed(1).replace('.', ',')} MB, ${p.pages} S.`).join(' · ');
@@ -5544,11 +5900,12 @@ const HELP_HTML = `
 <h4>So entsteht die Bilddokumentation</h4>
 <ol>
   <li><b>Projekt öffnen:</b> in der Projektzentrale „Fotos“ – oder oben auf das Projekt bzw. unten „Mehr …“ › „Anderen Ordner öffnen …“. Oben im Kopfband stehen dann Projektnummer und Ort groß, daneben die sechs Schritte. Wurde nur der Ordner <code>Fotos</code> gewählt, steht über den Fotos „Projekt zuordnen …“. Neue Fotos – auch nach einer schon erstellten Bilddokumentation – einfach in den Ordner kopieren: Beim Zurückkommen meldet FotoKit „n neue Fotos“ mit „Jetzt einlesen“ (sonst „Mehr …“ › „Fotos neu einlesen“). Alles Eingetragene bleibt, die neuen Fotos kommen ans Ende; danach die Bilddokumentation einfach neu erstellen. Einlesen liest immer die Fotos des Projekts, an dem gerade in Spektron gearbeitet wird.</li>
-  <li><b>Fotos übernehmen:</b> Haben Kollegen ihre Fotos in Unterordnern von <code>Fotos</code> abgelegt (z. B. <code>Begehung Ben</code>), steht über den Fotos eine Karte „Fotos übernehmen →“. Angehakte Unterordner werden nach <code>Fotos</code> verschoben (nicht kopiert), die Dateinamen bleiben – nur bei gleichem Namen kommt das Kürzel dazu. Der Ordnername wird auf Wunsch Abschnitt; die Herkunft jeder Datei steht in <code>_Bildumbenenner.json</code>. Die leeren Unterordner bleiben stehen.</li>
+  <li><b>Fotos in Unterordnern:</b> Haben Kollegen ihre Fotos in Unterordnern von <code>Fotos</code> abgelegt (z. B. <code>Bilder Stefan</code>, <code>fotos ka 20.08</code>), zeigt FotoKit sie dort, wo sie liegen – nichts wird verschoben oder umbenannt. Über den Kacheln jedes Ordners steht eine Zeile mit seinem Namen. FotoKit liest eine Ebene; Ordner mit „_“ vorn (<code>_aussortiert</code>, <code>_Originale</code>) zählen nicht.</li>
+  <li><b>Mehrere Ortstermine:</b> Ist in der Projektzentrale ein weiterer Ortstermin eingetragen, fragt FotoKit je Ordner einmal, zu welchem Termin er gehört – mit einem Vorschlag aus dem Datum im Ordnernamen (sonst dem Aufnahmedatum): „Ja“ oder „anderer …“. Passt das Datum zu keinem Termin, legt „Anlegen“ ihn in den Projektdaten an. Bis dahin sind die Fotos gelb gestrichelt. Über den Fotos „Termin 1 · Termin 2 · Alle“ – die Bilddokumentation entsteht für den gewählten Termin (oder alle) und trägt dessen Datum.</li>
   <li><b>Welche Fotos gehören in die Doku?</b> Jede Kachel hat oben links den Haken „in der Doku“. Ohne Haken ist das Foto <b>Weg</b> (abgeblendet, bleibt an seinem Platz, bekommt keine Bildnummer) – dasselbe wie der Knopf „Weg“ in der Fotokarte. Sollen nur wenige Fotos in die Doku: über den Kacheln „Keine“, dann die gewünschten anhaken. „Alle“, „Keine“ und „Umkehren“ lassen sich rückgängig machen. Nichts wird gelöscht.</li>
   <li><b>Beschreiben:</b> Foto anklicken – rechts erscheint die Fotokarte. „Was ist zu sehen?“ eintippen, <kbd>Enter</kbd> springt zum nächsten Foto. Darunter „Gehört zu Probe“ (z. B. „P1“, mehrere mit Komma; die Liste schlägt die Proben aus LabelKit vor) und „Raum / Abschnitt“ (z. B. „Küche“ – gilt für die folgenden Fotos mit und wird im PDF eine Zwischenüberschrift; im Raster steht je Abschnitt eine Trennzeile). Gelb umrandete Kacheln haben noch keine Beschreibung – unten „n Fotos ohne Beschreibung“ springt zum nächsten. In LabelKit stornierte Proben bietet FotoKit nicht an; ist ein Foto noch so einer Probe zugeordnet, steht ein Hinweis auf der Kachel und in der Karte, und vor PDF und ZIP fragt FotoKit nach – ordne es dann einer anderen Probe zu oder lege es mit „Weg“ beiseite.</li>
   <li><b>Reihenfolge:</b> Die Reihenfolge der Kacheln ist die Reihenfolge im PDF (Bild 1, 2, 3 …). Kachel ziehen oder in der Fotokarte „◂ Früher“ / „Später ▸“. „Mehr …“ › „Sortierung …“ ordnet nach Dateiname, Aufnahmedatum, Abschnitt (Begehung) oder Probe (P1, P2 … – Fotos ohne Probe ans Ende, bei mehreren Proben zählt die erste). Schiefe Fotos mit „↻ Drehen“ (gilt nur für PDF und ZIP).</li>
-  <li><b>Bilddokumentation erstellen →</b> (unten rechts): Im Dialog zuerst das <b>Deckblatt</b> – Anlagen-Nr., Objekt, Schadenereignis, Schadendatum, Ortstermin, Sachverständiger. Was in der Projektzentrale schon eingetragen ist, steht hier bereits; gelb = Pflicht (leere Felder werden im PDF weggelassen). Unter „Einstellungen“: Bildqualität (Standard reicht für Druck und Bildschirm, „E-Mail“ für kleinste Dateien, „Detail“ zum starken Hineinzoomen), Bilder je Seite, max. Dateigröße (Teile ≤ 14 MB), neuer Abschnitt auf neuer Seite, nur Fotos mit Beschreibung. Das PDF liegt danach im Ordner <code>Fotos</code> als <code>Bilddokumentation_26.0123_Köln_2026-10-19.pdf</code> (ältere Dateien werden nie überschrieben).</li>
+  <li><b>Bilddokumentation erstellen →</b> (unten rechts): Im Dialog zuerst das <b>Deckblatt</b> – Anlagen-Nr., Objekt, Schadenereignis, Schadendatum, Ortstermin, Sachverständiger. Was in der Projektzentrale schon eingetragen ist, steht hier bereits; gelb = Pflicht (leere Felder werden im PDF weggelassen). Unter „Einstellungen“: Bildqualität (Standard reicht für Druck und Bildschirm, „E-Mail“ für kleinste Dateien, „Detail“ zum starken Hineinzoomen), Bilder je Seite, max. Dateigröße (Teile ≤ 14 MB), neuer Abschnitt auf neuer Seite, nur Fotos mit Beschreibung. Das PDF liegt danach im Ordner <code>Fotos</code> als <code>Bilddokumentation_26.0123_Köln_2026-10-19.pdf</code> (ältere Dateien werden nie überschrieben). Bei mehreren Ortsterminen fragt der Dialog zuerst „Für welchen Termin?“; der Name trägt dann das Datum des Termins, das Deckblatt Datum und Bezeichnung, und FotoKit merkt sich je Termin eine Bilddokumentation.</li>
 </ol>
 <h4>Unter „Mehr …“ (unten links)</h4>
 <ul>
@@ -5684,7 +6041,6 @@ $('btnPdf').onclick = guardHeic(guardStorno(openPdfDialog));   // erst iPhone-Fo
 $('btnHeic').onclick = () => heicUmwandelnStarten();
 $('btnVersions').onclick = openPhotoVersions;
 $('btnOpen2').onclick = pickFolder;
-$('btnImport').onclick = fotoUebernahmeDialog;
 $('btnReload').onclick = async () => {
   // Fotos des Projekts, an dem gerade gearbeitet wird (in einer anderen App gewechselt?) – sonst diesen Ordner neu lesen
   // beim Zurückkommen erkannt (die Leiste dieses Fensters stellt danach ihr eigenes Projekt wieder nach vorn)
@@ -5704,7 +6060,7 @@ function ordnerNeuEinlesen(){
     await recoveryOpened(); // N3 recovery hook
     loadBohrkernZuordnung();   // LabelKit-Datei neu lesen (Storno gesetzt/aufgehoben) – im Hintergrund wie beim Öffnen
     if (note) banner(P.readOnly ? 'err' : 'info', note);
-  }).then(r => { fotoUebernahmeKnopf(); return r; });
+  });
 }
 $('sort').onchange = () => {
   if ($('sort').value === 'section'){

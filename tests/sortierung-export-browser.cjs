@@ -30,7 +30,7 @@ const PROJ = '26.0177 Bad Teststadt';
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}/index.html`;
   // Chromium: eigenes (persistentes) Profil je Lauf – im Inkognito-Kontext stürzt Chromium 1243 (Playwright 1.63) beim Lesen eines
-  // in IndexedDB abgelegten Ordner-Handles ab (SIGTRAP; hier: Archivordner „mosaik-suite“/archiv); wie in fotos-uebernehmen-browser.cjs.
+  // in IndexedDB abgelegten Ordner-Handles ab (SIGTRAP; hier: Archivordner „mosaik-suite“/archiv); wie in unterordner-browser.cjs.
   const profil = name === 'chromium' ? fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'fk-profil-')) : null;
   const ctx = profil ? await playwright.chromium.launchPersistentContext(profil, { viewport: { width: 1300, height: 900 } })
     : await (await playwright[name].launch()).newContext({ viewport: { width: 1300, height: 900 } });
