@@ -545,10 +545,10 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.7.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:1deb0e381ea981b8ebae2ee714a2af048152d955cab90f83f0b5920f9621fcab';
+const APP_BUILD = 'sha256:41bb1b3733ecd825bddef7467d8c3fb3d299705aae608b304662832e51412cf3';
 const APP_DATE = '2026-11-26';
 const CHANGELOG = [
-  ['2.7.0', '26.11.2026', 'Mehrere Ortstermine, Fotos bleiben in ihren Unterordnern: FotoKit liest jetzt auch die Fotos in den Unterordnern von „Fotos“ (eine Ebene, z. B. „Bilder Stefan“, „fotos ka 20.08“) – sie bleiben dort liegen und behalten ihren Namen; Ordner mit „_“ oder „.“ vorn zählen nicht. Über den Kacheln steht je Ordner eine Zeile. Hat das Projekt mehr als einen Ortstermin (Projektzentrale „+ Weiterer Ortstermin“), fragt FotoKit je Ordner einmal, zu welchem Termin er gehört – Vorschlag aus dem Datum im Ordnernamen, sonst aus dem Aufnahmedatum; nie ohne Klick. Passt das Datum zu keinem Termin, legt „Anlegen“ ihn in den Projektdaten an (nur den Termin, mit derselben Kennungsregel wie die Projektzentrale). Über den Fotos „Termin 1 · Termin 2 · Alle“, Fotos ohne Termin sind gelb. „Bilddokumentation erstellen“ fragt zuerst „Für welchen Termin?“, das Deckblatt nennt Datum und Bezeichnung des Termins, die PDF trägt das Termindatum im Namen, und FotoKit merkt sich je Termin eine Bilddokumentation – eine neue für Termin 2 lässt die von Termin 1 aktuell. Fotos in Unterordnern werden nicht umbenannt und nie nach „_aussortiert“ verschoben („Weg“ ist dort nur eine Markierung); iPhone-Fotos dort werden im selben Ordner umgewandelt, das Original kommt nach „<Ordner>/_Originale“. „Fotos übernehmen“ entfällt. Ein Projekt ohne Unterordner und mit einem Termin sieht aus wie bisher. Ältere FotoKit-Fassungen ändern eine Projektdatei von 2.7.0 nicht (geschützter Modus).'],
+  ['2.7.0', '26.11.2026', 'Mehrere Ortstermine, Fotos bleiben in ihren Unterordnern: FotoKit liest jetzt auch die Fotos in den Unterordnern von „Fotos“ (eine Ebene, z. B. „Bilder Stefan“, „fotos ka 20.08“) – sie bleiben dort liegen und behalten ihren Namen; Ordner mit „_“ oder „.“ vorn zählen nicht. Über den Kacheln steht je Ordner eine Zeile. Hat das Projekt mehr als einen Ortstermin (Projektzentrale „+ Weiterer Ortstermin“), fragt FotoKit je Ordner einmal, zu welchem Termin er gehört – Vorschlag aus dem Datum im Ordnernamen, sonst aus dem Aufnahmedatum; nie ohne Klick. Passt das Datum zu keinem Termin, legt „Anlegen“ ihn in den Projektdaten an (nur den Termin, mit derselben Kennungsregel wie die Projektzentrale). Über den Fotos „Termin 1 · Termin 2 · Alle“, Fotos ohne Termin sind gelb. „Bilddokumentation erstellen“ fragt zuerst „Für welchen Termin?“, das Deckblatt nennt Datum und Bezeichnung des Termins, die PDF trägt das Termindatum im Namen, und FotoKit merkt sich je Termin eine Bilddokumentation – eine neue für Termin 2 lässt die von Termin 1 aktuell. Ändert die Projektzentrale Datum oder Bezeichnung eines Termins, gilt nur dessen Bilddokumentation als geändert (Hinweis über den Fotos). Fotos in Unterordnern werden nicht umbenannt und nie nach „_aussortiert“ verschoben („Weg“ ist dort nur eine Markierung); iPhone-Fotos dort werden im selben Ordner umgewandelt, das Original kommt nach „<Ordner>/_Originale“. „Fotos übernehmen“ entfällt; schon übernommene Fotos fragt FotoKit je Herkunftsordner, auch nach dem Umbenennen (sonst „Herkunft unbekannt“). Ein Projekt ohne Unterordner und mit einem Termin sieht aus wie bisher. Ältere FotoKit-Fassungen ändern eine Projektdatei von 2.7.0 nicht (geschützter Modus).'],
   ['2.6.0', '21.11.2026', 'Probe in LabelKit verschoben: FotoKit merkt sich beim Zuordnen („Gehört zu Probe“), wie die Probe in LabelKit beschrieben war. Wurde dort vor dem Festlegen der Nummern eine Probe gelöscht oder verschoben, zeigt ein Foto sonst still auf eine andere Probe. Jetzt steht oben „⚠ Seit der Zuordnung ist in LabelKit die Probe P4 anders beschrieben …“, auf der Kachel „⚠ P4 in LabelKit geändert“ und in der Fotokarte, wie sie damals und heute heißt – auch wenn die Nummern inzwischen fest sind. Gehört das Foto noch dazu: „✓ Zuordnung stimmt“; sonst die richtige Probe eintragen. FotoKit ändert keine Zuordnung selbst. Neu über den Fotos: „Noch ohne Foto: P2, P5“ – LabelKit-Proben, denen noch kein Foto in der Doku zugeordnet ist (nur Hinweis; Rückstellproben von Bohrkernen zählen nicht). In der Projektdatei kommt je Foto ein zusätzliches Feld dazu, sonst bleibt alles gleich.'],
   ['2.5.0', '20.11.2026', 'Probennummern: Solange in LabelKit noch keine Nummer fest ist (keine Etiketten gedruckt, nichts ans Labor übergeben) und Fotos schon Proben zugeordnet sind, steht oben ein gelber Hinweis – wird in LabelKit eine Probe gelöscht oder verschoben, zeigen die Zuordnungen sonst auf andere Proben. Nur ein Hinweis, nichts gesperrt. Ist ein Foto einer Nummer zugeordnet, die es in LabelKit nicht gibt (z. B. P13 bei 12 Proben), steht „⚠ P13 nicht in LabelKit“ an der Kachel. Behoben: „Jetzt einlesen“ (neue Fotos) öffnete ein anderes Projekt, wenn vorher der Hinweis „In Spektron arbeitest du gerade an …“ gekommen war – jetzt liest der Knopf immer nur den offenen Ordner. Behoben: Die Fußzeile blieb nach dem Tippen bei „Projektspeicherung noch nicht bestätigt“, obwohl gespeichert war; jetzt steht dort „Projekt gespeichert“.'],
   ['2.4.0', '17.11.2026', 'Sortierung „nach Probe“ (Mehr … › Sortierung …): ordnet die Fotos einmalig nach ihrer Probe – P2 vor P10, bei mehreren Proben zählt die erste, Fotos ohne Probe kommen ans Ende; gleiche Probe behält ihre Reihenfolge, Weg-Fotos bleiben an ihrem Platz. Danach gilt die Reihenfolge „von Hand“, mit „Rückgängig“. Fotos nachreichen: Liegen beim Zurückkommen ins Fenster Fotos im Ordner, die noch nicht in der Liste sind (z. B. nach der ersten Bilddokumentation nachgereicht), meldet FotoKit „n neue Fotos“ mit „Jetzt einlesen“ – nie ohne Klick; Beschreibungen, Proben und Reihenfolge bleiben, die neuen Fotos kommen ans Ende. Nach „PDF erstellt“ steht, wie man Fotos nachreicht.'],
@@ -632,7 +632,7 @@ const $ = id => document.getElementById(id);
 const IMG_EXT = ['jpg','jpeg','png','webp','gif','bmp','tif','tiff','heic','heif'];
 const PREVIEWABLE = ['jpg','jpeg','png','webp','gif','bmp'];
 const S = { dir:null, proj:null, onlyDesc:false, items:[], view:[], otherNames:new Set(), focus:-1, lastRun:null, busy:false, changing:false, pvToken:0, pvUrl:null,
-  unlesbar:new Set(), tiefer:[], herkunft:new Map(), ansicht:'alle' };   // 2.7.0: nicht lesbare/tiefere Unterordner, Herkunft (O8), gezeigter Termin
+  unlesbar:new Set(), tiefer:[], herkunft:new Map(), ansicht:'alle', dokuTerminAnders:[] };   // 2.7.0: nicht lesbare/tiefere Unterordner, Herkunft (O8), gezeigter Termin
 const DISCARD_DIR = '_aussortiert';
 const TMP_PREFIX = 'umb-tmp_';
 
@@ -688,11 +688,31 @@ function termine(){
 }
 const mehrereTermine = () => termine().length > 1;
 const terminNach = id => termine().find(t => t.id === id) || null;
-/** O8: aus welchem Unterordner „Fotos übernehmen“ (bis 2.6.0) ein Foto direkt in „Fotos“ geholt hat (fotoUebernahmen, nur lesen) */
-function herkunftLesen(){
+/** O8: aus welchem Unterordner „Fotos übernehmen“ (bis 2.6.0) ein Foto direkt in „Fotos“ geholt hat. fotoUebernahmen nennt den
+    Namen beim Übernehmen (datei, mit Zusatz „_<Kürzel>“/„_<Ordnername>“/„_2“; vorher = Name im Unterordner) und wird nie
+    umgeschrieben. Ein danach umbenanntes Foto (auch mehrmals) findet ihn über seinen gemerkten ersten Namen (bilder[…].original,
+    beim Umbenennen mitgeführt), ein umgewandeltes iPhone-Foto über heic.original. Ergebnis: Schlüssel → Ordner, oder
+    HERKUNFT_UNBEKANNT, wenn es nicht sicher ist (Name passt zu mehreren Übernahmen, oder ein nicht umbenanntes Foto trägt den Namen,
+    den ein umbenanntes schon für sich hat) – nie still zu einer anderen Herkunft. Nur Fotos direkt in „Fotos“. */
+const HERKUNFT_UNBEKANNT = '\u0000unbekannt';
+function herkunftLesen(items = S.items){
   const m = new Map(), l = P.data && P.data.extensions && P.data.extensions.fotoUebernahmen;
-  if (Array.isArray(l)) for (const u of l) if (u && typeof u.ordner === 'string' && u.ordner && Array.isArray(u.dateien))
-    for (const f of u.dateien) if (f && typeof f.datei === 'string') m.set(f.datei, u.ordner);
+  if (!Array.isArray(l) || !l.length) return m;
+  const alsDatei = new Map(), alsVorher = new Map(), dazu = (karte, n, o) => { if (!karte.has(n)) karte.set(n, new Set()); karte.get(n).add(o); };
+  for (const u of l) if (u && typeof u.ordner === 'string' && u.ordner && Array.isArray(u.dateien))
+    for (const f of u.dateien){ if (f && typeof f.datei === 'string') dazu(alsDatei, f.datei, u.ordner); if (f && typeof f.vorher === 'string' && f.vorher) dazu(alsVorher, f.vorher, u.ordner); }
+  const orig = (P.data && P.data.orig) || {}, ie = (P.data && P.data.imageExtensions) || {};
+  // Name beim Übernehmen: der gemerkte erste Name (vor dem ersten Umbenennen), sonst das Original eines umgewandelten iPhone-Fotos, sonst der jetzige
+  const basis = (items || []).filter(it => !it.ordner).map(it => {
+    const og = orig[it.name], o = og && typeof og === 'object' ? og.o : og, h = ie[it.name] && ie[it.name].heic && ie[it.name].heic.original;
+    return { it, n: typeof o === 'string' && o ? o : typeof h === 'string' && h ? h : it.name, sicher: !!((typeof o === 'string' && o) || (typeof h === 'string' && h)) };
+  });
+  const anspruch = new Map(); for (const b of basis) anspruch.set(b.n, (anspruch.get(b.n) || 0) + 1);
+  for (const b of basis){
+    const treffer = alsDatei.get(b.n) || alsVorher.get(b.n);
+    if (!treffer) continue;
+    m.set(b.it.name, treffer.size > 1 || (!b.sicher && anspruch.get(b.n) > 1) ? HERKUNFT_UNBEKANNT : [...treffer][0]);
+  }
   return m;
 }
 function ordnerTermine(){ const o = P.data && P.data.extensions && P.data.extensions.ordnerTermine; return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; }
@@ -710,7 +730,11 @@ function terminVon(it){
 }
 /** Welche Termin-Dokus eine Änderung an Doku-Inhalten betrifft (Kennungen; null = Foto ohne Termin). undefined = alle. */
 function betroffeneTermine(kind, vorher, nachher){
-  if (!mehrereTermine() || kind === 'meta') return undefined;
+  if (!mehrereTermine()) return undefined;
+  if (kind === 'meta'){   // Projektdaten stehen auf jedem Deckblatt – nur das Datum von Termin 1 (meta.ort) betrifft allein dessen Doku
+    const a = vorher || {}, b = nachher || {}, k = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(x => JSON.stringify(a[x]) !== JSON.stringify(b[x]));
+    return k.length && k.every(x => x === 'ort') ? ['t1'] : undefined;
+  }
   const fotos = new Map(S.items.map(it => [it.name, it])), tv = k => { const it = fotos.get(k); return it ? terminVon(it) : null; };
   if (kind === 'order'){
     const ids = [], teil = (l, id) => JSON.stringify((Array.isArray(l) ? l : []).filter(k => tv(k) === id));
@@ -728,8 +752,9 @@ function projGet(kind, d){ return P.data && P.data[kind] !== undefined ? clone(P
     schreiben nichts. (BerichtKit sieht „veraltet“ dadurch erst nach diesem Speichern – offener Punkt o15.) */
 function metaNurImSpeicher(meta){
   if (!P.data || JSON.stringify(P.data.meta) === JSON.stringify(meta)) return;
+  const vorher = P.data.meta;
   P.data.meta = clone(meta);
-  dokuGeaendert();
+  dokuGeaendert(betroffeneTermine('meta', vorher, meta));
 }
 function projSet(kind, v){
   if (!P.data || JSON.stringify(P.data[kind]) === JSON.stringify(v)) return;
@@ -803,10 +828,46 @@ function bilddokuVermerken(dateien, anlage, wahl){
     const t = wahl === 'alle' ? null : terminNach(wahl), je = ext.dokuGeaendertJe || {};
     neu.bilddokus = { ...(ext.bilddokus && typeof ext.bilddokus === 'object' ? ext.bilddokus : {}), [wahl]: { dateien: [...dateien], erstellt: nachZeit(je[wahl]),
       anlage: b.anlage, version: APP_VERSION, bestand: S.items.filter(it => wahl === 'alle' || terminVon(it) === wahl).map(it => it.name),
-      ...(t ? { termin: { datum: t.datum, bezeichnung: t.bezeichnung } } : {}) } };
+      ...(t ? { termin: terminStand(t) } : { termine: termine().map(x => ({ id: x.id, ...terminStand(x) })) }) } };
   }
   P.data.extensions = neu;
+  dokuTerminPruefen();   // die neue Doku passt zu ihrem Termin – Hinweis dazu entfällt
   scheduleProjSave();
+}
+/** Datum und Bezeichnung eines Termins, wie sie gerade gelten (Termin 1: auch ein im Deckblatt eingetragenes, noch nicht gespeichertes Datum). */
+function terminStand(t){
+  const datum = t.id === 't1' && PJ.sent && typeof PJ.sent.ortstermin === 'string' ? PJ.sent.ortstermin : t.datum;
+  return { datum: String(datum || ''), bezeichnung: String(t.bezeichnung || '') };
+}
+/** Review #95: Deckblatt-Termin jeder gemerkten Doku gegen die Projektdaten vergleichen – nicht am Änderungsereignis festmachen.
+    Weichen Datum oder Bezeichnung ab (in der Projektzentrale geändert, auch während FotoKit zu war), gilt die Doku dieses Termins als
+    geändert (dokuGeaendertJe, nur dieser Termin; „alle“: ihre Terminliste); ist sie die zuletzt erstellte, auch das alte
+    dokuGeaendert für BerichtKit. Nur im Speicher (m3) – in die Datei mit dem nächsten Speichern; S.dokuTerminAnders für die Anzeige. */
+function dokuTerminPruefen(){
+  S.dokuTerminAnders = [];
+  const docs = P.data && P.data.extensions && P.data.extensions.bilddokus;
+  if (!docs || typeof docs !== 'object' || P.readOnly || !mehrereTermine()) return;
+  const gleich = (a, b) => !!a && typeof a === 'object' && String(a.datum || '') === b.datum && String(a.bezeichnung || '') === b.bezeichnung;
+  for (const [id, d] of Object.entries(docs)){
+    if (!d || typeof d !== 'object') continue;
+    let anders;
+    if (id === 'alle'){
+      if (!Array.isArray(d.termine)) continue;
+      const jetzt = termine();
+      anders = d.termine.length !== jetzt.length || jetzt.some((t, i) => !d.termine[i] || d.termine[i].id !== t.id || !gleich(d.termine[i], terminStand(t)));
+    } else {
+      const t = terminNach(id);
+      if (!t || !d.termin || typeof d.termin !== 'object') continue;
+      anders = !gleich(d.termin, terminStand(t));
+    }
+    if (!anders) continue;
+    S.dokuTerminAnders.push(id);
+    const e = P.data.extensions, je = e.dokuGeaendertJe || {};
+    if (je[id] && je[id] > d.erstellt) continue;   // schon als geändert vermerkt
+    const neu = { ...e, dokuGeaendertJe: { ...je, [id]: nachZeit(d.erstellt) } }, b = e.bilddoku;
+    if (b && b.termin === id && !(e.dokuGeaendert && e.dokuGeaendert > b.erstellt)) neu.dokuGeaendert = nachZeit(b.erstellt);
+    P.data.extensions = neu;
+  }
 }
 const DOKU_FELDER = ['bilddoku', 'dokuGeaendert', 'bilddokus', 'dokuGeaendertJe', 'ordnerTermine'];   // eigener Abgleich (dokuStandMischen, ordnerTermineMischen)
 /** Doku-Inhalte vergleichbar (Schlüsselreihenfolge und Reihenfolge von „aussortiert“ egal, fehlend = leer) */
@@ -1155,9 +1216,11 @@ async function refreshPJ(){
   const changed = PJ_MAP.some(([, pk]) => (fresh[pk] || '').trim() !== (PJ.sent[pk] || ''));
   const termineVorher = JSON.stringify(termine());
   PJ.data = fresh;
-  if (S.dir && JSON.stringify(termine()) !== termineVorher) termineNeuZeichnen();   // 2.7.0: Termin in der Projektzentrale angelegt/geändert/entfernt
+  for (const [, pk] of PJ_MAP) PJ.sent[pk] = (fresh[pk] || '').trim();   // ohne Änderung ohnehin gleich; vor dem Vergleich unten (Datum von Termin 1)
+  const hinweisVorher = JSON.stringify(S.dokuTerminAnders || []);
+  dokuTerminPruefen();   // Review #95: Termin in der Projektzentrale geändert → Doku dieses Termins geändert
+  if (S.dir && (JSON.stringify(termine()) !== termineVorher || JSON.stringify(S.dokuTerminAnders) !== hinweisVorher)) termineNeuZeichnen();   // 2.7.0: Termin in der Projektzentrale angelegt/geändert/entfernt
   if (!changed) return;
-  for (const [, pk] of PJ_MAP) PJ.sent[pk] = (fresh[pk] || '').trim();
   const meta = projGet('meta', {});
   if (applyPJ(meta)) metaNurImSpeicher(meta);
   if (!$('banner').classList.contains('err')) banner('ok', 'Projektdaten wurden geändert (Projektzentrale oder Kollege) und neu übernommen.');
@@ -1951,9 +2014,9 @@ const terminText = t => [`Termin ${t.nr}`, terminDatum(t), t.bezeichnung].filter
 function gruppeVon(it){
   if (it.ordner) return 'o:' + it.ordner;
   const h = mehrereTermine() && S.herkunft.get(it.name);
-  return h ? 'h:' + h : 'd:';
+  return h === HERKUNFT_UNBEKANNT ? 'u:' : h ? 'h:' + h : 'd:';
 }
-const gruppeName = g => g === 'd:' ? `direkt in „${FOTOS_DIR}“` : g.slice(2);
+const gruppeName = g => g === 'd:' ? `direkt in „${FOTOS_DIR}“` : g === 'u:' ? 'Herkunft unbekannt' : g.slice(2);
 /** Datum im Ordnernamen: TT.MM, TT.MM.JJ, TT.MM.JJJJ oder JJJJ-MM-TT; ohne Jahr das übergebene. '' = keins. */
 function datumImNamen(name, jahr){
   const n = String(name || '');
@@ -1971,7 +2034,7 @@ function gruppenVorschlag(gid, items){
   const t1 = termine()[0], datiert = items.filter(it => it.date && Number.isFinite(it.date.getTime()));
   const jahr = haeufigst(datiert.filter(it => it.dateSrc !== 'Dateidatum').map(it => it.date.getFullYear()))
     || (OT && OT.gueltig(t1.datum) ? +t1.datum.slice(0, 4) : null) || haeufigst(datiert.map(it => it.date.getFullYear()));
-  const ausName = gid === 'd:' ? '' : datumImNamen(gruppeName(gid), jahr);
+  const ausName = gid === 'd:' || gid === 'u:' ? '' : datumImNamen(gruppeName(gid), jahr);
   if (ausName) return { datum: ausName, quelle: 'datum-im-namen' };
   const tag = haeufigst(datiert.map(it => fmtISO(it.date)));
   return tag ? { datum: tag, quelle: 'aufnahmedatum', unsicher: datiert.every(it => it.dateSrc === 'Dateidatum') } : null;
@@ -2016,15 +2079,18 @@ function terminWahlZeigen(){
   const zt = !offen.length ? '' : S.ansicht === 'alle'
     ? `⚠ Noch ohne Ortstermin (gelb): ${namen}. Bitte in der Zeile über den Fotos des Ordners zuordnen – FotoKit ordnet nie ohne Klick zu.`
     : `⚠ Noch ohne Ortstermin und hier nicht zu sehen: ${namen}. <button type="button" data-ansicht="alle">Alle zeigen</button>`;
-  if (z.dataset.k !== zt){ z.dataset.k = zt; z.innerHTML = zt; }
-  z.hidden = !zt;
+  const anders = (S.dokuTerminAnders || []).map(id => id === 'alle' ? 'alle Termine' : (terminNach(id) ? 'Termin ' + terminNach(id).nr : id));
+  const zd = anders.length ? `⚠ Die Bilddokumentation für ${anders.join(', ')} nennt noch Datum oder Bezeichnung von vorher (in der Projektzentrale geändert) – bitte neu erstellen.` : '';
+  const zz = [zt, zd].filter(Boolean).join('<br>');
+  if (z.dataset.k !== zz){ z.dataset.k = zz; z.innerHTML = zz; }
+  z.hidden = !zz;
 }
 $('terminWahl').addEventListener('click', e => { const b = e.target.closest('[data-ansicht]'); if (b) ansichtSetzen(b.dataset.ansicht); });
 $('terminZeile').addEventListener('click', e => { const b = e.target.closest('[data-ansicht]'); if (b) ansichtSetzen(b.dataset.ansicht); });
 /** Kopfzeile je Ordner über seinen Kacheln: Name und Zahl; bei mehreren Terminen der Termin (änderbar) bzw. die Rückfrage (gelb). */
 function ordnerKopf(g){
   const n = g.items.length, name = gruppeName(g.id), art = g.id[0];
-  const titel = art === 'h' ? `übernommen aus „${esc(name)}“` : art === 'o' ? esc(name) : esc(name);
+  const titel = art === 'h' ? `übernommen aus „${esc(name)}“` : art === 'u' ? 'übernommen, Herkunft unbekannt' : esc(name);
   let html = `<span class="o-name">${titel}</span> <span class="o-zahl">· ${n} ${n === 1 ? 'Foto' : 'Fotos'}</span>`;
   if (!mehrereTermine()) return { html, offen: false };
   const ids = new Set(g.items.map(terminVon)), ro = P.readOnly ? ' disabled' : '';
@@ -2072,7 +2138,7 @@ function gruppeZuordnen(gid, id, vorschlag){
   if (P.readOnly || !P.data || S.busy || !terminNach(id)) return;
   const items = S.items.filter(it => gruppeVon(it) === gid); if (!items.length) return;
   const vorher = items.map(terminVon);
-  if (gid.startsWith('h:')){
+  if (gid.startsWith('h:') || gid === 'u:'){   // Herkunft (Bestand): Termin je Foto
     const ie = projGet('imageExtensions', {});
     for (const it of items) ie[it.name] = { ...(ie[it.name] || {}), termin: id };
     projSet('imageExtensions', ie);
@@ -2556,7 +2622,7 @@ async function loadItems(){
   const previousItems = S.items;
   S.items = items; S.otherNames = otherNames; S.focus = -1; S.cur = null;
   S.unlesbar = unlesbar; S.tiefer = tiefer; S.herkunft = herkunftLesen();
-  dokuBestandPruefen();
+  dokuBestandPruefen(); dokuTerminPruefen();
   ROT = rot; HASH = hash; EXTRA = extra; ORIG = orig;
   $('list').innerHTML = '';
   hideBanner();

@@ -32,7 +32,7 @@ function sitzung(d, pj = ZWEI){
   vm.createContext(ctx);
   vm.runInContext(teil('const PROJ_FILE =', "document.addEventListener('visibilitychange'") + '\n' + teil('let EXTRA = {}, ORIG = {};', 'function moveRotKeys(') + '\n' +
     teil('let draftTimer;', 'let thumbQueue') + '\n' + teil('function saveOrder(names){', '/* ---------- rows ---------- */') +
-    '\nfunction applyMergedToItems(){}\nthis.api = { P, S, projSet, projGet, flushProject, loadProject, projToJson, projFromJson, mergeExternal, flushDrafts, saveExtra, saveDiscards, saveOrder, dokuGeaendert, bilddokuVermerken, terminVon };', ctx);
+    `\nfunction applyMergedToItems(){}\nthis.api = { P, S, projSet, projGet, flushProject, loadProject, projToJson, projFromJson, mergeExternal, flushDrafts, saveExtra, saveDiscards, saveOrder, dokuGeaendert, bilddokuVermerken, terminVon, herkunftLesen: typeof herkunftLesen === 'function' ? herkunftLesen : null, dokuTerminPruefen: typeof dokuTerminPruefen === 'function' ? dokuTerminPruefen : () => {}, HERKUNFT_UNBEKANNT: typeof HERKUNFT_UNBEKANNT === 'string' ? HERKUNFT_UNBEKANNT : null };`, ctx);
   return { ...ctx.api, ctx, async open(){ await ctx.api.loadProject(d.dir); } };
 }
 
@@ -127,6 +127,51 @@ function sitzung(d, pj = ZWEI){
     assert.ok(e.dokuGeaendert > e.bilddoku.erstellt);
     gleich(Object.keys(e.bilddoku), ['dateien', 'erstellt', 'anlage', 'version', 'bestand'], 'bilddoku wie bisher');
     for (const k of ['bilddokus', 'dokuGeaendertJe', 'ordnerTermine']) assert.equal(e[k], undefined);
+  });
+
+  await test('Review #95 (1): Herkunft nach dem Umbenennen über den gemerkten Originalnamen, auch mehrfach; unsicher → „Herkunft unbekannt“', async () => {
+    const ueb = [{ ordner: 'Bilder A', dateien: [{ datei: 'IMG_0001.jpg' }, { datei: 'IMG_0009.jpg' }] },
+      { ordner: 'fotos ka 20.08', dateien: [{ datei: 'IMG_0001_fotos_ka_20_08.jpg', vorher: 'IMG_0001.jpg' }, { datei: 'IMG_0009.jpg' }, { datei: 'IMG_0007_Ka.jpg', vorher: 'IMG_0007.jpg' }] }];
+    const d = disk({ app: 'Bildumbenenner', format: 1, version: '2.6.0', projekt: {}, benennung: {}, reihenfolge: [], fotoUebernahmen: ueb, bilder: {
+      '01_Kueche.jpg': { beschreibung: 'Küche', original: { name: 'IMG_0001.jpg' } },                       // einmal umbenannt
+      '02_Flur_Wand.jpg': { beschreibung: 'Flur Wand', original: { name: 'IMG_0001_fotos_ka_20_08.jpg' } },   // zweimal umbenannt (erster Name bleibt)
+      '03_Keller.jpg': { original: { name: 'IMG_0009.jpg' } },                                                // Name in zwei Übernahmen
+      '04_Bad.jpg': { original: { name: 'IMG_0007.jpg' } },                                                   // nur der Name vor dem Zusatz
+      'IMG_0003.jpg': { beschreibung: 'nie übernommen' } } });
+    const s = sitzung(d); await s.open();
+    assert.ok(s.herkunftLesen, 'herkunftLesen fehlt');
+    s.S.items = ['01_Kueche.jpg', '02_Flur_Wand.jpg', '03_Keller.jpg', '04_Bad.jpg', 'IMG_0003.jpg', 'Bilder B/IMG_0001.jpg'].map(foto);
+    const h = s.herkunftLesen();
+    gleich(Object.fromEntries([...h].map(([k, v]) => [k, v === s.HERKUNFT_UNBEKANNT ? '?' : v])),
+      { '01_Kueche.jpg': 'Bilder A', '02_Flur_Wand.jpg': 'fotos ka 20.08', '03_Keller.jpg': '?', '04_Bad.jpg': 'fotos ka 20.08' });
+    // ein später direkt abgelegtes Foto mit dem Namen, den ein umbenanntes schon für sich hat: nicht still zu dessen Herkunft
+    s.S.items.push(foto('IMG_0001.jpg'));
+    assert.equal(s.herkunftLesen().get('IMG_0001.jpg'), s.HERKUNFT_UNBEKANNT);
+    assert.equal(s.herkunftLesen().get('01_Kueche.jpg'), 'Bilder A');
+    assert.equal(await s.flushProject(), true); gleich(d.json().fotoUebernahmen, ueb, 'fotoUebernahmen unverändert');
+  });
+
+  await test('Review #95 (2): Termin in der Projektzentrale geändert (auch während FotoKit zu war) → nur die Doku dieses Termins geändert', async () => {
+    const erstellt = { t1: '2026-11-26T10:00:00.000Z', t2: '2026-11-26T11:00:00.000Z' };
+    const datei2 = { ...datei(), dokuGeaendert: '2026-11-26T09:00:00.000Z', dokuGeaendertJe: { t1: '2026-11-26T09:00:00.000Z', t2: '2026-11-26T09:00:00.000Z', alle: '2026-11-26T09:00:00.000Z' },
+      bilddoku: { dateien: ['T2.pdf'], erstellt: erstellt.t2, anlage: 'Anlage 2', version: '2.7.0', bestand: [], termin: 't2' },
+      bilddokus: { t1: { dateien: ['T1.pdf'], erstellt: erstellt.t1, termin: { datum: '2026-08-12', bezeichnung: '' } }, t2: { dateien: ['T2.pdf'], erstellt: erstellt.t2, termin: { datum: '2026-08-20', bezeichnung: 'Nachbeprobung' } } } };
+    const pj = { ...ZWEI, weitereOrtstermine: [{ id: 't2', datum: '2026-08-21', bezeichnung: 'Nachbeprobung', wer: '' }] };   // Datum von t2 geändert, FotoKit war zu
+    const d = disk(datei2), s = sitzung(d, pj); await s.open();
+    s.dokuTerminPruefen();   // wie beim Einlesen
+    let e = s.P.data.extensions;
+    assert.ok(e.dokuGeaendertJe.t2 > erstellt.t2, 'Doku Termin 2 geändert');
+    assert.equal(e.dokuGeaendertJe.t1, '2026-11-26T09:00:00.000Z', 'Termin 1 unberührt');
+    assert.ok(e.dokuGeaendert > erstellt.t2, 'zuletzt erstellte Doku (t2) auch für BerichtKit geändert');
+    gleich(s.S.dokuTerminAnders, ['t2']);
+    assert.equal(d.json().dokuGeaendertJe.t2, '2026-11-26T09:00:00.000Z', 'nur im Speicher – erst mit dem nächsten Speichern in der Datei');
+    // Termin 1: Bezeichnung in der Projektzentrale geändert → nur t1; das alte Feld bleibt (zuletzt erstellt ist t2)
+    const d1 = disk(datei2), s1 = sitzung(d1, { ...ZWEI, ortsterminBezeichnung: 'Erstbegehung' }); await s1.open();
+    s1.dokuTerminPruefen(); e = s1.P.data.extensions;
+    assert.ok(e.dokuGeaendertJe.t1 > erstellt.t1); assert.equal(e.dokuGeaendertJe.t2, '2026-11-26T09:00:00.000Z'); assert.equal(e.dokuGeaendert, '2026-11-26T09:00:00.000Z');
+    // unverändert: nichts
+    const d0 = disk(datei2), s0 = sitzung(d0); await s0.open(); s0.dokuTerminPruefen();
+    gleich(s0.P.data.extensions.dokuGeaendertJe, datei2.dokuGeaendertJe); gleich(s0.S.dokuTerminAnders, []);
   });
 
   console.log(`OK Unterordner: ${n} Fälle bestanden.`);

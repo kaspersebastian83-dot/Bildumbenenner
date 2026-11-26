@@ -8,8 +8,13 @@
 //      ortsterminZaehler und weitereOrtstermine stehen.
 //   4. Bilddokumentation je Termin: Termindatum im Namen, Deckblatt-Datum nicht nach „ortstermin“, bilddokus je Termin,
 //      BerichtKits anlagen.js meldet die Doku nicht „veraltet“.
+//   4b. Review #95: Projektzentrale ändert das Datum von Termin 2 → FotoKit zeigt es sofort, nur die Doku von Termin 2 gilt als
+//      geändert (in die Datei mit dem nächsten Speichern), Termin 1 bleibt aktuell; BerichtKits anlagen.js meldet „veraltet“.
 //   5. R2: Unterordner nicht lesbar → gelbe Zeile, seine Einträge bleiben in der Projektdatei.
 //   6. Bestand (O8): Herkunft aus fotoUebernahmen → Rückfrage je Herkunft, Termin je Foto, nichts verschoben.
+//   6b. Review #95: Fotos aus zwei Herkunftsordnern, danach (zweimal) umbenannt → je Herkunft eine Rückfrage mit dem richtigen
+//      Vorschlag, nicht sicher zuzuordnen → „Herkunft unbekannt“; Vorschlag aus dem häufigsten Aufnahmetag (EXIF, erfundenes
+//      Testfoto tests/fixtures/exif-aufnahme-2026-08-20.jpg), nur Dateidatum → „unsicher“.
 //   7. Link mit unbekanntem Teil (mitteilung=2): übergangen und erhalten.
 //   8. FotoKit 2.6.0 (Commit c74418a) fasst eine Datei von 2.7.0 nicht an (R1); ein Projekt ohne Unterordner mit einem Termin
 //      ergibt mit 2.6.0 und 2.7.0 dieselbe Projektdatei (bis auf Version und Zeitstempel).
@@ -32,7 +37,7 @@ const ALT = 'c74418a';   // FotoKit 2.6.0
 let altHtml = null; try { altHtml = execFileSync('git', ['show', ALT + ':index.html'], { cwd: root, maxBuffer: 64 << 20 }); } catch (_) {}
 if (!altHtml && process.env.ORTSTERMINE_PFLICHT) throw new Error('FotoKit 2.6.0 (' + ALT + ') nicht in der Git-Historie');
 const TYP = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.css': 'text/css', '.webmanifest': 'application/manifest+json' };
-const HAUPT = '26.0501 Teststadt Ka', BESTAND = '26.0502 Bestand Teststadt', EINFACH = '26.0503 Einfach Teststadt';
+const HAUPT = '26.0501 Teststadt Ka', BESTAND = '26.0502 Bestand Teststadt', EINFACH = '26.0503 Einfach Teststadt', HERKUNFT = '26.0504 Herkunft Teststadt';
 let browser, server, schritt = 'Start';
 
 (async () => {
@@ -281,6 +286,41 @@ let browser, server, schritt = 'Start';
     } else if (process.env.ORTSTERMINE_PFLICHT) assert.fail('BerichtKit nicht neben dem Repo: ' + bkAnlagen);
     console.log(`OK ${browserName}: Bilddokumentation je Termin – Termindatum im Namen, Deckblatt-Datum ohne Schreiben, bilddokus, alte Felder`);
 
+    // ---------- 4b. Review #95: Termin in der Projektzentrale geändert ----------
+    schritt = '4b Termin geändert';
+    await pdf('t2');   // Doku für Termin 2 noch einmal – jetzt die zuletzt erstellte (bilddoku, das BerichtKit liest)
+    j = await bis(fk, async () => { const x = await fkDatei(fk, HAUPT); return x.bilddoku?.termin === 't2' && x; }, 'Doku Termin 2 zuletzt erstellt');
+    const vor4b = j;
+    assert.ok(!(j.dokuGeaendertJe?.t2 > j.bilddokus.t2.erstellt) && !(j.dokuGeaendertJe?.t1 > j.bilddokus.t1.erstellt), 'beide Dokus aktuell');
+    assert.equal(await fk.locator('#terminZeile').isHidden(), true);
+    await pzOeffnen(); await pz.locator('#pj_ot_t2_datum').fill('2026-08-21');
+    await bis(pz, async () => (await pjDatei(pz, HAUPT)).weitereOrtstermine.find(t => t.id === 't2').datum === '2026-08-21', 'Projektzentrale hat das neue Datum gespeichert');
+    await fokus(fk);
+    await bis(fk, async () => /Bilddokumentation für Termin 2 nennt noch Datum oder Bezeichnung von vorher \(in der Projektzentrale geändert\) – bitte neu erstellen/.test(await fk.locator('#terminZeile').textContent()), 'FotoKit zeigt es sofort');
+    assert.doesNotMatch(await fk.locator('#terminZeile').textContent(), /Termin 1/, 'nur Termin 2');
+    await fk.waitForTimeout(700);
+    assert.deepEqual((await fkDatei(fk, HAUPT)).dokuGeaendertJe, vor4b.dokuGeaendertJe, 'in die Datei erst mit dem nächsten Speichern');
+    await fk.locator('#terminWahl [data-ansicht="alle"]').click();
+    await kopf(fk, 'Nachtrag 2026-10-08').locator('select').selectOption('t5');   // nächstes Speichern – betrifft weder Termin 1 noch 2
+    j = await bis(fk, async () => { const x = await fkDatei(fk, HAUPT); return x.ordnerTermine['Nachtrag 2026-10-08'].termin === 't5' && x; }, 'gespeichert');
+    assert.ok(j.dokuGeaendertJe.t2 > j.bilddokus.t2.erstellt, 'Doku Termin 2 geändert');
+    assert.equal(j.dokuGeaendertJe.t1, vor4b.dokuGeaendertJe.t1, 'Doku Termin 1 unberührt'); assert.ok(!(j.dokuGeaendertJe.t1 > j.bilddokus.t1.erstellt));
+    assert.ok(j.dokuGeaendert > j.bilddoku.erstellt, 'zuletzt erstellte Doku (Termin 2) auch im alten Feld geändert');
+    assert.deepEqual(j.bilddokus.t2.termin, { datum: '2026-08-20', bezeichnung: 'Nachbeprobung' }, 'Vermerk der Doku bleibt, wie sie erstellt wurde');
+    if (fs.existsSync(bkAnlagen)){
+      const BA = require(bkAnlagen);
+      const { fotos, bilder } = await fk.evaluate(async p => { const f = await (await (await (await navigator.storage.getDirectory()).getDirectoryHandle('Mosaik Archivordner')).getDirectoryHandle(p)).getDirectoryHandle('Fotos');
+        const fotos = [], bilder = []; for await (const h of f.values()) if (h.kind === 'file'){ bilder.push({ name: h.name }); if (h.name.endsWith('.pdf')) fotos.push({ name: h.name, t: (await h.getFile()).lastModified }); } return { fotos, bilder }; }, HAUPT);
+      const k = BA.bilddokuFinden(fotos, j, '26.0501', [], bilder, await pjDatei(fk, HAUPT));
+      assert.equal(k.dateien[0], 'Fotos/' + j.bilddoku.dateien[0]);
+      assert.equal(k.veraltet, true, 'BerichtKit: Doku Termin 2 veraltet');
+      assert.match(k.grund, /nach dem Erstellen in FotoKit geändert/);
+      const k0 = BA.bilddokuFinden(fotos, vor4b, '26.0501', [], bilder, await pjDatei(fk, HAUPT));   // dieselben Eingaben, aber FotoKit hat noch nicht gespeichert
+      assert.equal(k0.veraltet, false, 'BerichtKit sieht das geänderte Datum von Termin 2 erst nach dem Speichern in FotoKit (eigene Prüfung nur „ortstermin“ = Termin 1)');
+      console.log(`OK ${browserName}: BerichtKits anlagen.js – Doku Termin 2 nach dem Speichern „veraltet“`);
+    } else if (process.env.ORTSTERMINE_PFLICHT) assert.fail('BerichtKit nicht neben dem Repo: ' + bkAnlagen);
+    console.log(`OK ${browserName}: Termin 2 in der Projektzentrale geändert → FotoKit zeigt es sofort, nur Doku Termin 2 geändert, in der Datei mit dem nächsten Speichern`);
+
     // ---------- 5. R2: Unterordner nicht lesbar ----------
     schritt = '5 R2';
     await fk.evaluate(() => { const orig = FileSystemDirectoryHandle.prototype.values; window.testValues = orig;
@@ -328,6 +368,76 @@ let browser, server, schritt = 'Start';
   assert.deepEqual(bestandDateien, ['IMG_0001.jpg', 'IMG_0002.jpg', 'IMG_0003.jpg', 'IMG_0009.jpg', '_Bildumbenenner.json', '_FotoKit_Fassungen/'], 'nichts zurückverschoben');
   console.log(`OK ${browserName}: Bestand – Rückfrage je Herkunft (fotoUebernahmen), Termin je Foto, nichts verschoben`);
   await fb.close();
+
+  // ---------- 6b. Review #95: Herkunft nach dem Umbenennen; Vorschlag aus dem Aufnahmedatum (EXIF) ----------
+  schritt = '6b Herkunft umbenannt';
+  await fk.evaluate(async HERKUNFT => {
+    const archiv = await (await navigator.storage.getDirectory()).getDirectoryHandle('Mosaik Archivordner');
+    const put = async (d, n, x) => { const w = await (await d.getFileHandle(n, { create: true })).createWritable(); await w.write(x); await w.close(); };
+    const vorlage = new Uint8Array(await (await fetch('/fk/tests/fixtures/exif-aufnahme-2026-08-20.jpg')).arrayBuffer());
+    let sek = 0;
+    const exif = tag => { const b = vorlage.slice(), alt = new TextEncoder().encode('2026:08:20 10:42:17'), neu = new TextEncoder().encode(tag.replace(/-/g, ':') + ' 10:42:' + String(++sek).padStart(2, '0'));   // erfunden; je Foto eine Sekunde weiter (keine gleichen Dateien)
+      for (let i = 0; i + alt.length <= b.length; i++) if (alt.every((x, k) => b[i + k] === x)) b.set(neu, i); return new Blob([b], { type: 'image/jpeg' }); };
+    const ohne = i => { const c = document.createElement('canvas'); c.width = 30 + i; c.height = 24; c.getContext('2d').fillRect(0, 0, i, i); return new Promise(r => c.toBlob(r, 'image/jpeg')); };
+    const p = await archiv.getDirectoryHandle(HERKUNFT, { create: true }), f = await p.getDirectoryHandle('Fotos', { create: true });
+    await put(p, '_Projekt.json', JSON.stringify({ format: 'mosaik-projekt', version: 1, objekt: 'EFH, Testweg 4', ortstermin: '2026-08-12' }));
+    await put(f, 'IMG_0001.jpg', exif('2026-08-12')); await put(f, 'IMG_0002.jpg', exif('2026-08-12'));
+    await put(f, 'IMG_0001_fotos_ka_20_08.jpg', exif('2026-08-20'));
+    await put(f, 'IMG_0009.jpg', await ohne(1)); await put(f, 'IMG_0050.jpg', await ohne(2));
+    const st = await f.getDirectoryHandle('Bilder Stefan', { create: true });
+    await put(st, 'DSC_1.jpg', exif('2026-08-20')); await put(st, 'DSC_2.jpg', exif('2026-08-20')); await put(st, 'DSC_3.jpg', exif('2026-08-12'));
+    const oe = await f.getDirectoryHandle('Ohne Exif', { create: true });
+    await put(oe, 'X_1.jpg', await ohne(3)); await put(oe, 'X_2.jpg', await ohne(4));
+    await put(f, '_Bildumbenenner.json', JSON.stringify({ app: 'Bildumbenenner', format: 1, version: '2.6.0', projekt: {}, benennung: {}, reihenfolge: [],
+      bilder: { 'IMG_0001.jpg': { beschreibung: 'Küche Decke' }, 'IMG_0002.jpg': { beschreibung: 'Küche Wand' }, 'IMG_0001_fotos_ka_20_08.jpg': { beschreibung: 'Flur Wand' }, 'IMG_0009.jpg': { beschreibung: 'Keller Boden' } },
+      fotoUebernahmen: [{ zeit: '2026-11-20T10:00:00.000Z', ordner: 'Bilder A', dateien: [{ datei: 'IMG_0001.jpg' }, { datei: 'IMG_0002.jpg' }, { datei: 'IMG_0009.jpg' }] },
+        { zeit: '2026-11-21T10:00:00.000Z', ordner: 'fotos ka 20.08', kuerzel: 'Ka', dateien: [{ datei: 'IMG_0001_fotos_ka_20_08.jpg', vorher: 'IMG_0001.jpg' }, { datei: 'IMG_0009.jpg' }] }] }, null, 2));
+  }, HERKUNFT);
+  const uebVorher = JSON.parse(await lies(fk, HERKUNFT, 'Fotos', '_Bildumbenenner.json')).fotoUebernahmen;
+  const fh = await seite('/fk/index.html', HERKUNFT);
+  await oeffnen(fh); await ruhig(fh);
+  await fh.waitForFunction(() => document.querySelectorAll('#list .row').length === 10);
+  await fh.locator('#list .row[aria-label="Bilder Stefan/DSC_1.jpg"] .tinfo').click();
+  assert.match(await fh.locator('#pvInfo').textContent(), /20\.08\.2026/, 'Aufnahmedatum aus dem erfundenen EXIF gelesen');
+  const umbenennen = async () => { await fh.click('#btnMehr'); await fh.locator('#mosaikMehrPop #mehrUmbenennen').click(); await fh.locator('#dOk').click();
+    await fh.waitForFunction(() => !document.querySelector('#overlay').classList.contains('show') && document.querySelector('#bUndo'), null, { timeout: 60000 }); await ruhig(fh); };
+  const nachOriginal = async () => { const x = await fkDatei(fh, HERKUNFT), m = {}; for (const [k, v] of Object.entries(x.bilder)) if (!k.includes('/') && v.original) m[v.original.name] = k; return m; };
+  await umbenennen();
+  let neu = await bis(fh, async () => { const m = await nachOriginal(); return Object.keys(m).length >= 4 && m; }, 'umbenannt');
+  for (const n of ['IMG_0001.jpg', 'IMG_0002.jpg', 'IMG_0001_fotos_ka_20_08.jpg', 'IMG_0009.jpg']) assert.notEqual(neu[n], n, n + ' umbenannt');
+  // zweites Umbenennen: der gemerkte erste Name bleibt
+  await beschreiben(fh, neu['IMG_0001_fotos_ka_20_08.jpg'], 'Flur Wand links'); await beschreiben(fh, neu['IMG_0002.jpg'], 'Küche Wand Fenster');
+  const erst = neu;
+  await umbenennen();
+  neu = await bis(fh, async () => { const m = await nachOriginal(); return m['IMG_0002.jpg'] && m['IMG_0002.jpg'] !== erst['IMG_0002.jpg'] && m['IMG_0001_fotos_ka_20_08.jpg'] !== erst['IMG_0001_fotos_ka_20_08.jpg'] && m; }, 'zweimal umbenannt');
+  // Termin 2 in _Projekt.json (wie aus der Projektzentrale), dann neu lesen
+  await fh.evaluate(async HERKUNFT => { const p = await (await (await navigator.storage.getDirectory()).getDirectoryHandle('Mosaik Archivordner')).getDirectoryHandle(HERKUNFT);
+    const w = await (await p.getFileHandle('_Projekt.json')).createWritable(); await w.write(JSON.stringify({ format: 'mosaik-projekt', version: 1, objekt: 'EFH, Testweg 4', ortstermin: '2026-08-12',
+      weitereOrtstermine: [{ id: 't2', datum: '2026-08-20', bezeichnung: 'Nachbeprobung', wer: 'Ka' }], ortsterminZaehler: 2 })); await w.close(); }, HERKUNFT);
+  await fh.click('#btnMehr'); await fh.locator('#mosaikMehrPop #mehrReload').click(); await ruhig(fh);
+  await bis(fh, async () => !(await fh.locator('#terminWahl').isHidden()), 'zwei Termine');
+  const k6 = await koepfe(fh), unsicherFrage = name => new RegExp('^\\[gelb\\] ' + name + ' – Neuer Ortstermin am \\d\\d\\.\\d\\d\\.\\d{4}\\? \\(Dateidatum der Fotos – unsicher – passt zu keinem Termin des Projekts\\) Anlegen$');
+  assert.equal(k6.length, 6, k6.join(' | '));
+  assert.match(k6[0], unsicherFrage('direkt in „Fotos“'), 'nur IMG_0050 (nie übernommen) direkt');
+  assert.equal(k6[1], '[gelb] übernommen aus „Bilder A“ – Ortstermin am 12.08.2026? (Aufnahmedatum der Fotos) Ja', 'Herkunft trotz Umbenennen, Vorschlag aus dem Aufnahmedatum');
+  assert.equal(k6[2], '[gelb] Bilder Stefan – Ortstermin am 20.08.2026 (Nachbeprobung)? (Aufnahmedatum der Fotos) Ja', 'ohne Datum im Namen: häufigster Aufnahmetag (2× 20.08., 1× 12.08.)');
+  assert.equal(k6[3], '[gelb] übernommen aus „fotos ka 20.08“ – Ortstermin am 20.08.2026 (Nachbeprobung)? (Datum im Ordnernamen) Ja', 'Herkunft nach zweimal Umbenennen, Name mit Zusatz aus der Übernahme');
+  assert.match(k6[4], /^\[gelb\] übernommen, Herkunft unbekannt – /, 'Name in beiden Übernahmen → nicht still zu einer');
+  assert.match(k6[5], unsicherFrage('Ohne Exif'), 'nur Dateidatum → „unsicher“');
+  const inGruppe = async titel => kopf(fh, titel).evaluate(k => { const o = []; for (let e = k.nextElementSibling; e && !e.classList.contains('fk-ordner'); e = e.nextElementSibling) if (e.classList.contains('row')) o.push(e.getAttribute('aria-label')); return o.sort(); });
+  assert.deepEqual(await inGruppe('übernommen aus „Bilder A“'), [neu['IMG_0001.jpg'], neu['IMG_0002.jpg']].sort());
+  assert.deepEqual(await inGruppe('übernommen aus „fotos ka 20.08“'), [neu['IMG_0001_fotos_ka_20_08.jpg']]);
+  assert.deepEqual(await inGruppe('übernommen, Herkunft unbekannt'), [neu['IMG_0009.jpg']]);
+  await kopf(fh, 'übernommen aus „Bilder A“').locator('button', { hasText: 'Ja' }).click();
+  await kopf(fh, 'übernommen aus „fotos ka 20.08“').locator('button', { hasText: 'Ja' }).click();
+  await kopf(fh, 'Bilder Stefan').locator('button', { hasText: 'Ja' }).click();
+  j = await bis(fh, async () => { const x = await fkDatei(fh, HERKUNFT); return x.bilder[neu['IMG_0001_fotos_ka_20_08.jpg']]?.termin && x.ordnerTermine?.['Bilder Stefan'] && x; }, 'Zuordnung gespeichert');
+  assert.deepEqual(['IMG_0001.jpg', 'IMG_0002.jpg', 'IMG_0001_fotos_ka_20_08.jpg', 'IMG_0009.jpg'].map(n => j.bilder[neu[n]].termin), ['t1', 't1', 't2', undefined]);
+  assert.deepEqual([j.ordnerTermine['Bilder Stefan'].termin, j.ordnerTermine['Bilder Stefan'].vorschlag], ['t2', 'aufnahmedatum']);
+  assert.deepEqual(j.fotoUebernahmen, uebVorher, 'fotoUebernahmen nicht umgeschrieben');
+  assert.equal(await fh.locator('#list .row.ohne-termin').count(), 4, 'Herkunft unbekannt, IMG_0050 und „Ohne Exif“ noch gelb');
+  console.log(`OK ${browserName}: Herkunft nach (zweimal) Umbenennen über den gemerkten Originalnamen, unsicher → „Herkunft unbekannt“; Vorschlag aus dem Aufnahmedatum (EXIF), nur Dateidatum → „unsicher“`);
+  await fh.close();
 
   // ---------- 7. Link mit unbekanntem Teil ----------
   schritt = '7 Link';
