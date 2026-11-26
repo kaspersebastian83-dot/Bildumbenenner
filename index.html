@@ -545,7 +545,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.7.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:41bb1b3733ecd825bddef7467d8c3fb3d299705aae608b304662832e51412cf3';
+const APP_BUILD = 'sha256:1a53cf3c079d9f414b1d07e83c086872e79fea9eef4f3301edaacd5f24e161fc';
 const APP_DATE = '2026-11-26';
 const CHANGELOG = [
   ['2.7.0', '26.11.2026', 'Mehrere Ortstermine, Fotos bleiben in ihren Unterordnern: FotoKit liest jetzt auch die Fotos in den Unterordnern von „Fotos“ (eine Ebene, z. B. „Bilder Stefan“, „fotos ka 20.08“) – sie bleiben dort liegen und behalten ihren Namen; Ordner mit „_“ oder „.“ vorn zählen nicht. Über den Kacheln steht je Ordner eine Zeile. Hat das Projekt mehr als einen Ortstermin (Projektzentrale „+ Weiterer Ortstermin“), fragt FotoKit je Ordner einmal, zu welchem Termin er gehört – Vorschlag aus dem Datum im Ordnernamen, sonst aus dem Aufnahmedatum; nie ohne Klick. Passt das Datum zu keinem Termin, legt „Anlegen“ ihn in den Projektdaten an (nur den Termin, mit derselben Kennungsregel wie die Projektzentrale). Über den Fotos „Termin 1 · Termin 2 · Alle“, Fotos ohne Termin sind gelb. „Bilddokumentation erstellen“ fragt zuerst „Für welchen Termin?“, das Deckblatt nennt Datum und Bezeichnung des Termins, die PDF trägt das Termindatum im Namen, und FotoKit merkt sich je Termin eine Bilddokumentation – eine neue für Termin 2 lässt die von Termin 1 aktuell. Ändert die Projektzentrale Datum oder Bezeichnung eines Termins, gilt nur dessen Bilddokumentation als geändert (Hinweis über den Fotos). Fotos in Unterordnern werden nicht umbenannt und nie nach „_aussortiert“ verschoben („Weg“ ist dort nur eine Markierung); iPhone-Fotos dort werden im selben Ordner umgewandelt, das Original kommt nach „<Ordner>/_Originale“. „Fotos übernehmen“ entfällt; schon übernommene Fotos fragt FotoKit je Herkunftsordner, auch nach dem Umbenennen (sonst „Herkunft unbekannt“). Ein Projekt ohne Unterordner und mit einem Termin sieht aus wie bisher. Ältere FotoKit-Fassungen ändern eine Projektdatei von 2.7.0 nicht (geschützter Modus).'],
@@ -784,7 +784,14 @@ const dokuZeit = ext => nachZeit(ext && ext.bilddoku && ext.bilddoku.erstellt);
     Ein Termin: wie bis 2.6.0. */
 function dokuGeaendert(betroffen){
   const ext = P.data.extensions || {};
-  if (!mehrereTermine()){ P.data.extensions = { ...ext, dokuGeaendert: dokuZeit(ext) }; return; }
+  if (!mehrereTermine()){
+    const neu = { ...ext, dokuGeaendert: dokuZeit(ext) }, docs = ext.bilddokus;
+    if (docs && typeof docs === 'object'){   // wieder ein Termin, aber Dokus je Termin gemerkt: Termin 1 und „alle“ mitführen (sonst gälten sie bei einem neuen Termin 2 als aktuell)
+      const je = { ...(ext.dokuGeaendertJe || {}) }; for (const id of ['t1', 'alle']) if (docs[id]) je[id] = nachZeit(docs[id].erstellt);
+      neu.dokuGeaendertJe = je;
+    }
+    P.data.extensions = neu; return;
+  }
   const ids = betroffen ? [...new Set(betroffen.filter(Boolean))] : termine().map(t => t.id);
   const docs = ext.bilddokus && typeof ext.bilddokus === 'object' ? ext.bilddokus : {}, je = { ...(ext.dokuGeaendertJe || {}) };
   for (const id of [...ids, 'alle']) je[id] = nachZeit(docs[id] && docs[id].erstellt);
@@ -823,7 +830,10 @@ function bilddokuVermerken(dateien, anlage, wahl){
     bestand: S.items.filter(it => !it.ordner).map(it => it.name) };
   if (unter.length) b.bestandUnterordner = unter;
   const neu = { ...ext, bilddoku: b };
-  if (mehrereTermine() && wahl){
+  // Wieder ein Termin, aber schon Dokus je Termin in der Datei (früher mehrere Termine): die neue gilt Termin 1 – ohne Frage (E5),
+  // damit der Termin-Vergleich unten stimmt. Ohne bilddokus (nie mehrere Termine) bleibt alles wie in 2.6.0.
+  if (!mehrereTermine() && ext.bilddokus && typeof ext.bilddokus === 'object') wahl = 't1';
+  if (wahl && (mehrereTermine() || wahl === 't1' && ext.bilddokus && typeof ext.bilddokus === 'object')){
     b.termin = wahl;
     const t = wahl === 'alle' ? null : terminNach(wahl), je = ext.dokuGeaendertJe || {};
     neu.bilddokus = { ...(ext.bilddokus && typeof ext.bilddokus === 'object' ? ext.bilddokus : {}), [wahl]: { dateien: [...dateien], erstellt: nachZeit(je[wahl]),
@@ -840,32 +850,38 @@ function terminStand(t){
   return { datum: String(datum || ''), bezeichnung: String(t.bezeichnung || '') };
 }
 /** Review #95: Deckblatt-Termin jeder gemerkten Doku gegen die Projektdaten vergleichen – nicht am Änderungsereignis festmachen.
-    Weichen Datum oder Bezeichnung ab (in der Projektzentrale geändert, auch während FotoKit zu war), gilt die Doku dieses Termins als
-    geändert (dokuGeaendertJe, nur dieser Termin; „alle“: ihre Terminliste); ist sie die zuletzt erstellte, auch das alte
-    dokuGeaendert für BerichtKit. Nur im Speicher (m3) – in die Datei mit dem nächsten Speichern; S.dokuTerminAnders für die Anzeige. */
+    Läuft immer, wenn es Dokus je Termin gibt (auch wenn das Projekt wieder nur einen Termin hat). Geändert gilt die Doku eines Termins,
+    wenn Datum oder Bezeichnung abweichen (in der Projektzentrale geändert, auch während FotoKit zu war) oder ihre Kennung in den
+    Projektdaten nicht mehr vorkommt (Termin entfernt); „alle“, wenn die Terminliste abweicht. Dann dokuGeaendertJe für diesen Termin;
+    ist sie die zuletzt erstellte, auch das alte dokuGeaendert für BerichtKit. Der gemerkte Eintrag bleibt unter seiner Kennung (O12),
+    nichts wird gelöscht. Nur im Speicher (m3) – in die Datei mit dem nächsten Speichern.
+    S.dokuTerminAnders für den Hinweis: [{ id, entfernt, datum }] – eine Doku, die sich neu erstellen lässt, immer; eine eines entfernten
+    Termins (oder „alle“ bei nur noch einem Termin) nur, solange sie die zuletzt erstellte ist (die BerichtKit anhängen würde). */
 function dokuTerminPruefen(){
   S.dokuTerminAnders = [];
   const docs = P.data && P.data.extensions && P.data.extensions.bilddokus;
-  if (!docs || typeof docs !== 'object' || P.readOnly || !mehrereTermine()) return;
+  if (!docs || typeof docs !== 'object' || Array.isArray(docs) || P.readOnly) return;
   const gleich = (a, b) => !!a && typeof a === 'object' && String(a.datum || '') === b.datum && String(a.bezeichnung || '') === b.bezeichnung;
+  const jetzt = termine();
   for (const [id, d] of Object.entries(docs)){
     if (!d || typeof d !== 'object') continue;
-    let anders;
+    let anders, entfernt = false;
     if (id === 'alle'){
       if (!Array.isArray(d.termine)) continue;
-      const jetzt = termine();
       anders = d.termine.length !== jetzt.length || jetzt.some((t, i) => !d.termine[i] || d.termine[i].id !== t.id || !gleich(d.termine[i], terminStand(t)));
     } else {
       const t = terminNach(id);
-      if (!t || !d.termin || typeof d.termin !== 'object') continue;
-      anders = !gleich(d.termin, terminStand(t));
+      if (!t){ anders = entfernt = true; }                       // Kennung nicht mehr in den Projektdaten (O12)
+      else if (!d.termin || typeof d.termin !== 'object') continue;   // ohne Vermerk (vor 508278e) nicht prüfbar
+      else anders = !gleich(d.termin, terminStand(t));
     }
     if (!anders) continue;
-    S.dokuTerminAnders.push(id);
-    const e = P.data.extensions, je = e.dokuGeaendertJe || {};
+    const e = P.data.extensions, je = e.dokuGeaendertJe || {}, b = e.bilddoku, zuletzt = !!b && b.termin === id;
+    const neuErstellbar = !entfernt && (id !== 'alle' || mehrereTermine());
+    if (neuErstellbar || zuletzt) S.dokuTerminAnders.push({ id, entfernt, datum: d.termin && typeof d.termin === 'object' ? String(d.termin.datum || '') : '' });
     if (je[id] && je[id] > d.erstellt) continue;   // schon als geändert vermerkt
-    const neu = { ...e, dokuGeaendertJe: { ...je, [id]: nachZeit(d.erstellt) } }, b = e.bilddoku;
-    if (b && b.termin === id && !(e.dokuGeaendert && e.dokuGeaendert > b.erstellt)) neu.dokuGeaendert = nachZeit(b.erstellt);
+    const neu = { ...e, dokuGeaendertJe: { ...je, [id]: nachZeit(d.erstellt) } };
+    if (zuletzt && !(e.dokuGeaendert && e.dokuGeaendert > b.erstellt)) neu.dokuGeaendert = nachZeit(b.erstellt);
     P.data.extensions = neu;
   }
 }
@@ -2066,7 +2082,13 @@ function ansichtSetzen(id){
 }
 function terminWahlZeigen(){
   const el = $('terminWahl'), z = $('terminZeile');
-  if (!S.dir || !mehrereTermine()){ el.hidden = true; el.dataset.k = ''; el.innerHTML = ''; z.hidden = true; return; }
+  const zd = dokuHinweis();
+  if (!S.dir || !mehrereTermine()){
+    el.hidden = true; el.dataset.k = ''; el.innerHTML = '';
+    const zz = S.dir ? zd : '';   // wieder ein Termin: nur der Hinweis zu gemerkten Dokus (Review #95)
+    if (z.dataset.k !== zz){ z.dataset.k = zz; z.innerHTML = zz; }
+    z.hidden = !zz; return;
+  }
   const zahl = id => S.items.filter(it => id === 'alle' || terminVon(it) === id).length;
   const knopf = (id, text, title) => `<button type="button" data-ansicht="${esc(id)}" aria-pressed="${S.ansicht === id}" title="${esc(title)}">${esc(text)} <small>(${zahl(id)})</small></button>`;
   const html = '<span class="tw-lbl">Ortstermin:</span>' +
@@ -2079,11 +2101,19 @@ function terminWahlZeigen(){
   const zt = !offen.length ? '' : S.ansicht === 'alle'
     ? `⚠ Noch ohne Ortstermin (gelb): ${namen}. Bitte in der Zeile über den Fotos des Ordners zuordnen – FotoKit ordnet nie ohne Klick zu.`
     : `⚠ Noch ohne Ortstermin und hier nicht zu sehen: ${namen}. <button type="button" data-ansicht="alle">Alle zeigen</button>`;
-  const anders = (S.dokuTerminAnders || []).map(id => id === 'alle' ? 'alle Termine' : (terminNach(id) ? 'Termin ' + terminNach(id).nr : id));
-  const zd = anders.length ? `⚠ Die Bilddokumentation für ${anders.join(', ')} nennt noch Datum oder Bezeichnung von vorher (in der Projektzentrale geändert) – bitte neu erstellen.` : '';
   const zz = [zt, zd].filter(Boolean).join('<br>');
   if (z.dataset.k !== zz){ z.dataset.k = zz; z.innerHTML = zz; }
   z.hidden = !zz;
+}
+/** Hinweis zu gemerkten Bilddokus, deren Termin sich geändert hat oder entfernt wurde (dokuTerminPruefen). */
+function dokuHinweis(){
+  const l = S.dokuTerminAnders || [], z = [];
+  const geaendert = l.filter(x => !x.entfernt && x.id !== 'alle').map(x => 'Termin ' + terminNach(x.id).nr);
+  if (geaendert.length) z.push(`⚠ Die Bilddokumentation für ${geaendert.join(', ')} nennt noch Datum oder Bezeichnung von vorher (in der Projektzentrale geändert) – bitte neu erstellen.`);
+  if (l.some(x => x.id === 'alle')) z.push(`⚠ Die Bilddokumentation für alle Termine nennt eine andere Terminliste als die Projektdaten (Termin geändert, angelegt oder entfernt)${mehrereTermine() ? ' – bitte neu erstellen' : ''}.`);
+  for (const x of l.filter(x => x.entfernt))
+    z.push(`⚠ Termin entfernt: Die Bilddokumentation ${OT && OT.gueltig(x.datum) ? `für den Ortstermin am ${esc(deDate(x.datum))}` : `für den Termin ${esc(x.id)}`} gehört zu einem Termin, den es in den Projektdaten nicht mehr gibt – sie gilt als veraltet. Die PDF bleibt liegen.`);
+  return z.join('<br>');
 }
 $('terminWahl').addEventListener('click', e => { const b = e.target.closest('[data-ansicht]'); if (b) ansichtSetzen(b.dataset.ansicht); });
 $('terminZeile').addEventListener('click', e => { const b = e.target.closest('[data-ansicht]'); if (b) ansichtSetzen(b.dataset.ansicht); });

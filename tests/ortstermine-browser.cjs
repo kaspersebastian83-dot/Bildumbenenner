@@ -10,6 +10,9 @@
 //      BerichtKits anlagen.js meldet die Doku nicht „veraltet“.
 //   4b. Review #95: Projektzentrale ändert das Datum von Termin 2 → FotoKit zeigt es sofort, nur die Doku von Termin 2 gilt als
 //      geändert (in die Datei mit dem nächsten Speichern), Termin 1 bleibt aktuell; BerichtKits anlagen.js meldet „veraltet“.
+//   4c. Review #95: Termin entfernt – (b) t3 mit Doku entfernt, t2 besteht → nur t3 geändert; (a) eigenes Projekt, Doku für t2, t2
+//      entfernt (wieder ein Termin) → Hinweis „Termin entfernt“, nach dem Speichern t2 geändert, BerichtKit „veraltet“; danach mit
+//      einem Termin: ordnerTermine/bilddokus/dokuGeaendertJe bleiben lesbar und erhalten, neue Doku ohne Frage nach dem Termin (E5).
 //   5. R2: Unterordner nicht lesbar → gelbe Zeile, seine Einträge bleiben in der Projektdatei.
 //   6. Bestand (O8): Herkunft aus fotoUebernahmen → Rückfrage je Herkunft, Termin je Foto, nichts verschoben.
 //   6b. Review #95: Fotos aus zwei Herkunftsordnern, danach (zweimal) umbenannt → je Herkunft eine Rückfrage mit dem richtigen
@@ -37,7 +40,7 @@ const ALT = 'c74418a';   // FotoKit 2.6.0
 let altHtml = null; try { altHtml = execFileSync('git', ['show', ALT + ':index.html'], { cwd: root, maxBuffer: 64 << 20 }); } catch (_) {}
 if (!altHtml && process.env.ORTSTERMINE_PFLICHT) throw new Error('FotoKit 2.6.0 (' + ALT + ') nicht in der Git-Historie');
 const TYP = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.css': 'text/css', '.webmanifest': 'application/manifest+json' };
-const HAUPT = '26.0501 Teststadt Ka', BESTAND = '26.0502 Bestand Teststadt', EINFACH = '26.0503 Einfach Teststadt', HERKUNFT = '26.0504 Herkunft Teststadt';
+const HAUPT = '26.0501 Teststadt Ka', BESTAND = '26.0502 Bestand Teststadt', EINFACH = '26.0503 Einfach Teststadt', HERKUNFT = '26.0504 Herkunft Teststadt', ENTFERNT = '26.0505 Entfernt Teststadt';
 let browser, server, schritt = 'Start';
 
 (async () => {
@@ -156,10 +159,10 @@ let browser, server, schritt = 'Start';
     // ---------- 2. Projektzentrale legt Termin 2 an; FotoKit fragt je Ordner ----------
     schritt = '2 Termin 2';
     const pz = await seite('/pz/index.html');
-    const pzOeffnen = async () => {
+    const pzOeffnen = async (name = HAUPT) => {
       await pz.reload(); await pz.waitForSelector('#btnInfo');
-      await pz.locator('#btnStart, #btnArchive').first().click(); await pz.locator(`.proj[data-name="${HAUPT}"]`).click();
-      await pz.waitForFunction(n => document.querySelector('.proj.active')?.dataset.name === n && document.getElementById('otBlock'), HAUPT);
+      await pz.locator('#btnStart, #btnArchive').first().click(); await pz.locator(`.proj[data-name="${name}"]`).click();
+      await pz.waitForFunction(n => document.querySelector('.proj.active')?.dataset.name === n && document.getElementById('otBlock'), name);
       if (!await pz.locator('#pjBox').evaluate(d => d.open)) await pz.locator('#pjBox > summary').click();
     };
     const pzNeu = async (id, datum, bez) => {
@@ -320,6 +323,87 @@ let browser, server, schritt = 'Start';
       console.log(`OK ${browserName}: BerichtKits anlagen.js – Doku Termin 2 nach dem Speichern „veraltet“`);
     } else if (process.env.ORTSTERMINE_PFLICHT) assert.fail('BerichtKit nicht neben dem Repo: ' + bkAnlagen);
     console.log(`OK ${browserName}: Termin 2 in der Projektzentrale geändert → FotoKit zeigt es sofort, nur Doku Termin 2 geändert, in der Datei mit dem nächsten Speichern`);
+
+    // ---------- 4c. Review #95: Termin entfernt ----------
+    schritt = '4c (b) t3 entfernt';
+    const bkPruefen = async (pg, projekt, nr, fkJson) => {
+      const BA = require(bkAnlagen);
+      const { fotos, bilder } = await pg.evaluate(async p => { const f = await (await (await (await navigator.storage.getDirectory()).getDirectoryHandle('Mosaik Archivordner')).getDirectoryHandle(p)).getDirectoryHandle('Fotos');
+        const fotos = [], bilder = []; for await (const h of f.values()) if (h.kind === 'file'){ bilder.push({ name: h.name }); if (h.name.endsWith('.pdf')) fotos.push({ name: h.name, t: (await h.getFile()).lastModified }); } return { fotos, bilder }; }, projekt);
+      return BA.bilddokuFinden(fotos, fkJson, nr, [], bilder, await pjDatei(pg, projekt));
+    };
+    const entferntPz = async (projekt, id) => { await pz.bringToFront(); await pz.locator(`[data-ot-weg="${id}"]`).click(); await pz.locator('#dlgBack.show #dYes').click();
+      await bis(pz, async () => !((await pjDatei(pz, projekt)).weitereOrtstermine || []).some(t => t.id === id), id + ' in der Projektzentrale entfernt'); };
+    await fokus(fk);
+    await pdf('t3');
+    j = await bis(fk, async () => { const x = await fkDatei(fk, HAUPT); return x.bilddoku?.termin === 't3' && x; }, 'Doku Termin 3');
+    const vor4c = j;
+    assert.deepEqual(j.bilddokus.t3.termin, { datum: '2026-09-03', bezeichnung: '' });
+    await pzOeffnen(); await entferntPz(HAUPT, 't3');
+    await fokus(fk);
+    await bis(fk, async () => /Termin entfernt: Die Bilddokumentation für den Ortstermin am 03\.09\.2026 gehört zu einem Termin, den es in den Projektdaten nicht mehr gibt – sie gilt als veraltet\. Die PDF bleibt liegen\./.test(await fk.locator('#terminZeile').textContent()), 'Hinweis Termin entfernt');
+    await fk.waitForTimeout(700);
+    assert.deepEqual((await fkDatei(fk, HAUPT)).dokuGeaendertJe, vor4c.dokuGeaendertJe, 'in die Datei erst mit dem nächsten Speichern');
+    await fk.locator('#terminWahl [data-ansicht="alle"]').click();
+    await kopf(fk, 'Nachtrag 2026-10-08').locator('select').selectOption('t7');   // nächstes Speichern – betrifft weder t1, t2 noch t3
+    j = await bis(fk, async () => { const x = await fkDatei(fk, HAUPT); return x.ordnerTermine['Nachtrag 2026-10-08'].termin === 't7' && x; }, 'gespeichert');
+    assert.ok(j.dokuGeaendertJe.t3 > j.bilddokus.t3.erstellt, 'Doku Termin 3 geändert');
+    assert.equal(j.dokuGeaendertJe.t1, vor4c.dokuGeaendertJe.t1, 't1 unberührt'); assert.equal(j.dokuGeaendertJe.t2, vor4c.dokuGeaendertJe.t2, 't2 unberührt');
+    assert.ok(j.dokuGeaendert > j.bilddoku.erstellt, 'zuletzt erstellte (t3) auch im alten Feld');
+    assert.deepEqual(j.bilddokus.t3, vor4c.bilddokus.t3, 'Eintrag bleibt unter t3 (O12)');
+    assert.equal(j.ordnerTermine['fotos ka 03.09'].termin, 't3', 'Zuordnung bleibt in der Datei');
+    assert.match((await koepfe(fk)).find(k => k.includes('fotos ka 03.09')), /^\[gelb\] /, 'Ordner des entfernten Termins wieder gelb');
+    if (fs.existsSync(bkAnlagen)) assert.equal((await bkPruefen(fk, HAUPT, '26.0501', j)).veraltet, true, 'BerichtKit: Doku Termin 3 veraltet');
+    console.log(`OK ${browserName}: t3 mit Doku in der Projektzentrale entfernt (t2 besteht) → Hinweis „Termin entfernt“, nur t3 geändert, Eintrag bleibt, BerichtKit „veraltet“`);
+
+    schritt = '4c (a) letzter weiterer Termin entfernt';
+    await fk.evaluate(async ENTFERNT => {
+      const a = await (await navigator.storage.getDirectory()).getDirectoryHandle('Mosaik Archivordner'), p = await a.getDirectoryHandle(ENTFERNT, { create: true }), f = await p.getDirectoryHandle('Fotos', { create: true });
+      const put = async (d, n, x) => { const w = await (await d.getFileHandle(n, { create: true })).createWritable(); await w.write(x); await w.close(); };
+      const jpg = i => { const c = document.createElement('canvas'); c.width = 36 + i; c.height = 24; c.getContext('2d').fillRect(0, 0, i * 3, i); return new Promise(r => c.toBlob(r, 'image/jpeg')); };
+      await put(p, '_Projekt.json', JSON.stringify({ format: 'mosaik-projekt', version: 1, objekt: 'EFH, Testweg 5', ortstermin: '2026-08-12',
+        weitereOrtstermine: [{ id: 't2', datum: '2026-08-20', bezeichnung: 'Nachbeprobung', wer: 'Ka' }], ortsterminZaehler: 2 }));
+      await put(f, 'IMG_0001.jpg', await jpg(1)); await put(await f.getDirectoryHandle('fotos ka 20.08', { create: true }), 'IMG_0002.jpg', await jpg(2));
+    }, ENTFERNT);
+    const fe = await seite('/fk/index.html', ENTFERNT);
+    await oeffnen(fe); await ruhig(fe); await fe.waitForFunction(() => document.querySelectorAll('#list .row').length === 2);
+    await kopf(fe, 'fotos ka 20.08').locator('button', { hasText: 'Ja' }).click();
+    await kopf(fe, 'direkt in „Fotos“').locator('select').selectOption('t1');
+    await bis(fe, async () => Object.keys((await fkDatei(fe, ENTFERNT))?.ordnerTermine || {}).length === 2, 'zugeordnet');
+    await fe.click('#btnPdf'); await fe.locator('#zOk').waitFor(); await fe.locator('#pTermin').selectOption('t2'); await fe.click('#zOk'); await ruhig(fe);
+    j = await bis(fe, async () => { const x = await fkDatei(fe, ENTFERNT); return x.bilddokus?.t2 && x; }, 'Doku Termin 2');
+    const vorA = j;
+    assert.equal(j.bilddoku.termin, 't2');
+    await pzOeffnen(ENTFERNT); await entferntPz(ENTFERNT, 't2');
+    assert.equal((await pjDatei(pz, ENTFERNT)).ortsterminZaehler, 2);
+    await fokus(fe);
+    await bis(fe, async () => /Termin entfernt: Die Bilddokumentation für den Ortstermin am 20\.08\.2026 gehört zu einem Termin, den es in den Projektdaten nicht mehr gibt/.test(await fe.locator('#terminZeile').textContent()), 'Hinweis bei einem Termin');
+    assert.equal(await fe.locator('#terminWahl').isHidden(), true, 'wieder ein Termin: keine Auswahl');
+    assert.deepEqual(await koepfe(fe), ['direkt in „Fotos“', 'fotos ka 20.08'], 'Kopfzeilen ohne Frage, nichts gelb');
+    await fe.waitForTimeout(700);
+    j = await fkDatei(fe, ENTFERNT);
+    assert.deepEqual(j.dokuGeaendertJe, vorA.dokuGeaendertJe, 'erst mit dem nächsten Speichern');
+    if (fs.existsSync(bkAnlagen)) assert.equal((await bkPruefen(fe, ENTFERNT, '26.0505', j)).veraltet, false, 'BerichtKit sieht es erst nach dem Speichern in FotoKit');
+    await beschreiben(fe, 'IMG_0001.jpg', 'Küche Decke');   // nächstes Speichern
+    j = await bis(fe, async () => { const x = await fkDatei(fe, ENTFERNT); return x.bilder?.['IMG_0001.jpg']?.beschreibung && x; }, 'gespeichert');
+    assert.ok(j.dokuGeaendertJe.t2 > j.bilddokus.t2.erstellt, 'Doku Termin 2 geändert');
+    assert.ok(j.dokuGeaendert > j.bilddoku.erstellt);
+    assert.deepEqual(j.bilddokus.t2, vorA.bilddokus.t2, 'Eintrag bleibt unter t2 (O12)');
+    assert.deepEqual(j.ordnerTermine, vorA.ordnerTermine, 'ordnerTermine bleibt in der Datei');
+    if (fs.existsSync(bkAnlagen)){ const k = await bkPruefen(fe, ENTFERNT, '26.0505', j); assert.equal(k.dateien[0], 'Fotos/' + vorA.bilddoku.dateien[0]); assert.equal(k.veraltet, true, 'BerichtKit: Doku des entfernten Termins veraltet'); }
+    // E5: mit einem Termin keine Frage nach dem Termin; neue Doku gilt Termin 1, alte Einträge bleiben
+    await fe.click('#btnPdf'); await fe.locator('#zOk').waitFor();
+    assert.equal(await fe.locator('#pTermin').count(), 0, 'keine Frage nach dem Termin (E5)');
+    assert.equal(await fe.locator('#m_ort').inputValue(), '2026-08-12');
+    await fe.click('#zOk'); await ruhig(fe);
+    j = await bis(fe, async () => { const x = await fkDatei(fe, ENTFERNT); return x.bilddoku?.termin === 't1' && x; }, 'neue Doku');
+    assert.deepEqual(j.bilddokus.t1.dateien, j.bilddoku.dateien); assert.deepEqual(j.bilddokus.t1.termin, { datum: '2026-08-12', bezeichnung: '' });
+    assert.deepEqual(j.bilddokus.t2, vorA.bilddokus.t2); assert.deepEqual(j.ordnerTermine, vorA.ordnerTermine);
+    assert.equal(await fe.locator('#terminZeile').isHidden(), true, 'Hinweis entfällt – die Doku des entfernten Termins ist nicht mehr die zuletzt erstellte');
+    assert.doesNotMatch(await fe.locator('#banner').textContent(), /Fehler|nicht/i);
+    if (fs.existsSync(bkAnlagen)) assert.equal((await bkPruefen(fe, ENTFERNT, '26.0505', j)).veraltet, false, 'BerichtKit: neue Doku aktuell');
+    await fe.close();
+    console.log(`OK ${browserName}: letzter weiterer Termin entfernt → Hinweis, t2 geändert, BerichtKit „veraltet“; mit einem Termin bleibt alles lesbar, neue Doku ohne Terminfrage (E5)`);
 
     // ---------- 5. R2: Unterordner nicht lesbar ----------
     schritt = '5 R2';

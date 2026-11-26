@@ -163,7 +163,7 @@ function sitzung(d, pj = ZWEI){
     assert.ok(e.dokuGeaendertJe.t2 > erstellt.t2, 'Doku Termin 2 geändert');
     assert.equal(e.dokuGeaendertJe.t1, '2026-11-26T09:00:00.000Z', 'Termin 1 unberührt');
     assert.ok(e.dokuGeaendert > erstellt.t2, 'zuletzt erstellte Doku (t2) auch für BerichtKit geändert');
-    gleich(s.S.dokuTerminAnders, ['t2']);
+    gleich(s.S.dokuTerminAnders.map(x => x.id), ['t2']);
     assert.equal(d.json().dokuGeaendertJe.t2, '2026-11-26T09:00:00.000Z', 'nur im Speicher – erst mit dem nächsten Speichern in der Datei');
     // Termin 1: Bezeichnung in der Projektzentrale geändert → nur t1; das alte Feld bleibt (zuletzt erstellt ist t2)
     const d1 = disk(datei2), s1 = sitzung(d1, { ...ZWEI, ortsterminBezeichnung: 'Erstbegehung' }); await s1.open();
@@ -172,6 +172,48 @@ function sitzung(d, pj = ZWEI){
     // unverändert: nichts
     const d0 = disk(datei2), s0 = sitzung(d0); await s0.open(); s0.dokuTerminPruefen();
     gleich(s0.P.data.extensions.dokuGeaendertJe, datei2.dokuGeaendertJe); gleich(s0.S.dokuTerminAnders, []);
+  });
+
+  const mitDokus = (zuletzt, termin) => ({ ...datei(), dokuGeaendert: '2026-11-26T09:00:00.000Z',
+    dokuGeaendertJe: { t1: '2026-11-26T09:00:00.000Z', t2: '2026-11-26T09:00:00.000Z', t3: '2026-11-26T09:00:00.000Z', alle: '2026-11-26T09:00:00.000Z' },
+    ordnerTermine: { 'Fotos B 20.08': { termin: 't2', am: '2026-11-26T08:00:00.000Z', vorschlag: 'datum-im-namen' } },
+    bilddoku: { dateien: [zuletzt + '.pdf'], erstellt: '2026-11-26T12:00:00.000Z', anlage: 'Anlage 2', version: '2.7.0', bestand: [], termin },
+    bilddokus: { t1: { dateien: ['T1.pdf'], erstellt: '2026-11-26T10:00:00.000Z', termin: { datum: '2026-08-12', bezeichnung: '' } },
+      t2: { dateien: ['T2.pdf'], erstellt: '2026-11-26T11:00:00.000Z', termin: { datum: '2026-08-20', bezeichnung: 'Nachbeprobung' } },
+      t3: { dateien: ['T3.pdf'], erstellt: '2026-11-26T12:00:00.000Z', termin: { datum: '2026-09-03', bezeichnung: '' } } } });
+  const EINER = { format: 'mosaik-projekt', version: 1, ortstermin: '2026-08-12', ortsterminZaehler: 3 };
+
+  await test('Review #95 (3): letzter weiterer Termin entfernt (wieder ein Termin) → Doku t2 geändert, Eintrag bleibt, Hinweis „entfernt“', async () => {
+    const f = mitDokus('T2', 't2'); delete f.bilddokus.t3;
+    const d = disk(f), s = sitzung(d, EINER); await s.open();
+    s.dokuTerminPruefen();
+    const e = s.P.data.extensions;
+    assert.ok(e.dokuGeaendertJe.t2 > f.bilddokus.t2.erstellt, 'Doku des entfernten Termins geändert');
+    assert.ok(e.dokuGeaendert > f.bilddoku.erstellt, 'zuletzt erstellte (t2) auch für BerichtKit geändert');
+    assert.equal(e.dokuGeaendertJe.t1, '2026-11-26T09:00:00.000Z', 'Termin 1 unberührt');
+    gleich(e.bilddokus.t2, f.bilddokus.t2, 'Eintrag bleibt unter seiner Kennung (O12)'); gleich(e.ordnerTermine, f.ordnerTermine);
+    gleich(s.S.dokuTerminAnders, [{ id: 't2', entfernt: true, datum: '2026-08-20' }]);
+    assert.equal(d.json().dokuGeaendertJe.t2, '2026-11-26T09:00:00.000Z', 'nur im Speicher');
+    // neue Doku bei einem Termin: ohne Frage für Termin 1, bilddokus.t1 mitgeführt; der Hinweis zum entfernten Termin entfällt (nicht mehr die zuletzt erstellte)
+    s.bilddokuVermerken(['Neu.pdf'], 'Anlage 2');
+    const e2 = s.P.data.extensions;
+    assert.equal(e2.bilddoku.termin, 't1'); gleich(e2.bilddokus.t1.dateien, ['Neu.pdf']); gleich(e2.bilddokus.t1.termin, { datum: '2026-08-12', bezeichnung: '' });
+    gleich(e2.bilddokus.t2, f.bilddokus.t2); assert.ok(e2.dokuGeaendertJe.t2 > e2.bilddokus.t2.erstellt, 't2 bleibt geändert');
+    gleich(s.S.dokuTerminAnders, []);
+  });
+
+  await test('Review #95 (4): t2 und t3, Doku für t3, t3 entfernt → nur t3 geändert', async () => {
+    const f = mitDokus('T3', 't3'), d = disk(f), s = sitzung(d, { ...ZWEI, ortsterminZaehler: 3 }); await s.open();
+    s.dokuTerminPruefen();
+    const e = s.P.data.extensions;
+    assert.ok(e.dokuGeaendertJe.t3 > f.bilddokus.t3.erstellt, 't3 geändert'); assert.ok(e.dokuGeaendert > f.bilddoku.erstellt);
+    assert.equal(e.dokuGeaendertJe.t1, '2026-11-26T09:00:00.000Z'); assert.equal(e.dokuGeaendertJe.t2, '2026-11-26T09:00:00.000Z');
+    gleich(s.S.dokuTerminAnders, [{ id: 't3', entfernt: true, datum: '2026-09-03' }]);
+    gleich(e.bilddokus.t3, f.bilddokus.t3);
+    // nicht die zuletzt erstellte: geändert vermerkt, aber kein Dauer-Hinweis
+    const f2 = mitDokus('T2', 't2'), s2 = sitzung(disk(f2), { ...ZWEI, ortsterminZaehler: 3 }); await s2.open(); s2.dokuTerminPruefen();
+    assert.ok(s2.P.data.extensions.dokuGeaendertJe.t3 > f2.bilddokus.t3.erstellt); assert.equal(s2.P.data.extensions.dokuGeaendert, '2026-11-26T09:00:00.000Z');
+    gleich(s2.S.dokuTerminAnders, []);
   });
 
   console.log(`OK Unterordner: ${n} Fälle bestanden.`);
