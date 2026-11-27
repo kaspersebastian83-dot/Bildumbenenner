@@ -545,7 +545,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.7.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:b9c46e7688217e90bb933733b7327e45934e185eb3bdf2a8d07d837772979612';
+const APP_BUILD = 'sha256:ad6ee525b18f605beb026ead77a2096f48d12424ada4555a9df5953dc8de1fa6';
 const APP_DATE = '2026-11-26';
 const CHANGELOG = [
   ['2.7.0', '26.11.2026', 'Mehrere Ortstermine, Fotos bleiben in ihren Unterordnern: FotoKit liest jetzt auch die Fotos in den Unterordnern von „Fotos“ (eine Ebene, z. B. „Bilder Stefan“, „fotos ka 20.08“) – sie bleiben dort liegen und behalten ihren Namen; Ordner mit „_“ oder „.“ vorn zählen nicht. Über den Kacheln steht je Ordner eine Zeile. Hat das Projekt mehr als einen Ortstermin (Projektzentrale „+ Weiterer Ortstermin“), fragt FotoKit je Ordner einmal, zu welchem Termin er gehört – Vorschlag aus dem Datum im Ordnernamen, sonst aus dem Aufnahmedatum; nie ohne Klick. Passt das Datum zu keinem Termin, legt „Anlegen“ ihn in den Projektdaten an (nur den Termin, mit derselben Kennungsregel wie die Projektzentrale). Über den Fotos „Termin 1 · Termin 2 · Alle“, Fotos ohne Termin sind gelb. „Bilddokumentation erstellen“ fragt zuerst „Für welchen Termin?“, das Deckblatt nennt Datum und Bezeichnung des Termins, die PDF trägt das Termindatum im Namen, und FotoKit merkt sich je Termin eine Bilddokumentation – eine neue für Termin 2 lässt die von Termin 1 aktuell. Ändert die Projektzentrale Datum oder Bezeichnung eines Termins, gilt nur dessen Bilddokumentation als geändert (Hinweis über den Fotos). Fotos in Unterordnern werden nicht umbenannt und nie nach „_aussortiert“ verschoben („Weg“ ist dort nur eine Markierung); iPhone-Fotos dort werden im selben Ordner umgewandelt, das Original kommt nach „<Ordner>/_Originale“. „Fotos übernehmen“ entfällt; schon übernommene Fotos fragt FotoKit je Herkunftsordner, auch nach dem Umbenennen (sonst „Herkunft unbekannt“). Ein Projekt ohne Unterordner und mit einem Termin sieht aus wie bisher. Ältere FotoKit-Fassungen ändern eine Projektdatei von 2.7.0 nicht (geschützter Modus).'],
@@ -673,7 +673,18 @@ function unlesbareMischen(neu, alt){
   for (const [k, v] of Object.entries(alt)) if (unlesbarerSchluessel(k) && !(k in neu)) neu[k] = v;
   return neu;
 }
-const unlesbareListe = (neu, alt) => !S.unlesbar || !S.unlesbar.size ? neu : [...neu, ...(Array.isArray(alt) ? alt : []).filter(k => unlesbarerSchluessel(k) && !neu.includes(k))];
+/** R2 für Listen (Reihenfolge, „Weg“): Einträge eines nicht lesbaren Unterordners bleiben – an ihrem Platz, jeweils direkt hinter dem
+    Eintrag, hinter dem sie bisher standen (Review #95, P2), nicht ans Ende gehängt. Ändert sich an den gezeigten Fotos nichts, bleibt
+    die Liste damit genau gleich; sonst rückten die Fotos des Ordners in der Reihenfolge nach hinten, sobald er wieder lesbar ist. */
+const unlesbareListe = (neu, alt) => {
+  if (!S.unlesbar || !S.unlesbar.size || !Array.isArray(alt)) return neu;
+  const out = [...neu], drin = new Set(neu); let pos = 0;
+  for (const k of alt){
+    if (drin.has(k)) pos = out.indexOf(k) + 1;
+    else if (unlesbarerSchluessel(k)){ out.splice(pos++, 0, k); drin.add(k); }
+  }
+  return out;
+};
 
 /** Ortstermine des Projekts: Termin 1 aus „ortstermin“ (+ Bezeichnung, Wer), weitere aus „weitereOrtstermine“ (Reihenfolge = Nummer). */
 let terminMemo = { d: undefined, l: null };
@@ -2485,12 +2496,12 @@ async function heicUmwandeln(liste){
   await loadItems();
   return { fertig, fehler, ms: Date.now() - t0 };
 }
-/** nurGezeigte (Review #95, P2): nur die iPhone-Fotos der gezeigten Auswahl (Termin) – für die Rückfrage vor der Bilddokumentation;
-    die Karte „iPhone-Fotos umwandeln“ wandelt wie bisher alle um. Wird alles gezeigt (ein Termin oder „Alle“), ist beides dasselbe. */
-async function heicUmwandelnStarten(nurGezeigte){
+/** nurDoku (Review #95, P2): nur die iPhone-Fotos, die in die Doku kommen – gezeigte Auswahl (Termin) und nicht „Weg“, genau die,
+    die die Rückfrage vor der Bilddokumentation zählt. Die Karte „iPhone-Fotos umwandeln“ wandelt wie bisher alle um. */
+async function heicUmwandelnStarten(nurDoku){
   if (!S.dir || S.busy || S.changing) return null;
   if (P.readOnly){ banner('err', esc(PROTECTED_PROJECT)); return null; }
-  const fotos = () => nurGezeigte === true ? S.view.filter(istHeic) : heicFotos();
+  const fotos = () => nurDoku === true ? S.view.filter(it => istHeic(it) && !it.discard) : heicFotos();
   if (!fotos().length) return null;
   let r = null;
   await withSavedProject('Das Umwandeln der iPhone-Fotos', async () => { r = await heicUmwandeln(fotos()); });
@@ -2503,8 +2514,8 @@ async function heicUmwandelnStarten(nurGezeigte){
   return r;
 }
 /** E2: vor „Bilddokumentation erstellen“ einmal nachfragen, statt Platzhalter ins PDF zu setzen.
-    Review #95 (P2): gezählt und umgewandelt wird, was die Doku nimmt – die gezeigte Auswahl (S.view). Ein iPhone-Foto eines anderen
-    Termins löst keine Rückfrage aus und wird hier nicht mit umgewandelt. */
+    Review #95 (P2): gezählt und umgewandelt wird, was die Doku nimmt – die gezeigte Auswahl (S.view) ohne „Weg“-Fotos. Ein iPhone-Foto
+    eines anderen Termins oder ein aussortiertes löst keine Rückfrage aus und wird hier nicht mit umgewandelt. */
 function guardHeic(next){
   return (...a) => {
     const n = S.view.filter(it => istHeic(it) && !it.discard).length;

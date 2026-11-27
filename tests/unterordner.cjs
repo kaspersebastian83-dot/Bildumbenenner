@@ -98,6 +98,22 @@ function sitzung(d, pj = ZWEI){
     }
   });
 
+  await test('Reihenfolge: Einträge eines nicht lesbaren Unterordners bleiben an ihrem Platz, nicht ans Ende gehängt (Review #95)', async () => {
+    const d = disk(datei()), s = sitzung(d); await s.open();
+    const A = 'Bilder A/IMG_0001.jpg', B = 'Fotos B/IMG_0001.jpg', D = 'IMG_0001.jpg', N = 'Fotos B 20.08/IMG_0001.jpg';
+    gleich(s.projGet('order', []), [A, B, D], 'Ausgang');
+    s.S.unlesbar = new Set(['Fotos B']);
+    s.S.items = [A, D].map(foto); s.S.view = s.S.items.slice();   // „Fotos B“ fehlt beim Einlesen
+    s.saveOrder();
+    gleich(s.projGet('order', []), [A, B, D], 'nichts an den gezeigten Fotos geändert → Reihenfolge genau wie vorher');
+    s.S.items = [D, A, N].map(foto); s.S.view = s.S.items.slice();   // umsortiert, ein neues Foto dazu
+    s.saveOrder();
+    assert.equal(await s.flushProject(), true);
+    assert.deepEqual(d.json().reihenfolge, [D, A, B, N], 'der Eintrag des nicht lesbaren Ordners bleibt hinter seinem bisherigen Vorgänger');
+    s.S.unlesbar = new Set();   // Gegenprobe: ohne nicht lesbaren Ordner ist die Liste genau die gezeigte
+    s.saveOrder(); gleich(s.projGet('order', []), [D, A, N]);
+  });
+
   await test('Doku geändert je Termin: Änderung in Termin 2 lässt Termin 1 und die zuletzt erstellte Doku (Termin 1) aktuell', async () => {
     const d = disk(datei()), s = sitzung(d); await s.open();
     s.S.items = ['Bilder A/IMG_0001.jpg', 'Fotos B 20.08/IMG_0001.jpg'].map(foto);
