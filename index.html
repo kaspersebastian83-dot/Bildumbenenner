@@ -545,7 +545,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.7.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:1a53cf3c079d9f414b1d07e83c086872e79fea9eef4f3301edaacd5f24e161fc';
+const APP_BUILD = 'sha256:31ba7741d0ea7baa81156e62063f381a42b36c44d81a1ba61d7dcc549e60aadb';
 const APP_DATE = '2026-11-26';
 const CHANGELOG = [
   ['2.7.0', '26.11.2026', 'Mehrere Ortstermine, Fotos bleiben in ihren Unterordnern: FotoKit liest jetzt auch die Fotos in den Unterordnern von „Fotos“ (eine Ebene, z. B. „Bilder Stefan“, „fotos ka 20.08“) – sie bleiben dort liegen und behalten ihren Namen; Ordner mit „_“ oder „.“ vorn zählen nicht. Über den Kacheln steht je Ordner eine Zeile. Hat das Projekt mehr als einen Ortstermin (Projektzentrale „+ Weiterer Ortstermin“), fragt FotoKit je Ordner einmal, zu welchem Termin er gehört – Vorschlag aus dem Datum im Ordnernamen, sonst aus dem Aufnahmedatum; nie ohne Klick. Passt das Datum zu keinem Termin, legt „Anlegen“ ihn in den Projektdaten an (nur den Termin, mit derselben Kennungsregel wie die Projektzentrale). Über den Fotos „Termin 1 · Termin 2 · Alle“, Fotos ohne Termin sind gelb. „Bilddokumentation erstellen“ fragt zuerst „Für welchen Termin?“, das Deckblatt nennt Datum und Bezeichnung des Termins, die PDF trägt das Termindatum im Namen, und FotoKit merkt sich je Termin eine Bilddokumentation – eine neue für Termin 2 lässt die von Termin 1 aktuell. Ändert die Projektzentrale Datum oder Bezeichnung eines Termins, gilt nur dessen Bilddokumentation als geändert (Hinweis über den Fotos). Fotos in Unterordnern werden nicht umbenannt und nie nach „_aussortiert“ verschoben („Weg“ ist dort nur eine Markierung); iPhone-Fotos dort werden im selben Ordner umgewandelt, das Original kommt nach „<Ordner>/_Originale“. „Fotos übernehmen“ entfällt; schon übernommene Fotos fragt FotoKit je Herkunftsordner, auch nach dem Umbenennen (sonst „Herkunft unbekannt“). Ein Projekt ohne Unterordner und mit einem Termin sieht aus wie bisher. Ältere FotoKit-Fassungen ändern eine Projektdatei von 2.7.0 nicht (geschützter Modus).'],
@@ -4052,8 +4052,7 @@ function openMetaDialog(mode){
   const angebot = forPdf ? umbenennenAnbieten() : null;
   const m = loadMeta();
   PJ.shown = Object.fromEntries(PJ_MAP.map(([k, pk]) => [pk, (m[k] || '').trim()]));   // Stand beim Öffnen: nur Änderungen daran werden gespeichert
-  const active = S.view.filter(it => !it.discard);
-  const withDesc = active.filter(it => it.nr != null).length;
+  let active = [], withDesc = 0;   // hängen an der gezeigten Auswahl – auswahlRechnen() unten, beim Öffnen und bei jedem Terminwechsel
   const fields = META_FIELDS.map(([key, label, ph, type, scope, hint]) =>
     `<label class="${[key === 'objekt' || key === 'ereignis' ? 'wide' : '', META_PFLICHT.includes(key) ? 'pflicht' : ''].filter(Boolean).join(' ')}"><span>${label}${scope === 'global' ? ' <small>(für alle Projekte)</small>' : ''}${META_PFLICHT.includes(key) ? '<span class="pflicht-tag">Pflicht</span>' : ''}</span>
        ${META_UNBEKANNT.includes(key) ? `<span class="datum-nb"><input type="${type}" id="m_${key}"><button type="button" class="nb" id="m_${key}_nb" aria-pressed="false" title="Datum ist nicht bekannt – erscheint auf dem Deckblatt als „nicht bekannt“">nicht bekannt</button></span>`
@@ -4070,7 +4069,7 @@ function openMetaDialog(mode){
       ${terminWahlHtml}
       ${forPdf ? '<div class="lbl fk-dlg-lbl">Deckblatt <span id="pPflicht"></span></div>' : ''}
       <div class="form">${forPdf ? fields + pjInfo : pjInfo + fields}</div>
-      ${forPdf && angebot ? `<label class="chk fk-angebot" id="pRenameBox"><input type="checkbox" id="pRename"><span><b>Vorher die Fotos im Ordner passend benennen?</b> Dann heißt z. B. Bild ${angebot.docNr} im Explorer <code>${esc(angebot.final)}</code> – so findet man einzelne Fotos schnell wieder, etwa um eines direkt in den Bericht einzufügen. Rückgängig ist möglich. Wird nur dieses eine Mal angeboten; später unter „Mehr …“ › „Dateien umbenennen“.</span></label>` : ''}
+      ${forPdf && angebot ? `<label class="chk fk-angebot" id="pRenameBox"><input type="checkbox" id="pRename"><span><b>Vorher die Fotos im Ordner passend benennen?</b> <span id="pRenameBsp">Dann heißt z. B. Bild ${angebot.docNr} im Explorer <code>${esc(angebot.final)}</code></span> – so findet man einzelne Fotos schnell wieder, etwa um eines direkt in den Bericht einzufügen. Rückgängig ist möglich. Wird nur dieses eine Mal angeboten; später unter „Mehr …“ › „Dateien umbenennen“.</span></label>` : ''}
       ${forPdf ? '<div class="m" id="zInfo"></div><details id="pEinst"><summary>Einstellungen <small>(Bildqualität, Bilder je Seite, Dateigröße …)</small></summary>' : ''}
       ${forPdf ? '' : `<label class="block">Projekthinweise für die KI <small>(nur dieses Projekt, haben Vorrang vor der Standardanweisung)</small>
         <textarea id="m_notes" rows="3" placeholder="z. B. Bilder 5–8 als Detailaufnahmen kennzeichnen · Raumbezeichnungen wie im Grundriss (Anlage 2) verwenden"></textarea></label>
@@ -4103,7 +4102,6 @@ function openMetaDialog(mode){
   const io0 = loadImgOpt(), po0 = loadPdfOpt();
   if (forExp){
     $('zOnly').checked = false;   // jeder Export fängt mit allen Bildern an – nichts fällt still weg
-    $('zOnly').disabled = withDesc === 0 || withDesc === active.length;
   }
   if (forZip){ $('zShrink').checked = io0.shrink; $('zEdge').value = String(io0.edge); $('zQ').value = String(io0.q); }
   if (forZip) $('zRecord').checked = io0.record !== false;
@@ -4124,12 +4122,26 @@ function openMetaDialog(mode){
     $('pTerminInfo').innerHTML = (w === 'alle' ? 'Deckblatt: alle Ortstermine. ' : t ? `Deckblatt: ${esc(terminText(t))}${w === 't1' ? '' : ' (Datum aus den Projektdaten, hier nicht änderbar)'}. ` : '') +
       (ohne ? `<span class="warn">${ohne} ${ohne === 1 ? 'Foto hat' : 'Fotos haben'} noch keinen Ortstermin${w === 'alle' ? ' – sie kommen in diese Doku mit' : ' und ' + (ohne === 1 ? 'ist' : 'sind') + ' in keiner Termin-Doku – erst zuordnen (gelbe Zeile über dem Ordner, Auswahl „Alle“)'}.</span>` : '');
   };
+  /* Review #95 (P2): alles, was von der gezeigten Auswahl abhängt – aktive Fotos, mit Beschreibung, Sperre von „nur Fotos mit
+     Beschreibung“, Beispiel im Umbenennen-Angebot, Ortstermin-Feld und Hinweis auf Fotos ohne Termin –, an einer Stelle aus S.view.
+     Läuft beim Öffnen und bei jedem Wechsel von „Für welchen Termin?“; Zusammenfassung, Dateiname und Deckblatt rechnet update() danach. */
+  const auswahlRechnen = () => {
+    if (mitTermin && $('pTermin').value !== S.ansicht) $('pTermin').value = S.ansicht;   // Ansicht nicht umgeschaltet → Wahl zeigt, was die PDF nimmt
+    active = S.view.filter(it => !it.discard);
+    withDesc = active.filter(it => it.nr != null).length;
+    if (forExp){ const z = $('zOnly'), zu = withDesc === 0 || withDesc === active.length; if (zu) z.checked = false; z.disabled = zu; }
+    const bsp = $('pRenameBsp');
+    if (bsp){ const b = S.view.find(it => !it.discard && it.final !== it.name);
+      bsp.innerHTML = b ? `Dann heißt z. B. Bild ${b.docNr} im Explorer <code>${esc(b.final)}</code>` : `Dann heißen die Fotos direkt in „${esc(FOTOS_DIR)}“ im Explorer wie ihre Bildnummer`; }
+    terminFeld();
+  };
   if (mitTermin){
     $('pTermin').value = S.ansicht === 'alle' || terminNach(S.ansicht) ? S.ansicht : 't1';
-    $('pTermin').addEventListener('change', () => { ansichtSetzen($('pTermin').value); terminFeld(); });
+    if ($('pTermin').value !== S.ansicht) ansichtSetzen($('pTermin').value);
+    $('pTermin').addEventListener('change', () => { ansichtSetzen($('pTermin').value); auswahlRechnen(); update(); });
     $('m_ort').addEventListener('input', () => { if (wahlJetzt() === 't1') ortT1 = $('m_ort').value.trim(); });
-    terminFeld();
   }
+  auswahlRechnen();
   const read = () => {
     const r = { template: forPdf ? m.template : ($('m_template').value.trim() ? $('m_template').value : DEFAULT_TEMPLATE),
                 notes: forPdf ? m.notes : $('m_notes').value,
@@ -4185,7 +4197,7 @@ function openMetaDialog(mode){
     $('zInfo').innerHTML = html;
     if (!forPdf && !$('m_preview').hidden) $('m_preview').textContent = buildTxt(r, items, new Date()).replace(/^﻿/, '');
   };
-  $('dialog').querySelectorAll('input,textarea,select').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', update));
+  $('dialog').querySelectorAll('input,textarea,select').forEach(el => { if (el.id !== 'pTermin') el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', update); });   // pTermin: oben, erst auswahlRechnen()
   for (const key of META_UNBEKANNT) $('m_' + key + '_nb').onclick = () => { const an = $('m_' + key + '_nb').getAttribute('aria-pressed') !== 'true'; nbSetzen(key, an); update(); if (!an) $('m_' + key).focus(); };
   if (!forPdf){
     $('m_tplReset').onclick = () => { $('m_template').value = DEFAULT_TEMPLATE; update(); };
@@ -4782,6 +4794,8 @@ async function buildAnnex(meta, items, progress){
 }
 
 async function doPdf(meta){
+  // 2.7.0: die PDF nimmt die Fotos des im Dialog gewählten Termins – zeigt die Liste (warum auch immer) einen anderen, erst umschalten
+  if (meta.terminWahl && meta.terminWahl !== S.ansicht && (meta.terminWahl === 'alle' || terminNach(meta.terminWahl))){ S.ansicht = meta.terminWahl; buildRows(); recompute(); }
   const items = zipSelection(meta.onlyDesc);
   if (!items.length) return;
   S.busy = true; recompute();

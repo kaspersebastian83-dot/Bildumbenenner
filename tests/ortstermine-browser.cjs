@@ -18,6 +18,8 @@
 //   6b. Review #95: Fotos aus zwei Herkunftsordnern, danach (zweimal) umbenannt → je Herkunft eine Rückfrage mit dem richtigen
 //      Vorschlag, nicht sicher zuzuordnen → „Herkunft unbekannt“; Vorschlag aus dem häufigsten Aufnahmetag (EXIF, erfundenes
 //      Testfoto tests/fixtures/exif-aufnahme-2026-08-20.jpg), nur Dateidatum → „unsicher“.
+//   6c. Review #95 (P2): Dialog „Bilddokumentation erstellen“ – Termin im Dialog wechseln (t1 alle beschrieben, t2 nur teils, Alle)
+//      → „nur Fotos mit Beschreibung“, Zusammenfassung, Dateiname neu gerechnet (nie negativ); die PDF nimmt die Fotos des gewählten.
 //   7. Link mit unbekanntem Teil (mitteilung=2): übergangen und erhalten.
 //   8. FotoKit 2.6.0 (Commit c74418a) fasst eine Datei von 2.7.0 nicht an (R1); ein Projekt ohne Unterordner mit einem Termin
 //      ergibt mit 2.6.0 und 2.7.0 dieselbe Projektdatei (bis auf Version und Zeitstempel).
@@ -40,7 +42,7 @@ const ALT = 'c74418a';   // FotoKit 2.6.0
 let altHtml = null; try { altHtml = execFileSync('git', ['show', ALT + ':index.html'], { cwd: root, maxBuffer: 64 << 20 }); } catch (_) {}
 if (!altHtml && process.env.ORTSTERMINE_PFLICHT) throw new Error('FotoKit 2.6.0 (' + ALT + ') nicht in der Git-Historie');
 const TYP = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.css': 'text/css', '.webmanifest': 'application/manifest+json' };
-const HAUPT = '26.0501 Teststadt Ka', BESTAND = '26.0502 Bestand Teststadt', EINFACH = '26.0503 Einfach Teststadt', HERKUNFT = '26.0504 Herkunft Teststadt', ENTFERNT = '26.0505 Entfernt Teststadt';
+const HAUPT = '26.0501 Teststadt Ka', BESTAND = '26.0502 Bestand Teststadt', EINFACH = '26.0503 Einfach Teststadt', HERKUNFT = '26.0504 Herkunft Teststadt', ENTFERNT = '26.0505 Entfernt Teststadt', WECHSEL = '26.0506 Wechsel Teststadt';
 let browser, server, schritt = 'Start';
 
 (async () => {
@@ -524,6 +526,59 @@ let browser, server, schritt = 'Start';
   await fh.close();
 
   // ---------- 7. Link mit unbekanntem Teil ----------
+  // ---------- 6c. Review #95 (P2): Termin im Dialog „Bilddokumentation erstellen“ wechseln ----------
+  schritt = '6c Terminwechsel im Dialog';
+  await fk.evaluate(async WECHSEL => {
+    const a = await (await navigator.storage.getDirectory()).getDirectoryHandle('Mosaik Archivordner'), p = await a.getDirectoryHandle(WECHSEL, { create: true }), f = await p.getDirectoryHandle('Fotos', { create: true });
+    const put = async (d, n, x) => { const w = await (await d.getFileHandle(n, { create: true })).createWritable(); await w.write(x); await w.close(); };
+    const jpg = i => { const c = document.createElement('canvas'); c.width = 40 + i; c.height = 30; const g = c.getContext('2d'); g.fillStyle = `rgb(${i * 30},90,120)`; g.fillRect(0, 0, 40 + i, 30); return new Promise(r => c.toBlob(r, 'image/jpeg')); };
+    await put(p, '_Projekt.json', JSON.stringify({ format: 'mosaik-projekt', version: 1, objekt: 'EFH, Testweg 6', ortstermin: '2026-08-12',
+      weitereOrtstermine: [{ id: 't2', datum: '2026-08-20', bezeichnung: 'Nachbeprobung', wer: 'Ka' }], ortsterminZaehler: 2 }));
+    const b = await f.getDirectoryHandle('fotos ka 20.08', { create: true }), bilder = {};
+    for (let i = 1; i <= 3; i++){ await put(f, `A${i}.jpg`, await jpg(i)); bilder[`A${i}.jpg`] = { beschreibung: 'Küche ' + i }; }   // t1: 3 Fotos, alle beschrieben
+    for (let i = 1; i <= 5; i++) await put(b, `B${i}.jpg`, await jpg(3 + i));                                                     // t2: 5 Fotos, 1 beschrieben
+    bilder['fotos ka 20.08/B1.jpg'] = { beschreibung: 'Keller Wand' };
+    await put(f, '_Bildumbenenner.json', JSON.stringify({ app: 'Bildumbenenner', format: 1, version: '2.7.0', projekt: {}, benennung: {}, reihenfolge: [], bilder,
+      ordnerTermine: { '': { termin: 't1', am: '2026-11-26T08:00:00.000Z', vorschlag: 'hand' }, 'fotos ka 20.08': { termin: 't2', am: '2026-11-26T08:00:00.000Z', vorschlag: 'datum-im-namen' } } }, null, 2));
+  }, WECHSEL);
+  const fw = await seite('/fk/index.html', WECHSEL);
+  await oeffnen(fw); await ruhig(fw); await fw.waitForFunction(() => document.querySelectorAll('#list .row').length === 8);
+  await fw.locator('#terminWahl [data-ansicht="t1"]').click();
+  await fw.click('#btnPdf'); await fw.locator('#zOk').waitFor();
+  await fw.locator('#pEinst summary').click();   // „nur Fotos mit Beschreibung“ steht unter „Einstellungen“
+  const stand = async () => ({ wahl: await fw.locator('#pTermin').inputValue(), nurAus: await fw.locator('#zOnly').isDisabled(), nur: await fw.locator('#zOnly').isChecked(),
+    info: (await fw.locator('#zInfo').textContent()).replace(/\s+/g, ' '), termin: await fw.locator('#pTerminInfo').textContent(), ort: await fw.locator('#m_ort').inputValue() });
+  const nieNegativ = x => assert.doesNotMatch(x.info, /(^|[^\d.:])-\d/, 'keine negativen Zahlen: ' + x.info);
+  let w = await stand();
+  assert.equal(w.wahl, 't1'); assert.equal(w.nurAus, true, 't1: alle beschrieben → „nur mit Beschreibung“ gesperrt');
+  assert.match(w.info, /Inhalt: Deckblatt \+ 3 Bilder \(2 pro Seite\)/); assert.doesNotMatch(w.info, /ohne Beschreibung/); assert.match(w.info, /_2026-08-12\.pdf/); nieNegativ(w);
+  await fw.locator('#pTermin').selectOption('t2'); w = await stand();
+  assert.equal(w.nurAus, false, 't2: nur teils beschrieben → „nur mit Beschreibung“ frei');
+  assert.match(w.info, /Inhalt: Deckblatt \+ 5 Bilder \(2 pro Seite\) · 4 ohne Beschreibung \(kommen ohne Beschriftung mit\)/); assert.match(w.info, /_2026-08-20\.pdf/); nieNegativ(w);
+  assert.deepEqual([w.ort, w.termin.startsWith('Deckblatt: Termin 2 · 20.08.2026 · Nachbeprobung')], ['2026-08-20', true]);
+  await fw.locator('label:has(#zOnly)').click(); w = await stand();
+  assert.match(w.info, /Inhalt: Deckblatt \+ 1 Bilder \(2 pro Seite\) · 4 ohne Beschreibung nicht enthalten/); nieNegativ(w);
+  await fw.locator('#pTermin').selectOption('t1'); w = await stand();
+  assert.deepEqual([w.nurAus, w.nur], [true, false], 'zurück auf t1: wieder gesperrt (und nicht still angehakt)');
+  assert.match(w.info, /Inhalt: Deckblatt \+ 3 Bilder \(2 pro Seite\)/); assert.doesNotMatch(w.info, /ohne Beschreibung/); assert.match(w.info, /_2026-08-12\.pdf/); nieNegativ(w);
+  await fw.locator('#pTermin').selectOption('alle'); w = await stand();
+  assert.equal(w.nurAus, false); assert.match(w.info, /Inhalt: Deckblatt \+ 8 Bilder \(2 pro Seite\) · 4 ohne Beschreibung \(kommen ohne Beschriftung mit\)/);
+  assert.match(w.info, / - alle Termine\.pdf/); nieNegativ(w);
+  await fw.locator('label:has(#zOnly)').click(); w = await stand(); assert.match(w.info, /Deckblatt \+ 4 Bilder .* · 4 ohne Beschreibung nicht enthalten/); nieNegativ(w);
+  await fw.locator('label:has(#zOnly)').click();
+  // PDF nach dem Wechsel: Fotos des gewählten Termins (t2: 5 Bilder), nicht die beim Öffnen gezeigten (t1: 3)
+  await fw.locator('#pTermin').selectOption('t2');
+  await fw.click('#zOk'); await ruhig(fw);
+  const jw = await bis(fw, async () => { const x = await fkDatei(fw, WECHSEL); return x.bilddokus?.t2 && x; }, 'Doku Termin 2');
+  assert.equal(jw.bilddoku.termin, 't2'); assert.match(jw.bilddoku.dateien[0], /_2026-08-20\.pdf$/);
+  const bilderImPdf = await fw.evaluate(async ([p, n]) => { const f = await (await (await (await navigator.storage.getDirectory()).getDirectoryHandle('Mosaik Archivordner')).getDirectoryHandle(p)).getDirectoryHandle('Fotos');
+    const t = new TextDecoder('latin1').decode(await (await (await f.getFileHandle(n)).getFile()).arrayBuffer()); return [...t.matchAll(/\/Subtype\s*\/Image\s*\/Width (\d+) \/Height 30 [^>]*\/DCTDecode/g)].map(m => +m[1]).sort((x, y) => x - y); }, [WECHSEL, jw.bilddoku.dateien[0]]);
+  assert.deepEqual(bilderImPdf, [44, 45, 46, 47, 48], 'PDF enthält genau die 5 Fotos von Termin 2 (B1–B5, 44–48 px breit), keins von Termin 1 (41–43 px)');
+  assert.deepEqual(jw.bilddoku.bestandUnterordner?.slice().sort(), ['fotos ka 20.08/B1.jpg', 'fotos ka 20.08/B2.jpg', 'fotos ka 20.08/B3.jpg', 'fotos ka 20.08/B4.jpg', 'fotos ka 20.08/B5.jpg']);
+  assert.equal(await fw.locator('#terminWahl [data-ansicht="t2"]').getAttribute('aria-pressed'), 'true', 'Liste zeigt danach Termin 2');
+  console.log(`OK ${browserName}: Terminwechsel im Dialog – „nur mit Beschreibung“, Zusammenfassung und Dateiname je Termin neu gerechnet, nie negativ; PDF mit den Fotos des gewählten Termins`);
+  await fw.close();
+
   schritt = '7 Link';
   const fl = await ctx.newPage(); fl.on('pageerror', e => fehler.push('Link: ' + e.message));
   await fl.goto(url('/fk/index.html#projekt=' + encodeURIComponent(BESTAND) + '&mitteilung=2'));
