@@ -216,6 +216,9 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
   await page.evaluate(() => { window.Worker = window.testWorker; });
   await page.click('#btnHeic'); await idle();
   assert.match(await page.locator('#banner').textContent(), /✓ 1 iPhone-Foto in JPG umgewandelt/);
+  // Review #95 (P2): die Meldung nennt den Ort, an dem das Original wirklich liegt
+  assert.match(await page.locator('#banner').textContent(), /Originale liegen unverändert im Unterordner „_Originale“ des jeweiligen Ordners/);
+  assert.doesNotMatch(await page.locator('#banner').textContent(), /Fotos\/_Originale/);
   assert.ok((await inhalt('Begehung Ben'))['IMG_0003.jpg'] > 0, 'JPG im selben Unterordner');
   assert.equal((await inhalt('Begehung Ben'))['IMG_0003.HEIC'], undefined);
   assert.equal((await inhalt('Begehung Ben/_Originale'))['IMG_0003.HEIC'], heic.length, 'Original unverändert in „<Ordner>/_Originale“');

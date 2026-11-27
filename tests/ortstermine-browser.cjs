@@ -27,6 +27,8 @@
 //      (d) in Termin 1 umbenannt, auf Termin 2 gewechselt, „Rückgängig“ → Reihenfolge nennt jedes Foto genau einmal; (e) Termin erst im
 //      Dialog gewählt → iPhone-Rückfrage beim Erstellen für diesen Termin (Abbrechen / schon „ohne“ gewählt: keine zweite / umwandeln);
 //      (f) Doku Termin 1 zuletzt erstellt, dann fällt Termin 2 weg → Doku Termin 1 und altes Feld geändert (ihr fehlen dessen Fotos).
+//   6e. Review #95 (P1): zwei Fenster – das zweite hängt einen Ordner an einen anderen Termin, das erste (zeigt den alten Termin) baut
+//      nach dem Zusammenführen seine Auswahl neu auf.
 //   7. Link mit unbekanntem Teil (mitteilung=2): übergangen und erhalten.
 //   8. FotoKit 2.6.0 (Commit c74418a) fasst eine Datei von 2.7.0 nicht an (R1); ein Projekt ohne Unterordner mit einem Termin
 //      ergibt mit 2.6.0 und 2.7.0 dieselbe Projektdatei (bis auf Version und Zeitstempel).
@@ -613,6 +615,7 @@ let browser, server, schritt = 'Start';
   await fbef.click('#btnPdf'); await fbef.locator('#dHeic').waitFor();
   assert.match(await fbef.locator('#dHeic').textContent(), /^\s*Ein Foto in der Doku ist im iPhone-Format/, 'Termin 1 gezeigt: nur sein iPhone-Foto in der Doku zählt – nicht das von Termin 2, nicht das aussortierte');
   assert.equal(await fbef.locator('#dOk').textContent(), '1 iPhone-Foto umwandeln');
+  assert.match(await fbef.locator('#dHeic').textContent(), /Originale bleiben unverändert in „Fotos\/_Originale“/, 'Foto direkt in „Fotos“');
   await fbef.click('#dCancel'); await ruhig(fbef);
   await fbef.locator('#terminWahl [data-ansicht="alle"]').click();
   await fbef.click('#btnPdf'); await fbef.locator('#dHeic').waitFor();
@@ -676,6 +679,8 @@ let browser, server, schritt = 'Start';
   await fbef.locator('#pTermin').selectOption('t2');
   await fbef.click('#zOk'); await fbef.locator('#dHeic').waitFor();
   assert.match(await fbef.locator('#dHeic').textContent(), /^\s*Ein Foto in der Doku ist im iPhone-Format/, 'Rückfrage für Termin 2 (im Dialog gewählt) vor dem Erstellen');
+  const ht = await fbef.locator('#dHeic').textContent();   // Review #95 (P2): Foto im Unterordner – das Original bleibt in dessen „_Originale“
+  assert.match(ht, /Originale bleiben unverändert im Unterordner „_Originale“ des jeweiligen Ordners/); assert.doesNotMatch(ht, /Fotos\/_Originale/);
   await fbef.click('#dCancel'); await ruhig(fbef);
   assert.equal((await fkDatei(fbef, BEFUNDE)).bilddokus?.t2, undefined, '„Abbrechen“: keine Doku erstellt');
   // jetzt zeigt die Liste Termin 2: Rückfrage beim Knopf, „Ohne Umwandeln weiter“ → beim Erstellen nicht noch einmal gefragt
@@ -715,6 +720,24 @@ let browser, server, schritt = 'Start';
   assert.ok(jbef.dokuGeaendert > jbef.bilddoku.erstellt, 'altes Feld (zuletzt erstellte Doku = Termin 1) geändert');
   console.log(`OK ${browserName}: iPhone-Rückfrage nur für die gezeigte Auswahl ohne „Weg“-Fotos; geändertes Datum von Termin 1 sofort im Dateinamen und im PDF; „Weg“-Foto im Unterordner bleibt in der Reihenfolge; „Rückgängig“ nach Terminwechsel; iPhone-Rückfrage für den im Dialog gewählten Termin; Termin entfernt → Doku Termin 1 geändert`);
   await fbef.close();
+
+  // ---------- 6e. Review #95 (P1): Zuordnung im anderen Fenster geändert → die gezeigte Auswahl wird neu aufgebaut ----------
+  schritt = '6e Zuordnung aus dem anderen Fenster';
+  const fx = await seite('/fk/index.html', WECHSEL);
+  await oeffnen(fx); await ruhig(fx); await fx.waitForFunction(() => document.querySelectorAll('#list .row').length === 8);
+  await fx.locator('#terminWahl [data-ansicht="t2"]').click();
+  assert.deepEqual((await kacheln(fx)).sort(), ['fotos ka 20.08/B1.jpg', 'fotos ka 20.08/B2.jpg', 'fotos ka 20.08/B3.jpg', 'fotos ka 20.08/B4.jpg', 'fotos ka 20.08/B5.jpg'], 'Fenster 1 zeigt Termin 2');
+  const fy = await seite('/fk/index.html', WECHSEL);   // zweites Fenster, dasselbe Projekt
+  await oeffnen(fy); await ruhig(fy); await fy.waitForFunction(() => document.querySelectorAll('#list .row').length === 8);
+  await kopf(fy, 'fotos ka 20.08').locator('select').selectOption('t1');   // dort: der Ordner gehört zu Termin 1
+  await bis(fy, async () => (await fkDatei(fy, WECHSEL)).ordnerTermine['fotos ka 20.08'].termin === 't1', 'Zuordnung im zweiten Fenster gespeichert');
+  await fokus(fx);   // Fenster 1 führt zusammen
+  await bis(fx, async () => (await kacheln(fx)).length === 0, 'Fenster 1: Termin 2 zeigt die umgehängten Fotos nicht mehr');
+  assert.equal(await fx.locator('#terminWahl [data-ansicht="t2"]').getAttribute('aria-pressed'), 'true', 'Auswahl bleibt Termin 2');
+  await fx.locator('#terminWahl [data-ansicht="t1"]').click();
+  assert.equal((await kacheln(fx)).length, 8, 'alle acht Fotos stehen jetzt bei Termin 1');
+  console.log(`OK ${browserName}: Zuordnung im anderen Fenster geändert → gezeigte Auswahl neu aufgebaut (keine Fotos des anderen Termins mehr)`);
+  await fy.close(); await fx.close();
 
   schritt = '7 Link';
   const fl = await ctx.newPage(); fl.on('pageerror', e => fehler.push('Link: ' + e.message));

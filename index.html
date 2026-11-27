@@ -545,7 +545,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.7.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:79a0a4212b59915053e89c5a5d22da3867eb63f94122fc65005d44aac4df9964';
+const APP_BUILD = 'sha256:eddc314ea6c39e1785fea21044cf0ce48c9e3690cb87e6e9bcd470babf5930db';
 const APP_DATE = '2026-11-26';
 const CHANGELOG = [
   ['2.7.0', '26.11.2026', 'Mehrere Ortstermine, Fotos bleiben in ihren Unterordnern: FotoKit liest jetzt auch die Fotos in den Unterordnern von „Fotos“ (eine Ebene, z. B. „Bilder Stefan“, „fotos ka 20.08“) – sie bleiben dort liegen und behalten ihren Namen; Ordner mit „_“ oder „.“ vorn zählen nicht. Über den Kacheln steht je Ordner eine Zeile. Hat das Projekt mehr als einen Ortstermin (Projektzentrale „+ Weiterer Ortstermin“), fragt FotoKit je Ordner einmal, zu welchem Termin er gehört – Vorschlag aus dem Datum im Ordnernamen, sonst aus dem Aufnahmedatum; nie ohne Klick. Passt das Datum zu keinem Termin, legt „Anlegen“ ihn in den Projektdaten an (nur den Termin, mit derselben Kennungsregel wie die Projektzentrale). Über den Fotos „Termin 1 · Termin 2 · Alle“, Fotos ohne Termin sind gelb. „Bilddokumentation erstellen“ fragt zuerst „Für welchen Termin?“, das Deckblatt nennt Datum und Bezeichnung des Termins, die PDF trägt das Termindatum im Namen, und FotoKit merkt sich je Termin eine Bilddokumentation – eine neue für Termin 2 lässt die von Termin 1 aktuell. Ändert die Projektzentrale Datum oder Bezeichnung eines Termins, gilt nur dessen Bilddokumentation als geändert (Hinweis über den Fotos). Fotos in Unterordnern werden nicht umbenannt und nie nach „_aussortiert“ verschoben („Weg“ ist dort nur eine Markierung); iPhone-Fotos dort werden im selben Ordner umgewandelt, das Original kommt nach „<Ordner>/_Originale“. „Fotos übernehmen“ entfällt; schon übernommene Fotos fragt FotoKit je Herkunftsordner, auch nach dem Umbenennen (sonst „Herkunft unbekannt“). Ein Projekt ohne Unterordner und mit einem Termin sieht aus wie bisher. Ältere FotoKit-Fassungen ändern eine Projektdatei von 2.7.0 nicht (geschützter Modus).'],
@@ -1224,8 +1224,9 @@ function mergeExternal(theirs){
      ordnet einen Ordner Termin 1 zu, das andere erstellt gleichzeitig die Doku für Termin 1), stimmt der vermerkte Bestand dieser Doku
      nicht mehr. Darum hier der Vergleich je Termin wie beim Einlesen – genau die betroffenen Dokus gelten als geändert, eine Doku, die
      die Zuordnung schon kannte, bleibt aktuell. */
-  if (mehrereTermine() && (zuordnungInhalt(m) !== zuordnungInhalt(o) || zuordnungInhalt(m) !== zuordnungInhalt(theirs))) dokuBestandPruefen(true);
-  applyMergedToItems(orderChanged);
+  const zuNeu = zuordnungInhalt(m) !== zuordnungInhalt(o);   // Zuordnungen der anderen Seite sind hereingekommen
+  if (mehrereTermine() && (zuNeu || zuordnungInhalt(m) !== zuordnungInhalt(theirs))) dokuBestandPruefen(true);
+  applyMergedToItems(orderChanged, zuNeu);
   out.theirs.delete('');
   const known = new Set(S.items.map(it => it.name));
   const unknown = [...new Set([...Object.keys(theirs.drafts || {}), ...Object.keys(theirs.orig || {}), ...(theirs.order || [])])].filter(n => !known.has(n) && !unlesbarerSchluessel(n) && !(n in (b.drafts || {})) && !(n in (b.orig || {})) && !(b.order || []).includes(n));
@@ -1288,10 +1289,12 @@ async function refreshPJ(){
 }
 window.addEventListener('focus', () => { checkExternal(); refreshPJ(); void zweiOrteZeigen(); void neueFotosPruefen(); });   // K1: Zeile auch beim Zurückkommen neu prüfen; 2.4.0: neue Fotos im Ordner
 
-function applyMergedToItems(orderChanged){
+/** zuordnungNeu (Review #95, P1): Termin-Zuordnungen aus dem anderen Fenster übernommen – die Liste zeigt nur die Fotos des gewählten Termins
+    (S.view) und muss neu aufgebaut werden, sonst zeigte und exportierte sie weiter Fotos, die jetzt zu einem anderen Termin gehören. */
+function applyMergedToItems(orderChanged, zuordnungNeu){
   const d = P.data, disc = new Set(d.discard);
   ROT = clone(d.rot); EXTRA = clone(d.extra); ORIG = clone(d.orig); HASH = clone(d.hash);
-  let rebuild = orderChanged && cfg.sort === 'manual', karteNeu = false;
+  let rebuild = (orderChanged && cfg.sort === 'manual') || !!zuordnungNeu, karteNeu = false;
   for (const it of S.items){
     const desc = d.drafts[it.name] || '', ex = d.extra[it.name] || {}, sec = ex.sec || '', probe = ex.probe || '';
     if (it.discard !== disc.has(it.name)){ it.discard = disc.has(it.name); rebuild = true; }
@@ -1304,7 +1307,9 @@ function applyMergedToItems(orderChanged){
     const f = S.focus >= 0 && S.view[S.focus];
     if (cfg.sort === 'manual') applySort();
     buildRows();
-    if (f) setFocus(S.view.indexOf(f), false);
+    const i = f ? S.view.indexOf(f) : -1;
+    if (zuordnungNeu && i < 0){ if (S.view.length) setFocus(0, false); else { S.focus = -1; S.cur = null; karteNeu = true; } }   // das gewählte Foto gehört nicht mehr zur gezeigten Auswahl
+    else if (f) setFocus(i, false);
   }
   recompute();
   if (karteNeu) karteFuellen(true);
@@ -2537,13 +2542,14 @@ async function heicUmwandelnStarten(nurDoku){
   if (P.readOnly){ banner('err', esc(PROTECTED_PROJECT)); return null; }
   const fotos = () => nurDoku === true ? S.view.filter(it => istHeic(it) && !it.discard) : heicFotos();
   if (!fotos().length) return null;
-  let r = null;
-  await withSavedProject('Das Umwandeln der iPhone-Fotos', async () => { r = await heicUmwandeln(fotos()); });
+  let r = null, unter = false;
+  await withSavedProject('Das Umwandeln der iPhone-Fotos', async () => { const l = fotos(); unter = l.some(it => it.ordner); r = await heicUmwandeln(l); });
   if (!r) return null;
-  const n = r.fertig.length, ziel = `„${esc(FOTOS_DIR)}/${ORIGINALE_DIR}“`;
+  // Review #95 (P2): Fotos in Unterordnern bleiben in ihrem Ordner (O7) – das Original liegt dann in dessen „_Originale“, nicht in „Fotos/_Originale“
+  const n = r.fertig.length, ziel = unter ? `im Unterordner „${esc(ORIGINALE_DIR)}“ des jeweiligen Ordners` : `in „${esc(FOTOS_DIR)}/${ORIGINALE_DIR}“`;
   const zeit = r.ms >= 1000 ? ` (${Math.round(r.ms / 1000)} s)` : '';
   if (r.fehler.length) banner('err', `${n ? `${n} ${heicWort(n)} umgewandelt, ` : ''}${r.fehler.length} nicht: ${r.fehler.slice(0, 3).map(esc).join(' · ')}${r.fehler.length > 3 ? ' …' : ''} – ${r.fehler.length === 1 ? 'dieses liegt' : 'diese liegen'} unverändert in „${esc(FOTOS_DIR)}“.`);
-  else banner('ok', `✓ ${n} ${heicWort(n)} in JPG umgewandelt${zeit} – im Ordner geprüft. Aufnahmedatum, Gerät und GPS sind übernommen; die Originale liegen unverändert in ${ziel}.`);
+  else banner('ok', `✓ ${n} ${heicWort(n)} in JPG umgewandelt${zeit} – im Ordner geprüft. Aufnahmedatum, Gerät und GPS sind übernommen; die Originale liegen unverändert ${ziel}.`);
   heicKarte();
   return r;
 }
@@ -2557,9 +2563,10 @@ let heicOhne = new Set();
 function heicRueckfrage(next, immer){
   const liste = S.view.filter(it => istHeic(it) && !it.discard), n = liste.length;
   if (!n || P.readOnly || (!immer && liste.every(it => heicOhne.has(it.name)))) return next();
+  const ziel = liste.some(it => it.ordner) ? `im Unterordner „${esc(ORIGINALE_DIR)}“ des jeweiligen Ordners` : `in „${esc(FOTOS_DIR)}/${ORIGINALE_DIR}“`;   // wie heicKarte (O7)
   showDialog(`<h3>${n} ${heicWort(n)} noch nicht umgewandelt</h3>
     <p id="dHeic">${n === 1 ? 'Ein Foto in der Doku ist' : `${n} Fotos in der Doku sind`} im iPhone-Format (HEIC). In der Bilddokumentation ${n === 1 ? 'stünde es' : 'stünden sie'} nur als Platzhalter.
-    FotoKit kann ${n === 1 ? 'es' : 'sie'} jetzt in JPG umwandeln; die Originale bleiben unverändert in „${esc(FOTOS_DIR)}/${ORIGINALE_DIR}“.</p>
+    FotoKit kann ${n === 1 ? 'es' : 'sie'} jetzt in JPG umwandeln; die Originale bleiben unverändert ${ziel}.</p>
     <div class="btns"><button id="dCancel">Abbrechen</button><span class="spacer"></span><button id="dOhne">Ohne Umwandeln weiter</button><button class="primary" id="dOk">${n} ${heicWort(n)} umwandeln</button></div>`);
   $('dCancel').onclick = closeDialog;
   $('dOhne').onclick = () => { liste.forEach(it => heicOhne.add(it.name)); closeDialog(); next(); };
