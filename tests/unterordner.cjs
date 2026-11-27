@@ -192,6 +192,21 @@ function sitzung(d, pj = ZWEI){
     assert.equal(await s.flushProject(), true); gleich(d.json().fotoUebernahmen, ueb, 'fotoUebernahmen unverändert');
   });
 
+  await test('Review #95 (5): iPhone-Foto erst umgewandelt, dann umbenannt → Herkunft über heic.original (der erste Name ist der JPG-Zwischenname)', async () => {
+    const ueb = [{ ordner: 'Bilder A', dateien: [{ datei: 'IMG_0100.HEIC' }, { datei: 'IMG_0400.jpg' }] },
+      { ordner: 'fotos ka 20.08', dateien: [{ datei: 'IMG_0200_Ka.heic', vorher: 'IMG_0200.heic' }] }];
+    const d = disk({ app: 'Bildumbenenner', format: 1, version: '2.6.0', projekt: {}, benennung: {}, reihenfolge: [], fotoUebernahmen: ueb, bilder: {
+      '05_Decke.jpg': { beschreibung: 'Decke', original: { name: 'IMG_0100.jpg' }, heic: { original: 'IMG_0100.HEIC' } },   // umgewandelt, dann umbenannt
+      '06_Wand.jpg': { original: { name: 'IMG_0200_Ka.jpg' }, heic: { original: 'IMG_0200_Ka.heic' } },                    // ebenso, Name mit Zusatz
+      '07_Boden.jpg': { original: { name: 'IMG_0400.jpg' }, heic: { original: 'IMG_0999.HEIC' } },                         // erster Name passt: der gilt weiter
+      'IMG_0300.jpg': { heic: { original: 'IMG_0300.HEIC' } },                                                              // umgewandelt, nie übernommen
+      '08_Flur.jpg': { original: { name: 'IMG_0500.jpg' }, heic: { original: 'IMG_0500.HEIC' } } } });                     // umgewandelt, umbenannt, nie übernommen
+    const s = sitzung(d); await s.open();
+    s.S.items = ['05_Decke.jpg', '06_Wand.jpg', '07_Boden.jpg', 'IMG_0300.jpg', '08_Flur.jpg'].map(foto);
+    gleich(Object.fromEntries([...s.herkunftLesen()].map(([k, v]) => [k, v === s.HERKUNFT_UNBEKANNT ? '?' : v])),
+      { '05_Decke.jpg': 'Bilder A', '06_Wand.jpg': 'fotos ka 20.08', '07_Boden.jpg': 'Bilder A' });
+  });
+
   await test('Review #95 (2): Termin in der Projektzentrale geändert (auch während FotoKit zu war) → nur die Doku dieses Termins geändert', async () => {
     const erstellt = { t1: '2026-11-26T10:00:00.000Z', t2: '2026-11-26T11:00:00.000Z' };
     const datei2 = { ...datei(), dokuGeaendert: '2026-11-26T09:00:00.000Z', dokuGeaendertJe: { t1: '2026-11-26T09:00:00.000Z', t2: '2026-11-26T09:00:00.000Z', alle: '2026-11-26T09:00:00.000Z' },
@@ -241,6 +256,21 @@ function sitzung(d, pj = ZWEI){
     assert.equal(e2.bilddoku.termin, 't1'); gleich(e2.bilddokus.t1.dateien, ['Neu.pdf']); gleich(e2.bilddokus.t1.termin, { datum: '2026-08-12', bezeichnung: '' });
     gleich(e2.bilddokus.t2, f.bilddokus.t2); assert.ok(e2.dokuGeaendertJe.t2 > e2.bilddokus.t2.erstellt, 't2 bleibt geändert');
     gleich(s.S.dokuTerminAnders, []);
+  });
+
+  await test('Review #95 (6): wieder ein Termin, Dokus je Termin gemerkt – neues Foto → altes Feld und Termin 1 geändert (Termin 2 unberührt)', async () => {
+    const f = mitDokus('T1', 't1'); delete f.bilddokus.t3;
+    f.bilddoku.bestand = ['IMG_0001.jpg']; f.bilddoku.bestandUnterordner = ['Bilder A/IMG_0001.jpg'];
+    const d = disk(f), s = sitzung(d, EINER); await s.open();
+    s.S.items = ['IMG_0001.jpg', 'Bilder A/IMG_0001.jpg'].map(foto);
+    s.dokuBestandPruefen();
+    let e = s.P.data.extensions;
+    assert.deepEqual([e.dokuGeaendert, e.dokuGeaendertJe.t1], ['2026-11-26T09:00:00.000Z', '2026-11-26T09:00:00.000Z'], 'Bestand gleich: nichts geändert');
+    s.S.items.push(foto('IMG_0005.jpg'));   // neues Foto, während das Projekt nur einen Termin hat
+    s.dokuBestandPruefen(); e = s.P.data.extensions;
+    assert.ok(e.dokuGeaendert > f.bilddoku.erstellt, 'altes Feld geändert (wie bis 2.6.0)');
+    assert.ok(e.dokuGeaendertJe.t1 > f.bilddokus.t1.erstellt, 'Doku Termin 1 mitgeführt – sie gälte sonst als aktuell, sobald wieder ein zweiter Termin dazukommt');
+    assert.equal(e.dokuGeaendertJe.t2, '2026-11-26T09:00:00.000Z', 'Termin 2 unberührt');
   });
 
   await test('Review #95 (4): t2 und t3, Doku für t3, t3 entfernt → nur t3 geändert', async () => {

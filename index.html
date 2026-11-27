@@ -545,7 +545,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.7.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:5bd7baa4b890acadefca14cf68fdbe22dbf514187424a33a27d7a9e2a73010f5';
+const APP_BUILD = 'sha256:6050bf8121c242ec7ac5eb28c9790c1ac827ccd76b07ccf17e766cd815e9e24e';
 const APP_DATE = '2026-11-26';
 const CHANGELOG = [
   ['2.7.0', '26.11.2026', 'Mehrere Ortstermine, Fotos bleiben in ihren Unterordnern: FotoKit liest jetzt auch die Fotos in den Unterordnern von „Fotos“ (eine Ebene, z. B. „Bilder Stefan“, „fotos ka 20.08“) – sie bleiben dort liegen und behalten ihren Namen; Ordner mit „_“ oder „.“ vorn zählen nicht. Über den Kacheln steht je Ordner eine Zeile. Hat das Projekt mehr als einen Ortstermin (Projektzentrale „+ Weiterer Ortstermin“), fragt FotoKit je Ordner einmal, zu welchem Termin er gehört – Vorschlag aus dem Datum im Ordnernamen, sonst aus dem Aufnahmedatum; nie ohne Klick. Passt das Datum zu keinem Termin, legt „Anlegen“ ihn in den Projektdaten an (nur den Termin, mit derselben Kennungsregel wie die Projektzentrale). Über den Fotos „Termin 1 · Termin 2 · Alle“, Fotos ohne Termin sind gelb. „Bilddokumentation erstellen“ fragt zuerst „Für welchen Termin?“, das Deckblatt nennt Datum und Bezeichnung des Termins, die PDF trägt das Termindatum im Namen, und FotoKit merkt sich je Termin eine Bilddokumentation – eine neue für Termin 2 lässt die von Termin 1 aktuell. Ändert die Projektzentrale Datum oder Bezeichnung eines Termins, gilt nur dessen Bilddokumentation als geändert (Hinweis über den Fotos). Fotos in Unterordnern werden nicht umbenannt und nie nach „_aussortiert“ verschoben („Weg“ ist dort nur eine Markierung); iPhone-Fotos dort werden im selben Ordner umgewandelt, das Original kommt nach „<Ordner>/_Originale“. „Fotos übernehmen“ entfällt; schon übernommene Fotos fragt FotoKit je Herkunftsordner, auch nach dem Umbenennen (sonst „Herkunft unbekannt“). Ein Projekt ohne Unterordner und mit einem Termin sieht aus wie bisher. Ältere FotoKit-Fassungen ändern eine Projektdatei von 2.7.0 nicht (geschützter Modus).'],
@@ -713,10 +713,13 @@ function herkunftLesen(items = S.items){
   for (const u of l) if (u && typeof u.ordner === 'string' && u.ordner && Array.isArray(u.dateien))
     for (const f of u.dateien){ if (f && typeof f.datei === 'string') dazu(alsDatei, f.datei, u.ordner); if (f && typeof f.vorher === 'string' && f.vorher) dazu(alsVorher, f.vorher, u.ordner); }
   const orig = (P.data && P.data.orig) || {}, ie = (P.data && P.data.imageExtensions) || {};
-  // Name beim Übernehmen: der gemerkte erste Name (vor dem ersten Umbenennen), sonst das Original eines umgewandelten iPhone-Fotos, sonst der jetzige
+  // Name beim Übernehmen: der gemerkte erste Name (vor dem ersten Umbenennen), sonst das Original eines umgewandelten iPhone-Fotos, sonst der jetzige.
+  // Review #95 (P1): Ein iPhone-Foto, das erst umgewandelt und dann umbenannt wurde, hat als ersten Namen den JPG-Zwischennamen – der steht
+  // nicht in fotoUebernahmen. Darum beide gemerkten Namen versuchen: den, der zu einer Übernahme passt (erster Name vor heic.original).
   const basis = (items || []).filter(it => !it.ordner).map(it => {
     const og = orig[it.name], o = og && typeof og === 'object' ? og.o : og, h = ie[it.name] && ie[it.name].heic && ie[it.name].heic.original;
-    return { it, n: typeof o === 'string' && o ? o : typeof h === 'string' && h ? h : it.name, sicher: !!((typeof o === 'string' && o) || (typeof h === 'string' && h)) };
+    const kand = [o, h].filter(x => typeof x === 'string' && x);
+    return { it, n: kand.find(x => alsDatei.has(x) || alsVorher.has(x)) || kand[0] || it.name, sicher: kand.length > 0 };
   });
   const anspruch = new Map(); for (const b of basis) anspruch.set(b.n, (anspruch.get(b.n) || 0) + 1);
   for (const b of basis){
@@ -824,10 +827,18 @@ function dokuBestandPruefen(){
      „Alle Termine“, ein Termin oder kein Eintrag je Termin: Vergleich mit allen Fotos wie bisher. */
   const bt = jeTermin && b && typeof b.termin === 'string' && b.termin !== 'alle' && docs[b.termin] && Array.isArray(docs[b.termin].bestand) ? b.termin : null;
   const altAktuell = () => { const e = P.data.extensions; return !(e.dokuGeaendert && e.dokuGeaendert > b.erstellt); };   // sonst schon veraltet
-  if (b && !bt && Array.isArray(b.bestand) && altAktuell()){
+  if (b && !bt && Array.isArray(b.bestand)){
     const direkt = S.items.filter(it => !it.ordner).map(it => it.name), unter = S.items.filter(it => it.ordner).map(it => it.name);
-    if (anders(b.bestand, direkt) || anders(Array.isArray(b.bestandUnterordner) ? b.bestandUnterordner : [], unter))   // m3: nur im Speicher
-      P.data.extensions = { ...P.data.extensions, dokuGeaendert: dokuZeit(P.data.extensions) };
+    if (anders(b.bestand, direkt) || anders(Array.isArray(b.bestandUnterordner) ? b.bestandUnterordner : [], unter)){   // m3: nur im Speicher
+      if (altAktuell()) P.data.extensions = { ...P.data.extensions, dokuGeaendert: dokuZeit(P.data.extensions) };
+      /* Review #95 (P2): wieder ein Termin, aber Dokus je Termin gemerkt – Termin 1 und „alle“ mitführen wie dokuGeaendert(). Sonst gälten
+         sie als aktuell, sobald (bei offenem FotoKit) wieder ein zweiter Termin dazukommt, obwohl ihr Bestand das Foto nicht kennt. */
+      if (!mehrereTermine() && docs && typeof docs === 'object'){
+        const je = { ...(P.data.extensions.dokuGeaendertJe || {}) }; let neu = false;
+        for (const id of ['t1', 'alle']) if (docs[id] && !(je[id] && je[id] > docs[id].erstellt)){ je[id] = nachZeit(docs[id].erstellt); neu = true; }
+        if (neu) P.data.extensions = { ...P.data.extensions, dokuGeaendertJe: je };
+      }
+    }
   }
   if (!jeTermin) return;
   for (const [id, d] of Object.entries(docs)){
