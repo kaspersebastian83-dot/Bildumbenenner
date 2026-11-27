@@ -31,8 +31,8 @@ function sitzung(d, pj = ZWEI){
     banner(){}, hideBanner(){}, saveError(){}, logProblem(){}, completePendingSave(){}, lkMerken(){}, verCmp: (a, b) => a.localeCompare(b, undefined, { numeric: true }) };
   vm.createContext(ctx);
   vm.runInContext(teil('const PROJ_FILE =', "document.addEventListener('visibilitychange'") + '\n' + teil('let EXTRA = {}, ORIG = {};', 'function moveRotKeys(') + '\n' +
-    teil('let draftTimer;', 'let thumbQueue') + '\n' + teil('function saveOrder(names){', '/* ---------- rows ---------- */') +
-    `\nfunction applyMergedToItems(){}\nthis.api = { P, S, projSet, projGet, flushProject, loadProject, projToJson, projFromJson, mergeExternal, flushDrafts, saveExtra, saveDiscards, saveOrder, dokuGeaendert, bilddokuVermerken, terminVon, herkunftLesen: typeof herkunftLesen === 'function' ? herkunftLesen : null, dokuTerminPruefen: typeof dokuTerminPruefen === 'function' ? dokuTerminPruefen : () => {}, HERKUNFT_UNBEKANNT: typeof HERKUNFT_UNBEKANNT === 'string' ? HERKUNFT_UNBEKANNT : null };`, ctx);
+    teil('let draftTimer;', 'let thumbQueue') + '\n' + teil('function saveOrder(names, plaetze){', '/* ---------- rows ---------- */') +
+    `\nfunction applyMergedToItems(){}\nthis.api = { P, S, projSet, projGet, flushProject, loadProject, projToJson, projFromJson, mergeExternal, flushDrafts, saveExtra, saveDiscards, saveOrder, dokuGeaendert, bilddokuVermerken, terminVon, herkunftLesen: typeof herkunftLesen === 'function' ? herkunftLesen : null, dokuTerminPruefen: typeof dokuTerminPruefen === 'function' ? dokuTerminPruefen : () => {}, dokuBestandPruefen, HERKUNFT_UNBEKANNT: typeof HERKUNFT_UNBEKANNT === 'string' ? HERKUNFT_UNBEKANNT : null };`, ctx);
   return { ...ctx.api, ctx, async open(){ await ctx.api.loadProject(d.dir); } };
 }
 
@@ -131,6 +131,31 @@ function sitzung(d, pj = ZWEI){
     gleich(e.bilddoku.bestandUnterordner, ['Bilder A/IMG_0001.jpg', 'Fotos B 20.08/IMG_0001.jpg']);
     s.projSet('meta', { anlage: 'Anlage 3' });
     assert.ok(s.P.data.extensions.dokuGeaendertJe.t1 > e.bilddokus.t1.erstellt && s.P.data.extensions.dokuGeaendert > e.bilddoku.erstellt, 'Projektdaten betreffen alle');
+  });
+
+  await test('Bestand je Termin (Review #95): neues Foto in Termin 2 macht die zuletzt erstellte Doku von Termin 1 nicht „geändert“', async () => {
+    const d = disk(datei()), s = sitzung(d); await s.open();
+    s.S.items = ['Bilder A/IMG_0001.jpg', 'Fotos B 20.08/IMG_0001.jpg'].map(foto);
+    s.P.data.extensions.ordnerTermine['Fotos B 20.08'] = { termin: 't2' };
+    s.bilddokuVermerken(['T2.pdf'], 'Anlage 2', 't2'); await tick(); s.bilddokuVermerken(['T1.pdf'], 'Anlage 2', 't1'); await tick();   // zuletzt erstellt: Termin 1
+    const alt = e => !!(e.dokuGeaendert && e.dokuGeaendert > e.bilddoku.erstellt), je = (e, id) => !!(e.dokuGeaendertJe && e.dokuGeaendertJe[id] > e.bilddokus[id].erstellt);
+    s.dokuBestandPruefen();
+    let e = s.P.data.extensions;
+    assert.deepEqual([alt(e), je(e, 't1'), je(e, 't2')], [false, false, false], 'nichts geändert: alles aktuell');
+    gleich(e.bilddoku.bestandUnterordner, ['Bilder A/IMG_0001.jpg', 'Fotos B 20.08/IMG_0001.jpg'], 'bestand der zuletzt erstellten Doku nennt weiter alle Fotos (BerichtKit)');
+    s.S.items.push(foto('Fotos B 20.08/IMG_0002.jpg'));   // neues Foto im Ordner von Termin 2
+    s.dokuBestandPruefen(); e = s.P.data.extensions;
+    assert.deepEqual([alt(e), je(e, 't1'), je(e, 't2')], [false, false, true], 'nur die Doku von Termin 2 geändert – das alte Feld (Doku Termin 1) bleibt');
+    s.S.items.push(foto('Bilder A/IMG_0002.jpg'));        // neues Foto im Ordner von Termin 1
+    s.dokuBestandPruefen(); e = s.P.data.extensions;
+    assert.deepEqual([alt(e), je(e, 't1'), je(e, 't2')], [true, true, true], 'jetzt auch Termin 1 und damit das alte Feld');
+    // zuletzt erstellt „Alle Termine“: jedes neue Foto betrifft sie (Vergleich mit allen Fotos wie bisher)
+    const d2 = disk(datei()), s2 = sitzung(d2); await s2.open();
+    s2.S.items = ['Bilder A/IMG_0001.jpg', 'Fotos B 20.08/IMG_0001.jpg'].map(foto);
+    s2.P.data.extensions.ordnerTermine['Fotos B 20.08'] = { termin: 't2' };
+    s2.bilddokuVermerken(['Alle.pdf'], 'Anlage 2', 'alle'); await tick();
+    s2.S.items.push(foto('Fotos B 20.08/IMG_0002.jpg')); s2.dokuBestandPruefen();
+    assert.equal(alt(s2.P.data.extensions), true, '„Alle Termine“ zuletzt erstellt: geändert');
   });
 
   await test('ein Termin: „Doku geändert“ wie bis 2.6.0, keine neuen Felder', async () => {

@@ -23,7 +23,9 @@
 //   6d. Review #95 (P2, zweite Runde): (a) Rückfrage „iPhone-Fotos umwandeln“ vor der Doku zählt und wandelt nur die gezeigte Auswahl
 //      (Termin 1) ohne „Weg“-Fotos, nicht das iPhone-Foto von Termin 2 und nicht das aussortierte; (b) Datum von Termin 1 im Dialog geändert → Dateiname, Zeile „Deckblatt: …“ und
 //      PDF sofort mit dem neuen Datum (nicht erst nach dem Schreiben von _Projekt.json); (c) „Dateien umbenennen“ mit einem „Weg“-Foto
-//      direkt in „Fotos“ (wird verschoben) und einem im Unterordner (bleibt liegen) → das im Unterordner bleibt in der Reihenfolge.
+//      direkt in „Fotos“ (wird verschoben) und einem im Unterordner (bleibt liegen) → das im Unterordner bleibt in der Reihenfolge;
+//      (d) in Termin 1 umbenannt, auf Termin 2 gewechselt, „Rückgängig“ → Reihenfolge nennt jedes Foto genau einmal; (e) Termin erst im
+//      Dialog gewählt → iPhone-Rückfrage beim Erstellen für diesen Termin (Abbrechen / schon „ohne“ gewählt: keine zweite / umwandeln).
 //   7. Link mit unbekanntem Teil (mitteilung=2): übergangen und erhalten.
 //   8. FotoKit 2.6.0 (Commit c74418a) fasst eine Datei von 2.7.0 nicht an (R1); ein Projekt ohne Unterordner mit einem Termin
 //      ergibt mit 2.6.0 und 2.7.0 dieselbe Projektdatei (bis auf Version und Zeitstempel).
@@ -650,7 +652,46 @@ let browser, server, schritt = 'Start';
   assert.ok(jbef.reihenfolge.includes('fotos ka 20.08/B2.jpg'), 'das „Weg“-Foto im Unterordner bleibt in der gespeicherten Reihenfolge: ' + jbef.reihenfolge.join(', '));
   assert.ok(!jbef.reihenfolge.includes('A2.jpg'), 'das verschobene Foto steht nicht mehr in der Reihenfolge');
   assert.deepEqual(jbef.reihenfolge.slice().sort(), (await kacheln(fbef)).slice().sort(), 'Reihenfolge = genau die Fotos, die noch da sind');
-  console.log(`OK ${browserName}: iPhone-Rückfrage nur für die gezeigte Auswahl ohne „Weg“-Fotos; geändertes Datum von Termin 1 sofort im Dateinamen und im PDF; „Weg“-Foto im Unterordner bleibt in der Reihenfolge`);
+  // (d) Review #95 (dritte Runde): in Termin 1 umbenennen, auf Termin 2 wechseln, „Rückgängig“ → die Reihenfolge nennt jedes Foto genau einmal
+  await fbef.locator('#terminWahl [data-ansicht="t1"]').click();
+  await beschreiben(fbef, 'A4.jpg', 'Flur Decke');
+  await fbef.click('#btnMehr'); await fbef.locator('#mosaikMehrPop #mehrUmbenennen').click();
+  assert.match(await fbef.locator('#dialog .list').textContent(), /Umbenennen \(1\)\s*A4\.jpg → 03_Flur_Decke\.jpg/);
+  await fbef.locator('#dOk').click();
+  await bis(fbef, async () => /1 umbenannt – im Ordner geprüft/.test(await fbef.locator('#banner').textContent()) && (await kacheln(fbef)).includes('03_Flur_Decke.jpg'), 'umbenannt'); await ruhig(fbef);
+  await fbef.locator('#terminWahl [data-ansicht="t2"]').click();
+  assert.equal(await fbef.locator('#terminWahl [data-ansicht="t2"]').getAttribute('aria-pressed'), 'true'); assert.equal((await kacheln(fbef)).length, 4, 'Liste zeigt Termin 2');
+  assert.equal(await fbef.locator('#bUndo').isVisible(), true, '„Rückgängig“ steht nach dem Terminwechsel noch da');
+  await fbef.locator('#bUndo').click();
+  await bis(fbef, async () => /Rückgängig gemacht/.test(await fbef.locator('#banner').textContent()), 'Rückgängig fertig'); await ruhig(fbef);
+  await fbef.locator('#terminWahl [data-ansicht="alle"]').click();
+  jbef = await bis(fbef, async () => { const x = await fkDatei(fbef, BEFUNDE); return x.reihenfolge.includes('A4.jpg') && x; }, 'Rückgängig gespeichert');
+  assert.deepEqual(jbef.reihenfolge.slice().sort(), (await kacheln(fbef)).slice().sort(), 'nach „Rückgängig“ in einer anderen Auswahl: jedes Foto genau einmal, keins doppelt, keins fehlt – ' + jbef.reihenfolge.join(', '));
+  assert.deepEqual(jbef.reihenfolge.filter(n => n.startsWith('fotos ka 20.08/')), ['fotos ka 20.08/B1.jpg', 'fotos ka 20.08/B3.jpg', 'fotos ka 20.08/B4.heic', 'fotos ka 20.08/B2.jpg'], 'Fotos von Termin 2 an ihren Plätzen');
+  // (e) Review #95 (dritte Runde): Termin erst im Dialog gewählt → die iPhone-Rückfrage kommt beim Erstellen, für den gewählten Termin
+  await fbef.locator('#terminWahl [data-ansicht="t1"]').click();
+  await fbef.click('#btnPdf'); await fbef.locator('#zOk').waitFor();                // Termin 1 hat kein iPhone-Foto mehr in der Doku: keine Rückfrage
+  assert.equal(await fbef.locator('#dHeic').count(), 0);
+  await fbef.locator('#pTermin').selectOption('t2');
+  await fbef.click('#zOk'); await fbef.locator('#dHeic').waitFor();
+  assert.match(await fbef.locator('#dHeic').textContent(), /^\s*Ein Foto in der Doku ist im iPhone-Format/, 'Rückfrage für Termin 2 (im Dialog gewählt) vor dem Erstellen');
+  await fbef.click('#dCancel'); await ruhig(fbef);
+  assert.equal((await fkDatei(fbef, BEFUNDE)).bilddokus?.t2, undefined, '„Abbrechen“: keine Doku erstellt');
+  // jetzt zeigt die Liste Termin 2: Rückfrage beim Knopf, „Ohne Umwandeln weiter“ → beim Erstellen nicht noch einmal gefragt
+  await fbef.click('#btnPdf'); await fbef.locator('#dHeic').waitFor(); await fbef.click('#dOhne'); await fbef.locator('#zOk').waitFor();
+  await fbef.click('#zOk'); await ruhig(fbef);
+  jbef = await bis(fbef, async () => { const x = await fkDatei(fbef, BEFUNDE); return x.bilddokus?.t2 && x; }, 'Doku Termin 2 (mit Platzhalter)');
+  assert.equal(jbef.bilddokus.t2.dateien.length, 1); assert.ok((await imOrdnerB()).includes('fotos ka 20.08/B4.heic'), 'nicht umgewandelt');
+  // wieder Termin 1 gezeigt, im Dialog Termin 2 → Rückfrage → umwandeln → die Doku wird danach erstellt
+  await fbef.locator('#terminWahl [data-ansicht="t1"]').click();
+  await fbef.click('#btnPdf'); await fbef.locator('#zOk').waitFor(); await fbef.locator('#pTermin').selectOption('t2');
+  await fbef.click('#zOk'); await fbef.locator('#dHeic').waitFor(); await fbef.click('#dOk');
+  jbef = await bis(fbef, async () => { const x = await fkDatei(fbef, BEFUNDE); return x.bilddokus?.t2 && x.bilddokus.t2.dateien[0] !== jbef.bilddokus.t2.dateien[0] && x; }, 'zweite Doku Termin 2 (nach dem Umwandeln)');
+  await ruhig(fbef);
+  obef = await imOrdnerB();
+  assert.ok(obef.includes('fotos ka 20.08/B4.jpg') && !obef.includes('fotos ka 20.08/B4.heic'), 'iPhone-Foto von Termin 2 umgewandelt: ' + obef.join(', '));
+  assert.match(jbef.bilddokus.t2.dateien[0], /_2026-08-20 \(2\)\.pdf$/);
+  console.log(`OK ${browserName}: iPhone-Rückfrage nur für die gezeigte Auswahl ohne „Weg“-Fotos; geändertes Datum von Termin 1 sofort im Dateinamen und im PDF; „Weg“-Foto im Unterordner bleibt in der Reihenfolge; „Rückgängig“ nach Terminwechsel; iPhone-Rückfrage für den im Dialog gewählten Termin`);
   await fbef.close();
 
   schritt = '7 Link';

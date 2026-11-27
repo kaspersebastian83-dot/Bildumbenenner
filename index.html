@@ -545,7 +545,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.7.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:ad6ee525b18f605beb026ead77a2096f48d12424ada4555a9df5953dc8de1fa6';
+const APP_BUILD = 'sha256:5bd7baa4b890acadefca14cf68fdbe22dbf514187424a33a27d7a9e2a73010f5';
 const APP_DATE = '2026-11-26';
 const CHANGELOG = [
   ['2.7.0', '26.11.2026', 'Mehrere Ortstermine, Fotos bleiben in ihren Unterordnern: FotoKit liest jetzt auch die Fotos in den Unterordnern von „Fotos“ (eine Ebene, z. B. „Bilder Stefan“, „fotos ka 20.08“) – sie bleiben dort liegen und behalten ihren Namen; Ordner mit „_“ oder „.“ vorn zählen nicht. Über den Kacheln steht je Ordner eine Zeile. Hat das Projekt mehr als einen Ortstermin (Projektzentrale „+ Weiterer Ortstermin“), fragt FotoKit je Ordner einmal, zu welchem Termin er gehört – Vorschlag aus dem Datum im Ordnernamen, sonst aus dem Aufnahmedatum; nie ohne Klick. Passt das Datum zu keinem Termin, legt „Anlegen“ ihn in den Projektdaten an (nur den Termin, mit derselben Kennungsregel wie die Projektzentrale). Über den Fotos „Termin 1 · Termin 2 · Alle“, Fotos ohne Termin sind gelb. „Bilddokumentation erstellen“ fragt zuerst „Für welchen Termin?“, das Deckblatt nennt Datum und Bezeichnung des Termins, die PDF trägt das Termindatum im Namen, und FotoKit merkt sich je Termin eine Bilddokumentation – eine neue für Termin 2 lässt die von Termin 1 aktuell. Ändert die Projektzentrale Datum oder Bezeichnung eines Termins, gilt nur dessen Bilddokumentation als geändert (Hinweis über den Fotos). Fotos in Unterordnern werden nicht umbenannt und nie nach „_aussortiert“ verschoben („Weg“ ist dort nur eine Markierung); iPhone-Fotos dort werden im selben Ordner umgewandelt, das Original kommt nach „<Ordner>/_Originale“. „Fotos übernehmen“ entfällt; schon übernommene Fotos fragt FotoKit je Herkunftsordner, auch nach dem Umbenennen (sonst „Herkunft unbekannt“). Ein Projekt ohne Unterordner und mit einem Termin sieht aus wie bisher. Ältere FotoKit-Fassungen ändern eine Projektdatei von 2.7.0 nicht (geschützter Modus).'],
@@ -817,18 +817,26 @@ function dokuBestandPruefen(){
   const ext = P.data && P.data.extensions, b = ext && ext.bilddoku;
   if (!ext || P.readOnly) return;
   const anders = (liste, jetzt) => { const damals = new Set(liste.filter(n => !unlesbarerSchluessel(n))); return jetzt.length !== damals.size || jetzt.some(n => !damals.has(n)); };
-  if (b && Array.isArray(b.bestand) && !(ext.dokuGeaendert && ext.dokuGeaendert > b.erstellt)){   // sonst schon veraltet
+  const docs = ext.bilddokus, jeTermin = mehrereTermine() && !!docs && typeof docs === 'object';
+  /* Review #95 (P2): Bei mehreren Terminen gehört die zuletzt erstellte Doku (bilddoku, für BerichtKit) zu einem Termin (bilddoku.termin).
+     Ihr „bestand“ nennt weiter alle Fotos (damit vergleicht BerichtKit); ob sie für FotoKit geändert ist, entscheidet aber der Bestand
+     ihres Termins (bilddokus[termin].bestand, Schleife unten) – ein neues Foto eines anderen Termins betrifft sie nicht.
+     „Alle Termine“, ein Termin oder kein Eintrag je Termin: Vergleich mit allen Fotos wie bisher. */
+  const bt = jeTermin && b && typeof b.termin === 'string' && b.termin !== 'alle' && docs[b.termin] && Array.isArray(docs[b.termin].bestand) ? b.termin : null;
+  const altAktuell = () => { const e = P.data.extensions; return !(e.dokuGeaendert && e.dokuGeaendert > b.erstellt); };   // sonst schon veraltet
+  if (b && !bt && Array.isArray(b.bestand) && altAktuell()){
     const direkt = S.items.filter(it => !it.ordner).map(it => it.name), unter = S.items.filter(it => it.ordner).map(it => it.name);
     if (anders(b.bestand, direkt) || anders(Array.isArray(b.bestandUnterordner) ? b.bestandUnterordner : [], unter))   // m3: nur im Speicher
       P.data.extensions = { ...P.data.extensions, dokuGeaendert: dokuZeit(P.data.extensions) };
   }
-  const docs = ext.bilddokus;
-  if (!mehrereTermine() || !docs || typeof docs !== 'object') return;
+  if (!jeTermin) return;
   for (const [id, d] of Object.entries(docs)){
     const je = P.data.extensions.dokuGeaendertJe || {};
     if (!d || !Array.isArray(d.bestand) || (je[id] && je[id] > d.erstellt) || (id !== 'alle' && !terminNach(id))) continue;
-    if (anders(d.bestand, S.items.filter(it => id === 'alle' || terminVon(it) === id).map(it => it.name)))
+    if (anders(d.bestand, S.items.filter(it => id === 'alle' || terminVon(it) === id).map(it => it.name))){
       P.data.extensions = { ...P.data.extensions, dokuGeaendertJe: { ...je, [id]: nachZeit(d.erstellt) } };
+      if (id === bt && altAktuell()) P.data.extensions = { ...P.data.extensions, dokuGeaendert: dokuZeit(P.data.extensions) };   // die zuletzt erstellte Doku ist die dieses Termins
+    }
   }
 }
 /** wahl (2.7.0, nur bei mehreren Terminen): Kennung des Termins der Doku oder 'alle' – dann zusätzlich bilddokus[wahl]. */
@@ -2515,21 +2523,24 @@ async function heicUmwandelnStarten(nurDoku){
 }
 /** E2: vor „Bilddokumentation erstellen“ einmal nachfragen, statt Platzhalter ins PDF zu setzen.
     Review #95 (P2): gezählt und umgewandelt wird, was die Doku nimmt – die gezeigte Auswahl (S.view) ohne „Weg“-Fotos. Ein iPhone-Foto
-    eines anderen Termins oder ein aussortiertes löst keine Rückfrage aus und wird hier nicht mit umgewandelt. */
-function guardHeic(next){
-  return (...a) => {
-    const n = S.view.filter(it => istHeic(it) && !it.discard).length;
-    if (!n || P.readOnly) return next(...a);
-    showDialog(`<h3>${n} ${heicWort(n)} noch nicht umgewandelt</h3>
-      <p id="dHeic">${n === 1 ? 'Ein Foto in der Doku ist' : `${n} Fotos in der Doku sind`} im iPhone-Format (HEIC). In der Bilddokumentation ${n === 1 ? 'stünde es' : 'stünden sie'} nur als Platzhalter.
-      FotoKit kann ${n === 1 ? 'es' : 'sie'} jetzt in JPG umwandeln; die Originale bleiben unverändert in „${esc(FOTOS_DIR)}/${ORIGINALE_DIR}“.</p>
-      <div class="btns"><button id="dCancel">Abbrechen</button><span class="spacer"></span><button id="dOhne">Ohne Umwandeln weiter</button><button class="primary" id="dOk">${n} ${heicWort(n)} umwandeln</button></div>`);
-    $('dCancel').onclick = closeDialog;
-    $('dOhne').onclick = () => { closeDialog(); next(...a); };
-    $('dOk').onclick = async () => { closeDialog(); const r = await heicUmwandelnStarten(true); if (r && !r.fehler.length) next(...a); };
-    $('dOk').focus();
-  };
+    eines anderen Termins oder ein aussortiertes löst keine Rückfrage aus und wird hier nicht mit umgewandelt.
+    Die Rückfrage kommt an zwei Stellen: beim Knopf „Bilddokumentation erstellen“ (guardHeic, für die gezeigte Auswahl) und beim Erstellen
+    selbst (heicRueckfrage aus dem Dialog) – dort für den im Dialog gewählten Termin, falls für dessen iPhone-Fotos noch nicht gefragt
+    wurde. heicOhne merkt, für welche Fotos seit dem Knopf „Ohne Umwandeln weiter“ gewählt wurde – danach wird nicht noch einmal gefragt. */
+let heicOhne = new Set();
+function heicRueckfrage(next, immer){
+  const liste = S.view.filter(it => istHeic(it) && !it.discard), n = liste.length;
+  if (!n || P.readOnly || (!immer && liste.every(it => heicOhne.has(it.name)))) return next();
+  showDialog(`<h3>${n} ${heicWort(n)} noch nicht umgewandelt</h3>
+    <p id="dHeic">${n === 1 ? 'Ein Foto in der Doku ist' : `${n} Fotos in der Doku sind`} im iPhone-Format (HEIC). In der Bilddokumentation ${n === 1 ? 'stünde es' : 'stünden sie'} nur als Platzhalter.
+    FotoKit kann ${n === 1 ? 'es' : 'sie'} jetzt in JPG umwandeln; die Originale bleiben unverändert in „${esc(FOTOS_DIR)}/${ORIGINALE_DIR}“.</p>
+    <div class="btns"><button id="dCancel">Abbrechen</button><span class="spacer"></span><button id="dOhne">Ohne Umwandeln weiter</button><button class="primary" id="dOk">${n} ${heicWort(n)} umwandeln</button></div>`);
+  $('dCancel').onclick = closeDialog;
+  $('dOhne').onclick = () => { liste.forEach(it => heicOhne.add(it.name)); closeDialog(); next(); };
+  $('dOk').onclick = async () => { closeDialog(); const r = await heicUmwandelnStarten(true); if (r && !r.fehler.length) next(); };
+  $('dOk').focus();
 }
+function guardHeic(next){ return (...a) => { heicOhne = new Set(); return heicRueckfrage(() => next(...a), true); }; }
 
 /* ---------- open folder ---------- */
 const supported = 'showDirectoryPicker' in window;
@@ -2745,14 +2756,15 @@ function undoGroup(undo){
   saveExtra(); buildRows(); recompute(); saveOrder(); if (S.items.length) setFocus(0, false);
   banner('ok', '↺ Sortierung nach Abschnitt rückgängig gemacht.');
 }
-function saveOrder(names){
-  projSet('order', unlesbareListe(ordnungEinsetzen(names || S.view.map(it => it.name)), P.data && P.data.order));   // R2
+function saveOrder(names, plaetze){
+  projSet('order', unlesbareListe(ordnungEinsetzen(names || S.view.map(it => it.name), plaetze), P.data && P.data.order));   // R2
 }
 /** 2.7.0: Reihenfolge der gezeigten Fotos in die ganze Liste einsetzen – Fotos anderer Termine behalten ihre Plätze. Wird alles
     gezeigt (ein Termin oder „Alle“), ist das Ergebnis genau die übergebene Liste (wie bis 2.6.0). */
-function ordnungEinsetzen(namen){
-  const inAnsicht = new Set(S.view), q = [...namen], out = [];
-  for (const it of S.items){ if (!inAnsicht.has(it)) out.push(it.name); else if (q.length) out.push(q.shift()); }
+function ordnungEinsetzen(namen, plaetze){
+  // plaetze (Set von Namen, wie die Fotos jetzt heißen): diese Plätze statt der gezeigten Fotos – für „Rückgängig“ nach einem Terminwechsel
+  const inAnsicht = new Set(S.view), drin = plaetze ? it => plaetze.has(it.name) : it => inAnsicht.has(it), q = [...namen], out = [];
+  for (const it of S.items){ if (!drin(it)) out.push(it.name); else if (q.length) out.push(q.shift()); }
   return out.concat(q);
 }
 /** Umsortierte gezeigte Fotos zurück in die ganze Liste (gleiche Plätze, andere Termine unberührt). */
@@ -3784,7 +3796,9 @@ async function undo(){
     const disc = new Set(projGet('discard', []));
     run.moves.forEach(m => disc.add(m.from));
     projSet('discard', [...disc]);
-    saveOrder(run.rows.map(r => r.from).concat(run.discardRows.map(r => r.from)));
+    // Review #95 (P2): die Plätze der Fotos dieses Laufs (wie sie jetzt heißen), nicht die der gerade gezeigten Auswahl – nach einem
+    // Wechsel des Termins bekämen sonst die Fotos des anderen Termins diese Namen.
+    saveOrder(run.rows.map(r => r.from).concat(run.discardRows.map(r => r.from)), new Set(run.rows.map(r => r.to).concat(run.discardRows.map(r => r.from))));
     umbenennenFertigSetzen(jr);
     const saved = await flushProject();
     // The reverse file operation must not run again when only its save failed.
@@ -4238,14 +4252,18 @@ function openMetaDialog(mode){
   update();
   $('zCancel').onclick = closeDialog;
   if (forZip) $('zOk').onclick = () => doZip(read());
-  if (forPdf) $('zOk').onclick = async () => {
-    const r = read(), umb = $('pRename') && $('pRename').checked;
-    if ($('pRename')) angebotVermerken();
-    if (umb){
-      const { pairs, moves } = plan();
-      if (pairs.length || moves.length){ const ok = await doRename(pairs, moves); if (ok !== true) return; }   // Fehler: Meldung steht schon da, kein PDF
-    }
-    doPdf(r);
+  if (forPdf) $('zOk').onclick = () => {
+    const r = read(), angebot = !!$('pRename'), umb = angebot && $('pRename').checked;
+    // Review #95 (P2): iPhone-Fotos des im Dialog gewählten Termins – die Rückfrage beim Knopf galt der damals gezeigten Auswahl.
+    // Die Rückfrage ersetzt diesen Dialog; r ist gelesen, „Abbrechen“ dort erstellt nichts.
+    heicRueckfrage(async () => {
+      if (angebot) angebotVermerken();
+      if (umb){
+        const { pairs, moves } = plan();
+        if (pairs.length || moves.length){ const ok = await doRename(pairs, moves); if (ok !== true) return; }   // Fehler: Meldung steht schon da, kein PDF
+      }
+      doPdf(r);
+    });
   };
   setTimeout(() => $(m.proj ? 'm_anlage' : 'm_proj').focus(), 0);
 }
