@@ -25,7 +25,8 @@
 //      PDF sofort mit dem neuen Datum (nicht erst nach dem Schreiben von _Projekt.json); (c) „Dateien umbenennen“ mit einem „Weg“-Foto
 //      direkt in „Fotos“ (wird verschoben) und einem im Unterordner (bleibt liegen) → das im Unterordner bleibt in der Reihenfolge;
 //      (d) in Termin 1 umbenannt, auf Termin 2 gewechselt, „Rückgängig“ → Reihenfolge nennt jedes Foto genau einmal; (e) Termin erst im
-//      Dialog gewählt → iPhone-Rückfrage beim Erstellen für diesen Termin (Abbrechen / schon „ohne“ gewählt: keine zweite / umwandeln).
+//      Dialog gewählt → iPhone-Rückfrage beim Erstellen für diesen Termin (Abbrechen / schon „ohne“ gewählt: keine zweite / umwandeln);
+//      (f) Doku Termin 1 zuletzt erstellt, dann fällt Termin 2 weg → Doku Termin 1 und altes Feld geändert (ihr fehlen dessen Fotos).
 //   7. Link mit unbekanntem Teil (mitteilung=2): übergangen und erhalten.
 //   8. FotoKit 2.6.0 (Commit c74418a) fasst eine Datei von 2.7.0 nicht an (R1); ein Projekt ohne Unterordner mit einem Termin
 //      ergibt mit 2.6.0 und 2.7.0 dieselbe Projektdatei (bis auf Version und Zeitstempel).
@@ -691,7 +692,28 @@ let browser, server, schritt = 'Start';
   obef = await imOrdnerB();
   assert.ok(obef.includes('fotos ka 20.08/B4.jpg') && !obef.includes('fotos ka 20.08/B4.heic'), 'iPhone-Foto von Termin 2 umgewandelt: ' + obef.join(', '));
   assert.match(jbef.bilddokus.t2.dateien[0], /_2026-08-20 \(2\)\.pdf$/);
-  console.log(`OK ${browserName}: iPhone-Rückfrage nur für die gezeigte Auswahl ohne „Weg“-Fotos; geändertes Datum von Termin 1 sofort im Dateinamen und im PDF; „Weg“-Foto im Unterordner bleibt in der Reihenfolge; „Rückgängig“ nach Terminwechsel; iPhone-Rückfrage für den im Dialog gewählten Termin`);
+  // (f) Review #95 (siebte Runde): Doku für Termin 1 ist die zuletzt erstellte; dann fällt Termin 2 weg (bei offenem FotoKit) → alle Fotos
+  //     gehören zu Termin 1, der Doku von Termin 1 fehlen die des entfernten Termins → geändert, auch das alte Feld (für BerichtKit)
+  await fbef.locator('#terminWahl [data-ansicht="t1"]').click();
+  await fbef.click('#btnPdf'); await fbef.locator('#zOk').waitFor(); await fbef.click('#zOk'); await ruhig(fbef);
+  jbef = await bis(fbef, async () => { const x = await fkDatei(fbef, BEFUNDE); return x.bilddoku?.termin === 't1' && x.bilddokus.t1.dateien[0] === x.bilddoku.dateien[0] && x; }, 'Doku Termin 1 zuletzt erstellt');
+  assert.ok(!(jbef.dokuGeaendertJe?.t1 > jbef.bilddokus.t1.erstellt) && !(jbef.dokuGeaendert > jbef.bilddoku.erstellt), 'frisch erstellt: aktuell');
+  assert.ok(jbef.bilddokus.t1.bestand.every(n => !n.startsWith('fotos ka 20.08/')), 'Bestand der Doku von Termin 1 ohne die Fotos von Termin 2');
+  await fbef.evaluate(async p => { const d = await (await (await navigator.storage.getDirectory()).getDirectoryHandle('Mosaik Archivordner')).getDirectoryHandle(p);
+    const h = await d.getFileHandle('_Projekt.json'), pj = JSON.parse(await (await h.getFile()).text()); delete pj.weitereOrtstermine;   // Termin 2 entfernt (Zähler bleibt)
+    const w = await h.createWritable(); await w.write(JSON.stringify(pj)); await w.close(); }, BEFUNDE);
+  await fokus(fbef);
+  await bis(fbef, async () => await fbef.locator('#terminWahl').isHidden(), 'wieder ein Termin: keine Auswahl');
+  // nächstes Speichern ohne etwas an den Fotos zu ändern (eine geänderte Beschreibung machte die Doku ohnehin „geändert“):
+  // eine Einstellung unter „Dateinamen …“ – gehört nicht zum Inhalt der Doku
+  const kleinVorher = !!jbef.benennung?.lower;
+  await fbef.click('#btnMehr'); await fbef.locator('#mosaikMehrPop #mehrNamen').click();
+  await fbef.locator('#oLower').setChecked(!kleinVorher); await fbef.click('#dlgNamenZu');
+  jbef = await bis(fbef, async () => { const x = await fkDatei(fbef, BEFUNDE); return !!x.benennung?.lower === !kleinVorher && x; }, 'Einstellung gespeichert');
+  assert.equal(jbef.bilddoku.termin, 't1'); assert.equal(jbef.bilder['fotos ka 20.08/B3.jpg'].beschreibung, 'Keller 3', 'an den Fotos nichts geändert');
+  assert.ok(jbef.dokuGeaendertJe.t1 > jbef.bilddokus.t1.erstellt, 'Doku Termin 1 geändert: ihr fehlen die Fotos des entfernten Termins');
+  assert.ok(jbef.dokuGeaendert > jbef.bilddoku.erstellt, 'altes Feld (zuletzt erstellte Doku = Termin 1) geändert');
+  console.log(`OK ${browserName}: iPhone-Rückfrage nur für die gezeigte Auswahl ohne „Weg“-Fotos; geändertes Datum von Termin 1 sofort im Dateinamen und im PDF; „Weg“-Foto im Unterordner bleibt in der Reihenfolge; „Rückgängig“ nach Terminwechsel; iPhone-Rückfrage für den im Dialog gewählten Termin; Termin entfernt → Doku Termin 1 geändert`);
   await fbef.close();
 
   schritt = '7 Link';

@@ -545,7 +545,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.7.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:99e482c8e5e02791b8c33a5d79132b3495bcd618fdf85dfc3c03ec007e8b257c';
+const APP_BUILD = 'sha256:79a0a4212b59915053e89c5a5d22da3867eb63f94122fc65005d44aac4df9964';
 const APP_DATE = '2026-11-26';
 const CHANGELOG = [
   ['2.7.0', '26.11.2026', 'Mehrere Ortstermine, Fotos bleiben in ihren Unterordnern: FotoKit liest jetzt auch die Fotos in den Unterordnern von „Fotos“ (eine Ebene, z. B. „Bilder Stefan“, „fotos ka 20.08“) – sie bleiben dort liegen und behalten ihren Namen; Ordner mit „_“ oder „.“ vorn zählen nicht. Über den Kacheln steht je Ordner eine Zeile. Hat das Projekt mehr als einen Ortstermin (Projektzentrale „+ Weiterer Ortstermin“), fragt FotoKit je Ordner einmal, zu welchem Termin er gehört – Vorschlag aus dem Datum im Ordnernamen, sonst aus dem Aufnahmedatum; nie ohne Klick. Passt das Datum zu keinem Termin, legt „Anlegen“ ihn in den Projektdaten an (nur den Termin, mit derselben Kennungsregel wie die Projektzentrale). Über den Fotos „Termin 1 · Termin 2 · Alle“, Fotos ohne Termin sind gelb. „Bilddokumentation erstellen“ fragt zuerst „Für welchen Termin?“, das Deckblatt nennt Datum und Bezeichnung des Termins, die PDF trägt das Termindatum im Namen, und FotoKit merkt sich je Termin eine Bilddokumentation – eine neue für Termin 2 lässt die von Termin 1 aktuell. Ändert die Projektzentrale Datum oder Bezeichnung eines Termins, gilt nur dessen Bilddokumentation als geändert (Hinweis über den Fotos). Fotos in Unterordnern werden nicht umbenannt und nie nach „_aussortiert“ verschoben („Weg“ ist dort nur eine Markierung); iPhone-Fotos dort werden im selben Ordner umgewandelt, das Original kommt nach „<Ordner>/_Originale“. „Fotos übernehmen“ entfällt; schon übernommene Fotos fragt FotoKit je Herkunftsordner, auch nach dem Umbenennen (sonst „Herkunft unbekannt“). Ein Projekt ohne Unterordner und mit einem Termin sieht aus wie bisher. Ältere FotoKit-Fassungen ändern eine Projektdatei von 2.7.0 nicht (geschützter Modus).'],
@@ -820,11 +820,13 @@ function dokuBestandPruefen(nurJeTermin){
   const ext = P.data && P.data.extensions, b = ext && ext.bilddoku;
   if (!ext || P.readOnly) return;
   const anders = (liste, jetzt) => { const damals = new Set(liste.filter(n => !unlesbarerSchluessel(n))); return jetzt.length !== damals.size || jetzt.some(n => !damals.has(n)); };
-  const docs = ext.bilddokus, jeTermin = mehrereTermine() && !!docs && typeof docs === 'object';
+  const docs = ext.bilddokus, jeTermin = !!docs && typeof docs === 'object';   // Dokus je Termin gemerkt – auch wenn das Projekt wieder nur einen Termin hat
   /* Review #95 (P2): Bei mehreren Terminen gehört die zuletzt erstellte Doku (bilddoku, für BerichtKit) zu einem Termin (bilddoku.termin).
      Ihr „bestand“ nennt weiter alle Fotos (damit vergleicht BerichtKit); ob sie für FotoKit geändert ist, entscheidet aber der Bestand
      ihres Termins (bilddokus[termin].bestand, Schleife unten) – ein neues Foto eines anderen Termins betrifft sie nicht.
-     „Alle Termine“, ein Termin oder kein Eintrag je Termin: Vergleich mit allen Fotos wie bisher. */
+     „Alle Termine“ oder kein Eintrag je Termin: Vergleich mit allen Fotos wie bisher.
+     Wieder ein Termin (Review #95, P1): Jedes Foto gehört jetzt zu Termin 1 (terminVon) – die Doku von Termin 1 von vorher kennt die Fotos
+     des entfernten Termins nicht; ihr Bestand wird darum weiter verglichen (Schleife unten), auch für das alte Feld. */
   const bt = jeTermin && b && typeof b.termin === 'string' && b.termin !== 'alle' && docs[b.termin] && Array.isArray(docs[b.termin].bestand) ? b.termin : null;
   const altAktuell = () => { const e = P.data.extensions; return !(e.dokuGeaendert && e.dokuGeaendert > b.erstellt); };   // sonst schon veraltet
   if (b && !bt && !nurJeTermin && Array.isArray(b.bestand)){   // nurJeTermin (Zusammenführen): nur der Bestand je Termin, s. mergeExternal
@@ -840,7 +842,7 @@ function dokuBestandPruefen(nurJeTermin){
       }
     }
   }
-  if (!jeTermin) return;
+  if (!jeTermin) return;   // nie mehrere Termine: wie bis 2.6.0
   for (const [id, d] of Object.entries(docs)){
     const je = P.data.extensions.dokuGeaendertJe || {};
     if (!d || !Array.isArray(d.bestand) || (je[id] && je[id] > d.erstellt) || (id !== 'alle' && !terminNach(id))) continue;
@@ -1275,6 +1277,9 @@ async function refreshPJ(){
   for (const [, pk] of PJ_MAP) PJ.sent[pk] = (fresh[pk] || '').trim();   // ohne Änderung ohnehin gleich; vor dem Vergleich unten (Datum von Termin 1)
   const hinweisVorher = JSON.stringify(S.dokuTerminAnders || []);
   dokuTerminPruefen();   // Review #95: Termin in der Projektzentrale geändert → Doku dieses Termins geändert
+  // Review #95 (P1): Termin dazu oder entfernt → welche Fotos zu welchem Termin gehören, hat sich geändert (bei einem Termin alle zu Termin 1):
+  // Bestand der gemerkten Dokus je Termin gleich vergleichen, nicht erst beim nächsten Einlesen.
+  if (S.dir && JSON.stringify(termine()) !== termineVorher) dokuBestandPruefen(true);
   if (S.dir && (JSON.stringify(termine()) !== termineVorher || JSON.stringify(S.dokuTerminAnders) !== hinweisVorher)) termineNeuZeichnen();   // 2.7.0: Termin in der Projektzentrale angelegt/geändert/entfernt
   if (!changed) return;
   const meta = projGet('meta', {});

@@ -302,6 +302,26 @@ function sitzung(d, pj = ZWEI){
     assert.equal(e.dokuGeaendertJe.t2, '2026-11-26T09:00:00.000Z', 'Termin 2 unberührt');
   });
 
+  await test('Review #95 (8): letzter weiterer Termin entfernt – die Doku von Termin 1 kennt dessen Fotos nicht → geändert (auch das alte Feld)', async () => {
+    const mit = bestandT1 => { const f = mitDokus('T1', 't1'); delete f.bilddokus.t3;
+      f.bilddoku.bestand = []; f.bilddoku.bestandUnterordner = ['Bilder A/IMG_0001.jpg', 'Fotos B 20.08/IMG_0001.jpg'];
+      f.bilddokus.t1.bestand = bestandT1; f.bilddokus.t2.bestand = ['Fotos B 20.08/IMG_0001.jpg']; return f; };
+    let f = mit(['Bilder A/IMG_0001.jpg']);   // Doku Termin 1 aus der Zeit mit zwei Terminen: ohne das Foto von Termin 2
+    let d = disk(f), s = sitzung(d, EINER); await s.open();
+    s.S.items = ['Bilder A/IMG_0001.jpg', 'Fotos B 20.08/IMG_0001.jpg'].map(foto);
+    assert.equal(s.terminVon(s.S.items[1]), 't1', 'ein Termin: jedes Foto gehört zu Termin 1');
+    s.dokuBestandPruefen();
+    let e = s.P.data.extensions;
+    assert.ok(e.dokuGeaendertJe.t1 > f.bilddokus.t1.erstellt, 'Doku Termin 1 geändert – ihr fehlt das Foto des entfernten Termins');
+    assert.ok(e.dokuGeaendert > f.bilddoku.erstellt, 'altes Feld auch – sie ist die zuletzt erstellte');
+    assert.equal(e.dokuGeaendertJe.t2, '2026-11-26T09:00:00.000Z', 'Termin 2 (entfernt) hier unberührt – das macht dokuTerminPruefen');
+    // Gegenprobe: die Doku von Termin 1 enthält schon alle Fotos (bei einem Termin erstellt) → bleibt aktuell
+    f = mit(['Bilder A/IMG_0001.jpg', 'Fotos B 20.08/IMG_0001.jpg']); d = disk(f); s = sitzung(d, EINER); await s.open();
+    s.S.items = ['Bilder A/IMG_0001.jpg', 'Fotos B 20.08/IMG_0001.jpg'].map(foto);
+    s.dokuBestandPruefen(); e = s.P.data.extensions;
+    assert.deepEqual([e.dokuGeaendertJe.t1, e.dokuGeaendert], ['2026-11-26T09:00:00.000Z', '2026-11-26T09:00:00.000Z'], 'alle Fotos drin: aktuell');
+  });
+
   await test('Review #95 (4): t2 und t3, Doku für t3, t3 entfernt → nur t3 geändert', async () => {
     const f = mitDokus('T3', 't3'), d = disk(f), s = sitzung(d, { ...ZWEI, ortsterminZaehler: 3 }); await s.open();
     s.dokuTerminPruefen();
