@@ -7,9 +7,10 @@
    This worker therefore only ever touches caches with its own prefix and only answers requests inside its own scope. */
 const SCOPE = self.registration.scope;
 const PREFIX = 'bildumbenenner:' + SCOPE + ':';
-const CACHE = PREFIX + 'v18';
+const CACHE = PREFIX + 'v19';
 // heic-worker.js + vendor/libheif-bundle.js (2 MB): iPhone-Fotos umwandeln geht auch offline (FotoKit 2.3.0)
-const ASSETS = ['./', './index.html', './spektron-ordner.js', './project-store.js', './heic-worker.js', './vendor/libheif-bundle.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png']
+// ortstermine.js (FotoKit 2.7.0): Kopie aus der Projektzentrale – Termin-Kennungen nach derselben Regel
+const ASSETS = ['./', './index.html', './spektron-ordner.js', './project-store.js', './ortstermine.js', './heic-worker.js', './vendor/libheif-bundle.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png']
   .map(f => new URL(f, SCOPE).href);
 const INDEX = new URL('index.html', SCOPE).href;
 
