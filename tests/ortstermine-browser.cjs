@@ -20,6 +20,10 @@
 //      Testfoto tests/fixtures/exif-aufnahme-2026-08-20.jpg), nur Dateidatum → „unsicher“.
 //   6c. Review #95 (P2): Dialog „Bilddokumentation erstellen“ – Termin im Dialog wechseln (t1 alle beschrieben, t2 nur teils, Alle)
 //      → „nur Fotos mit Beschreibung“, Zusammenfassung, Dateiname neu gerechnet (nie negativ); die PDF nimmt die Fotos des gewählten.
+//   6d. Review #95 (P2, zweite Runde): (a) Rückfrage „iPhone-Fotos umwandeln“ vor der Doku zählt und wandelt nur die gezeigte Auswahl
+//      (Termin 1), nicht das iPhone-Foto von Termin 2; (b) Datum von Termin 1 im Dialog geändert → Dateiname, Zeile „Deckblatt: …“ und
+//      PDF sofort mit dem neuen Datum (nicht erst nach dem Schreiben von _Projekt.json); (c) „Dateien umbenennen“ mit einem „Weg“-Foto
+//      direkt in „Fotos“ (wird verschoben) und einem im Unterordner (bleibt liegen) → das im Unterordner bleibt in der Reihenfolge.
 //   7. Link mit unbekanntem Teil (mitteilung=2): übergangen und erhalten.
 //   8. FotoKit 2.6.0 (Commit c74418a) fasst eine Datei von 2.7.0 nicht an (R1); ein Projekt ohne Unterordner mit einem Termin
 //      ergibt mit 2.6.0 und 2.7.0 dieselbe Projektdatei (bis auf Version und Zeitstempel).
@@ -42,7 +46,7 @@ const ALT = 'c74418a';   // FotoKit 2.6.0
 let altHtml = null; try { altHtml = execFileSync('git', ['show', ALT + ':index.html'], { cwd: root, maxBuffer: 64 << 20 }); } catch (_) {}
 if (!altHtml && process.env.ORTSTERMINE_PFLICHT) throw new Error('FotoKit 2.6.0 (' + ALT + ') nicht in der Git-Historie');
 const TYP = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.css': 'text/css', '.webmanifest': 'application/manifest+json' };
-const HAUPT = '26.0501 Teststadt Ka', BESTAND = '26.0502 Bestand Teststadt', EINFACH = '26.0503 Einfach Teststadt', HERKUNFT = '26.0504 Herkunft Teststadt', ENTFERNT = '26.0505 Entfernt Teststadt', WECHSEL = '26.0506 Wechsel Teststadt';
+const HAUPT = '26.0501 Teststadt Ka', BESTAND = '26.0502 Bestand Teststadt', EINFACH = '26.0503 Einfach Teststadt', HERKUNFT = '26.0504 Herkunft Teststadt', ENTFERNT = '26.0505 Entfernt Teststadt', WECHSEL = '26.0506 Wechsel Teststadt', BEFUNDE = '26.0507 Befunde Teststadt';
 let browser, server, schritt = 'Start';
 
 (async () => {
@@ -578,6 +582,75 @@ let browser, server, schritt = 'Start';
   assert.equal(await fw.locator('#terminWahl [data-ansicht="t2"]').getAttribute('aria-pressed'), 'true', 'Liste zeigt danach Termin 2');
   console.log(`OK ${browserName}: Terminwechsel im Dialog – „nur mit Beschreibung“, Zusammenfassung und Dateiname je Termin neu gerechnet, nie negativ; PDF mit den Fotos des gewählten Termins`);
   await fw.close();
+
+  // ---------- 6d. Review #95 (P2, zweite Runde): iPhone-Rückfrage je Auswahl, Dateiname mit geändertem Datum, Reihenfolge nach „Weg“ ----------
+  schritt = '6d iPhone-Rückfrage, Datum im Dateinamen, Reihenfolge';
+  const heicB = [...fs.readFileSync(path.join(__dirname, 'fixtures', 'testbild.heic'))];
+  await fk.evaluate(async ([BEFUNDE, heicB]) => {
+    const a = await (await navigator.storage.getDirectory()).getDirectoryHandle('Mosaik Archivordner'), p = await a.getDirectoryHandle(BEFUNDE, { create: true }), f = await p.getDirectoryHandle('Fotos', { create: true });
+    const put = async (d, n, x) => { const w = await (await d.getFileHandle(n, { create: true })).createWritable(); await w.write(x); await w.close(); };
+    const jpg = i => { const c = document.createElement('canvas'); c.width = 40 + i; c.height = 30; const g = c.getContext('2d'); g.fillStyle = `rgb(${i * 30},120,90)`; g.fillRect(0, 0, 40 + i, 30); return new Promise(r => c.toBlob(r, 'image/jpeg')); };
+    await put(p, '_Projekt.json', JSON.stringify({ format: 'mosaik-projekt', version: 1, objekt: 'EFH, Testweg 7', ortstermin: '2026-08-12',
+      weitereOrtstermine: [{ id: 't2', datum: '2026-08-20', bezeichnung: 'Nachbeprobung', wer: 'Ka' }], ortsterminZaehler: 2 }));
+    const b = await f.getDirectoryHandle('fotos ka 20.08', { create: true }), heic = new Uint8Array(heicB), bilder = {};
+    for (let i = 1; i <= 3; i++){ await put(f, `A${i}.jpg`, await jpg(i)); bilder[`A${i}.jpg`] = { beschreibung: 'Küche ' + i }; }            // t1: 3 JPG + 1 iPhone-Foto
+    for (let i = 1; i <= 3; i++){ await put(b, `B${i}.jpg`, await jpg(3 + i)); bilder[`fotos ka 20.08/B${i}.jpg`] = { beschreibung: 'Keller ' + i }; }   // t2: 3 JPG + 1 iPhone-Foto
+    await put(f, 'A4.heic', heic); await put(b, 'B4.heic', heic);
+    bilder['A2.jpg'].aussortiert = true; bilder['fotos ka 20.08/B2.jpg'].aussortiert = true;   // je ein „Weg“-Foto: direkt in „Fotos“ und im Unterordner
+    await put(f, '_Bildumbenenner.json', JSON.stringify({ app: 'Bildumbenenner', format: 1, version: '2.7.0', projekt: {}, benennung: {}, reihenfolge: [], bilder,
+      ordnerTermine: { '': { termin: 't1', am: '2026-11-26T08:00:00.000Z', vorschlag: 'hand' }, 'fotos ka 20.08': { termin: 't2', am: '2026-11-26T08:00:00.000Z', vorschlag: 'datum-im-namen' } } }, null, 2));
+  }, [BEFUNDE, heicB]);
+  const fbef = await seite('/fk/index.html', BEFUNDE);
+  await oeffnen(fbef); await ruhig(fbef); await fbef.waitForFunction(() => document.querySelectorAll('#list .row').length === 8);
+  const imOrdnerB = () => fbef.evaluate(async p => { const f = await (await (await (await navigator.storage.getDirectory()).getDirectoryHandle('Mosaik Archivordner')).getDirectoryHandle(p)).getDirectoryHandle('Fotos');
+    const o = []; for await (const [n, h] of f.entries()){ if (h.kind === 'file') o.push(n); else for await (const m of h.keys()) o.push(n + '/' + m); } return o.filter(n => !/^_Bildumbenenner|^_FotoKit_Fassungen\/|\.pdf$/.test(n)).sort(); }, BEFUNDE);   // ohne Projektdatei, Fassungen und PDFs
+  // (a) Rückfrage vor der Doku: nur die iPhone-Fotos der gezeigten Auswahl
+  await fbef.locator('#terminWahl [data-ansicht="t1"]').click();
+  await fbef.click('#btnPdf'); await fbef.locator('#dHeic').waitFor();
+  assert.match(await fbef.locator('#dHeic').textContent(), /^\s*Ein Foto in der Doku ist im iPhone-Format/, 'Termin 1 gezeigt: nur sein iPhone-Foto zählt, nicht das von Termin 2');
+  assert.equal(await fbef.locator('#dOk').textContent(), '1 iPhone-Foto umwandeln');
+  await fbef.click('#dCancel'); await ruhig(fbef);
+  await fbef.locator('#terminWahl [data-ansicht="alle"]').click();
+  await fbef.click('#btnPdf'); await fbef.locator('#dHeic').waitFor();
+  assert.match(await fbef.locator('#dHeic').textContent(), /2 Fotos in der Doku sind im iPhone-Format/, '„Alle“: beide');
+  await fbef.click('#dCancel'); await ruhig(fbef);
+  await fbef.locator('#terminWahl [data-ansicht="t1"]').click();
+  await fbef.click('#btnPdf'); await fbef.locator('#dHeic').waitFor(); await fbef.click('#dOk');
+  await fbef.locator('#zOk').waitFor({ timeout: 60000 });   // umgewandelt, danach öffnet sich der Dialog „Bilddokumentation erstellen“
+  assert.match(await fbef.locator('#banner').textContent(), /1 iPhone-Foto in JPG umgewandelt/);
+  let obef = await imOrdnerB();
+  assert.deepEqual(obef, ['A1.jpg', 'A2.jpg', 'A3.jpg', 'A4.jpg', '_Originale/A4.heic', 'fotos ka 20.08/B1.jpg', 'fotos ka 20.08/B2.jpg', 'fotos ka 20.08/B3.jpg', 'fotos ka 20.08/B4.heic'],
+    'nur das iPhone-Foto von Termin 1 umgewandelt – das von Termin 2 liegt unverändert in seinem Ordner');
+  // (b) Datum von Termin 1 im Dialog ändern: Dateiname und „Deckblatt: …“ sofortB (im selben Schritt gelesen – _Projekt.json wird erst verzögert geschrieben)
+  assert.equal(await fbef.locator('#pTermin').inputValue(), 't1'); assert.equal(await fbef.locator('#m_ort').inputValue(), '2026-08-12');
+  assert.match(await fbef.locator('#zInfo').textContent(), /_2026-08-12\.pdf/);
+  const sofortB = await fbef.evaluate(() => { const f = document.getElementById('m_ort'); f.value = '2026-08-14'; f.dispatchEvent(new Event('input', { bubbles: true }));
+    return { info: document.getElementById('zInfo').textContent, termin: document.getElementById('pTerminInfo').textContent }; });
+  assert.match(sofortB.info, /_2026-08-14\.pdf/, 'Dateiname mit dem eben eingetragenen Datum: ' + sofortB.info.replace(/\s+/g, ' '));
+  assert.doesNotMatch(sofortB.info, /_2026-08-12\.pdf/);
+  assert.ok(sofortB.termin.startsWith('Deckblatt: Termin 1 · 14.08.2026'), sofortB.termin);
+  if (await fbef.locator('#pRename').count()) await fbef.locator('#pRename').uncheck();   // hier nur die PDF, kein Umbenennen
+  await fbef.click('#zOk'); await ruhig(fbef);
+  let jbef = await bis(fbef, async () => { const x = await fkDatei(fbef, BEFUNDE); return x.bilddokus?.t1 && x; }, 'Doku Termin 1');
+  assert.match(jbef.bilddokus.t1.dateien[0], /_2026-08-14\.pdf$/, 'PDF heißt nach dem neuen Datum (wie das Deckblatt)');
+  assert.equal(jbef.bilddokus.t1.termin.datum, '2026-08-14');
+  await bis(fbef, async () => (await pjDatei(fbef, BEFUNDE)).ortstermin === '2026-08-14', '_Projekt.json mit dem neuen Datum');
+  assert.deepEqual((await pjDatei(fbef, BEFUNDE)).weitereOrtstermine, [{ id: 't2', datum: '2026-08-20', bezeichnung: 'Nachbeprobung', wer: 'Ka' }]);
+  // (c) „Dateien umbenennen“ in „Alle“: A2 (Weg, direkt in „Fotos“) wird verschoben, B2 (Weg, Unterordner) bleibt liegen – und in der Reihenfolge
+  await fbef.locator('#terminWahl [data-ansicht="alle"]').click();
+  await fbef.click('#btnMehr'); await fbef.locator('#mosaikMehrPop #mehrUmbenennen').click();
+  assert.match(await fbef.locator('#dialog .list').textContent(), /Nach _aussortiert\/ verschieben \(1\)\s*A2\.jpg/);
+  await fbef.locator('#dOk').click(); await fbef.locator('#bUndo').waitFor({ timeout: 60000 });
+  jbef = await bis(fbef, async () => { const x = await fkDatei(fbef, BEFUNDE); return x.reihenfolge.length && x; }, 'Umbenennen gespeichert');
+  obef = await imOrdnerB();
+  assert.ok(obef.includes('_aussortiert/A2.jpg') && !obef.includes('A2.jpg'), 'A2 verschoben: ' + obef.join(', '));
+  assert.ok(obef.includes('fotos ka 20.08/B2.jpg'), 'B2 bleibt im Unterordner');
+  assert.equal(jbef.bilder['fotos ka 20.08/B2.jpg'].aussortiert, true);
+  assert.ok(jbef.reihenfolge.includes('fotos ka 20.08/B2.jpg'), 'das „Weg“-Foto im Unterordner bleibt in der gespeicherten Reihenfolge: ' + jbef.reihenfolge.join(', '));
+  assert.ok(!jbef.reihenfolge.includes('A2.jpg'), 'das verschobene Foto steht nicht mehr in der Reihenfolge');
+  assert.deepEqual(jbef.reihenfolge.slice().sort(), (await kacheln(fbef)).slice().sort(), 'Reihenfolge = genau die Fotos, die noch da sind');
+  console.log(`OK ${browserName}: iPhone-Rückfrage nur für die gezeigte Auswahl; geändertes Datum von Termin 1 sofortB im Dateinamen und im PDF; „Weg“-Foto im Unterordner bleibt in der Reihenfolge`);
+  await fbef.close();
 
   schritt = '7 Link';
   const fl = await ctx.newPage(); fl.on('pageerror', e => fehler.push('Link: ' + e.message));

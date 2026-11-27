@@ -545,7 +545,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.7.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:31ba7741d0ea7baa81156e62063f381a42b36c44d81a1ba61d7dcc549e60aadb';
+const APP_BUILD = 'sha256:b9c46e7688217e90bb933733b7327e45934e185eb3bdf2a8d07d837772979612';
 const APP_DATE = '2026-11-26';
 const CHANGELOG = [
   ['2.7.0', '26.11.2026', 'Mehrere Ortstermine, Fotos bleiben in ihren Unterordnern: FotoKit liest jetzt auch die Fotos in den Unterordnern von „Fotos“ (eine Ebene, z. B. „Bilder Stefan“, „fotos ka 20.08“) – sie bleiben dort liegen und behalten ihren Namen; Ordner mit „_“ oder „.“ vorn zählen nicht. Über den Kacheln steht je Ordner eine Zeile. Hat das Projekt mehr als einen Ortstermin (Projektzentrale „+ Weiterer Ortstermin“), fragt FotoKit je Ordner einmal, zu welchem Termin er gehört – Vorschlag aus dem Datum im Ordnernamen, sonst aus dem Aufnahmedatum; nie ohne Klick. Passt das Datum zu keinem Termin, legt „Anlegen“ ihn in den Projektdaten an (nur den Termin, mit derselben Kennungsregel wie die Projektzentrale). Über den Fotos „Termin 1 · Termin 2 · Alle“, Fotos ohne Termin sind gelb. „Bilddokumentation erstellen“ fragt zuerst „Für welchen Termin?“, das Deckblatt nennt Datum und Bezeichnung des Termins, die PDF trägt das Termindatum im Namen, und FotoKit merkt sich je Termin eine Bilddokumentation – eine neue für Termin 2 lässt die von Termin 1 aktuell. Ändert die Projektzentrale Datum oder Bezeichnung eines Termins, gilt nur dessen Bilddokumentation als geändert (Hinweis über den Fotos). Fotos in Unterordnern werden nicht umbenannt und nie nach „_aussortiert“ verschoben („Weg“ ist dort nur eine Markierung); iPhone-Fotos dort werden im selben Ordner umgewandelt, das Original kommt nach „<Ordner>/_Originale“. „Fotos übernehmen“ entfällt; schon übernommene Fotos fragt FotoKit je Herkunftsordner, auch nach dem Umbenennen (sonst „Herkunft unbekannt“). Ein Projekt ohne Unterordner und mit einem Termin sieht aus wie bisher. Ältere FotoKit-Fassungen ändern eine Projektdatei von 2.7.0 nicht (geschützter Modus).'],
@@ -2485,12 +2485,15 @@ async function heicUmwandeln(liste){
   await loadItems();
   return { fertig, fehler, ms: Date.now() - t0 };
 }
-async function heicUmwandelnStarten(){
+/** nurGezeigte (Review #95, P2): nur die iPhone-Fotos der gezeigten Auswahl (Termin) – für die Rückfrage vor der Bilddokumentation;
+    die Karte „iPhone-Fotos umwandeln“ wandelt wie bisher alle um. Wird alles gezeigt (ein Termin oder „Alle“), ist beides dasselbe. */
+async function heicUmwandelnStarten(nurGezeigte){
   if (!S.dir || S.busy || S.changing) return null;
   if (P.readOnly){ banner('err', esc(PROTECTED_PROJECT)); return null; }
-  if (!heicFotos().length) return null;
+  const fotos = () => nurGezeigte === true ? S.view.filter(istHeic) : heicFotos();
+  if (!fotos().length) return null;
   let r = null;
-  await withSavedProject('Das Umwandeln der iPhone-Fotos', async () => { r = await heicUmwandeln(heicFotos()); });
+  await withSavedProject('Das Umwandeln der iPhone-Fotos', async () => { r = await heicUmwandeln(fotos()); });
   if (!r) return null;
   const n = r.fertig.length, ziel = `„${esc(FOTOS_DIR)}/${ORIGINALE_DIR}“`;
   const zeit = r.ms >= 1000 ? ` (${Math.round(r.ms / 1000)} s)` : '';
@@ -2499,10 +2502,12 @@ async function heicUmwandelnStarten(){
   heicKarte();
   return r;
 }
-/** E2: vor „Bilddokumentation erstellen“ einmal nachfragen, statt Platzhalter ins PDF zu setzen */
+/** E2: vor „Bilddokumentation erstellen“ einmal nachfragen, statt Platzhalter ins PDF zu setzen.
+    Review #95 (P2): gezählt und umgewandelt wird, was die Doku nimmt – die gezeigte Auswahl (S.view). Ein iPhone-Foto eines anderen
+    Termins löst keine Rückfrage aus und wird hier nicht mit umgewandelt. */
 function guardHeic(next){
   return (...a) => {
-    const n = S.items.filter(it => istHeic(it) && !it.discard).length;
+    const n = S.view.filter(it => istHeic(it) && !it.discard).length;
     if (!n || P.readOnly) return next(...a);
     showDialog(`<h3>${n} ${heicWort(n)} noch nicht umgewandelt</h3>
       <p id="dHeic">${n === 1 ? 'Ein Foto in der Doku ist' : `${n} Fotos in der Doku sind`} im iPhone-Format (HEIC). In der Bilddokumentation ${n === 1 ? 'stünde es' : 'stünden sie'} nur als Platzhalter.
@@ -2510,7 +2515,7 @@ function guardHeic(next){
       <div class="btns"><button id="dCancel">Abbrechen</button><span class="spacer"></span><button id="dOhne">Ohne Umwandeln weiter</button><button class="primary" id="dOk">${n} ${heicWort(n)} umwandeln</button></div>`);
     $('dCancel').onclick = closeDialog;
     $('dOhne').onclick = () => { closeDialog(); next(...a); };
-    $('dOk').onclick = async () => { closeDialog(); const r = await heicUmwandelnStarten(); if (r && !r.fehler.length) next(...a); };
+    $('dOk').onclick = async () => { closeDialog(); const r = await heicUmwandelnStarten(true); if (r && !r.fehler.length) next(...a); };
     $('dOk').focus();
   };
 }
@@ -3680,7 +3685,10 @@ async function doRename(pairs, moves){
     S.lastRun = { rows: snapshot, pairs, moves, discardRows, when: new Date() };
     // New physical names must not re-sort the documentation on loadItems/reopen.
     cfg.sort = 'manual'; $('sort').value = 'manual'; store.set('bu-settings', cfg);
-    saveOrder(snapshot.map(r => r.to).concat(moves.length ? [] : discardRows.map(r => r.from)));
+    // Review #95 (P2): nur wirklich nach „_aussortiert“ Verschobene fehlen – „Weg“-Fotos in Unterordnern bleiben liegen (O5/O6) und
+    // behalten ihren Platz in der Reihenfolge, auch wenn im selben Lauf ein Foto direkt in „Fotos“ verschoben wurde.
+    const verschoben = new Set(moves.map(m => m.from));
+    saveOrder(snapshot.map(r => r.to).concat(discardRows.filter(r => !verschoben.has(r.from)).map(r => r.from)));
     remapKeys('drafts', pairs);       // descriptions stay with the renamed file
     remapKeys('extra', pairs);
     remapKeys('hash', pairs);
@@ -3968,7 +3976,10 @@ function docBaseName(m){
   const parts = S.proj ? [S.proj.nr || S.proj.name, S.proj.ort]
               : [(m.proj || '').trim() || (generic ? '' : S.dir.name)];
   const t = m && m.terminWahl && m.terminWahl !== 'alle' && mehrereTermine() ? terminNach(m.terminWahl) : null;
-  const datum = t && OT && OT.gueltig(t.datum) ? t.datum : fmtISO(new Date());
+  // Review #95 (P2): Termin 1 mit dem Datum aus dem Dialog (m.ort, wie das Deckblatt) – PJ.data kennt ein eben geändertes Datum erst,
+  // wenn „_Projekt.json“ (verzögert) geschrieben ist; Deckblatt und Dateiname dürfen nicht auseinanderlaufen. Termin ≥ 2: Projektdaten.
+  const td = t ? (t.id === 't1' && typeof m.ort === 'string' ? m.ort.trim() : t.datum) : '';
+  const datum = t && OT && OT.gueltig(td) ? td : fmtISO(new Date());
   return ['Bilddokumentation', ...parts.map(winName), datum].filter(Boolean).join('_') + (m && m.terminWahl === 'alle' && mehrereTermine() ? ' - alle Termine' : '');
 }
 /* never overwrite an earlier export: „…_2026-10-19.pdf“ exists → „…_2026-10-19 (2).pdf“ (all parts of a split PDF get the same suffix) */
@@ -4118,6 +4129,12 @@ function openMetaDialog(mode){
     f.disabled = w !== 't1';
     f.value = w === 't1' ? ortT1 : t ? t.datum : '';
     lbl.title = w === 't1' ? '' : 'Datum aus den Projektdaten (Projektzentrale) – hier nicht änderbar';
+    terminInfo();
+  };
+  /* Zeile unter „Für welchen Termin?“. Termin 1 mit dem Datum aus dem Feld (ortT1) – wie Deckblatt und Dateiname, auch solange ein eben
+     geändertes Datum noch nicht in „_Projekt.json“ steht (Review #95, P2). */
+  const terminInfo = () => {
+    const w = wahlJetzt(), t0 = terminNach(w), t = t0 && w === 't1' ? { ...t0, datum: ortT1 } : t0;
     const ohne = S.items.filter(it => !terminVon(it)).length;
     $('pTerminInfo').innerHTML = (w === 'alle' ? 'Deckblatt: alle Ortstermine. ' : t ? `Deckblatt: ${esc(terminText(t))}${w === 't1' ? '' : ' (Datum aus den Projektdaten, hier nicht änderbar)'}. ` : '') +
       (ohne ? `<span class="warn">${ohne} ${ohne === 1 ? 'Foto hat' : 'Fotos haben'} noch keinen Ortstermin${w === 'alle' ? ' – sie kommen in diese Doku mit' : ' und ' + (ohne === 1 ? 'ist' : 'sind') + ' in keiner Termin-Doku – erst zuordnen (gelbe Zeile über dem Ordner, Auswahl „Alle“)'}.</span>` : '');
@@ -4139,7 +4156,7 @@ function openMetaDialog(mode){
     $('pTermin').value = S.ansicht === 'alle' || terminNach(S.ansicht) ? S.ansicht : 't1';
     if ($('pTermin').value !== S.ansicht) ansichtSetzen($('pTermin').value);
     $('pTermin').addEventListener('change', () => { ansichtSetzen($('pTermin').value); auswahlRechnen(); update(); });
-    $('m_ort').addEventListener('input', () => { if (wahlJetzt() === 't1') ortT1 = $('m_ort').value.trim(); });
+    $('m_ort').addEventListener('input', () => { if (wahlJetzt() === 't1'){ ortT1 = $('m_ort').value.trim(); terminInfo(); } });
   }
   auswahlRechnen();
   const read = () => {
