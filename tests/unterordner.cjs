@@ -66,6 +66,35 @@ function sitzung(d, pj = ZWEI){
     assert.deepEqual(Object.keys(j.bilddokus).sort(), ['t1', 't2']);
   });
 
+  await test('Review #95 (7): ein Fenster ordnet einen Ordner Termin 1 zu, das andere erstellt gleichzeitig die Doku für Termin 1 → nach dem Zusammenführen geändert', async () => {
+    const zuordnen = (s, ordner, termin) => { s.P.data.extensions = { ...s.P.data.extensions, ordnerTermine: { ...s.P.data.extensions.ordnerTermine, [ordner]: { termin, am: new Date().toISOString(), vorschlag: 'hand' } } }; s.dokuGeaendert([termin]); s.projSet('discard', [...s.P.data.discard]); s.P.dirty = true; };
+    // Fotos mit den Angaben aus der Datei – sonst zählte schon das Zusammenführen leerer Beschreibungen als geänderter Doku-Inhalt
+    const fotos = () => { const l = ['Bilder A/IMG_0001.jpg', 'Fotos B/IMG_0001.jpg', 'Fotos B 20.08/IMG_0001.jpg', 'IMG_0001.jpg'].map(foto);
+      l[0].desc = 'Küche'; Object.assign(l[1], { desc: 'Flur', probe: 'P1', sec: 'EG' }); l[2].desc = 'Nachbeprobung Flur'; l[3].desc = 'direkt'; return l; };
+    const aktuell = (e, id) => !(e.dokuGeaendertJe && e.dokuGeaendertJe[id] > e.bilddokus[id].erstellt);
+    const d = disk(datei()), a = sitzung(d), b = sitzung(d); await a.open(); await b.open();
+    a.S.items = fotos(); a.S.view = a.S.items.slice(); b.S.items = fotos(); b.S.view = b.S.items.slice();
+    zuordnen(a, 'Fotos B', 't1'); await tick();                       // A: „Fotos B“ gehört zu Termin 1
+    b.bilddokuVermerken(['T1.pdf'], 'Anlage 2', 't1'); await tick();   // B (kennt das noch nicht): Doku Termin 1 ohne „Fotos B“
+    gleich(b.P.data.extensions.bilddokus.t1.bestand, ['Bilder A/IMG_0001.jpg', 'IMG_0001.jpg']);
+    assert.equal(await a.flushProject(), true); assert.equal(await b.flushProject(), true, 'B führt zusammen');
+    let e = b.P.data.extensions;
+    assert.equal(e.ordnerTermine['Fotos B'].termin, 't1', 'Zuordnung aus A ist da');
+    assert.equal(aktuell(e, 't1'), false, 'Doku Termin 1 (ohne die Fotos aus „Fotos B“) gilt als geändert');
+    assert.ok(e.dokuGeaendert > e.bilddoku.erstellt, 'auch das alte Feld – sie ist die zuletzt erstellte');
+    assert.equal(await b.flushProject(), true);
+    assert.ok(d.json().dokuGeaendertJe.t1 > d.json().bilddokus.t1.erstellt, 'steht nach dem Speichern in der Datei');
+    // Gegenprobe: die Doku kennt die Zuordnung schon (A ordnet zu und erstellt dann) → bleibt beim Zusammenführen in B aktuell
+    const d2 = disk(datei()), a2 = sitzung(d2), b2 = sitzung(d2); await a2.open(); await b2.open();
+    a2.S.items = fotos(); a2.S.view = a2.S.items.slice(); b2.S.items = fotos(); b2.S.view = b2.S.items.slice();
+    zuordnen(a2, 'Fotos B', 't1'); await tick(); a2.bilddokuVermerken(['T1.pdf'], 'Anlage 2', 't1'); await tick();
+    gleich(a2.P.data.extensions.bilddokus.t1.bestand, ['Bilder A/IMG_0001.jpg', 'Fotos B/IMG_0001.jpg', 'IMG_0001.jpg']);
+    zuordnen(b2, 'Fotos B 20.08', 't2');   // B ordnet nur einen anderen Ordner Termin 2 zu (kein Inhalt der Doku von Termin 1)
+    assert.equal(await a2.flushProject(), true); assert.equal(await b2.flushProject(), true);
+    e = b2.P.data.extensions;
+    assert.equal(e.ordnerTermine['Fotos B'].termin, 't1'); assert.equal(aktuell(e, 't1'), true, 'Doku mit der Zuordnung gebaut: bleibt aktuell');
+  });
+
   await test('zwei Fenster ordnen denselben Ordner verschieden zu → Widerspruch, nichts überschrieben', async () => {
     const d = disk(datei()), a = sitzung(d), b = sitzung(d); await a.open(); await b.open();
     a.P.data.extensions.ordnerTermine = { ...a.P.data.extensions.ordnerTermine, 'Fotos B': { termin: 't1', am: 'x' } }; a.P.dirty = true;

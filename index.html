@@ -545,7 +545,7 @@ body{font-family:var(--sp-font);background:var(--sp-bg);color:var(--sp-text)}
 const APP_NAME = 'FotoKit';   // display name (technical names – web address, _Bildumbenenner.json, storage keys – stay „Bildumbenenner“)
 const APP_VERSION = '2.7.0';
 // Generated from this HTML's bytes with the build value normalized; no project format change.
-const APP_BUILD = 'sha256:6050bf8121c242ec7ac5eb28c9790c1ac827ccd76b07ccf17e766cd815e9e24e';
+const APP_BUILD = 'sha256:99e482c8e5e02791b8c33a5d79132b3495bcd618fdf85dfc3c03ec007e8b257c';
 const APP_DATE = '2026-11-26';
 const CHANGELOG = [
   ['2.7.0', '26.11.2026', 'Mehrere Ortstermine, Fotos bleiben in ihren Unterordnern: FotoKit liest jetzt auch die Fotos in den Unterordnern von „Fotos“ (eine Ebene, z. B. „Bilder Stefan“, „fotos ka 20.08“) – sie bleiben dort liegen und behalten ihren Namen; Ordner mit „_“ oder „.“ vorn zählen nicht. Über den Kacheln steht je Ordner eine Zeile. Hat das Projekt mehr als einen Ortstermin (Projektzentrale „+ Weiterer Ortstermin“), fragt FotoKit je Ordner einmal, zu welchem Termin er gehört – Vorschlag aus dem Datum im Ordnernamen, sonst aus dem Aufnahmedatum; nie ohne Klick. Passt das Datum zu keinem Termin, legt „Anlegen“ ihn in den Projektdaten an (nur den Termin, mit derselben Kennungsregel wie die Projektzentrale). Über den Fotos „Termin 1 · Termin 2 · Alle“, Fotos ohne Termin sind gelb. „Bilddokumentation erstellen“ fragt zuerst „Für welchen Termin?“, das Deckblatt nennt Datum und Bezeichnung des Termins, die PDF trägt das Termindatum im Namen, und FotoKit merkt sich je Termin eine Bilddokumentation – eine neue für Termin 2 lässt die von Termin 1 aktuell. Ändert die Projektzentrale Datum oder Bezeichnung eines Termins, gilt nur dessen Bilddokumentation als geändert (Hinweis über den Fotos). Fotos in Unterordnern werden nicht umbenannt und nie nach „_aussortiert“ verschoben („Weg“ ist dort nur eine Markierung); iPhone-Fotos dort werden im selben Ordner umgewandelt, das Original kommt nach „<Ordner>/_Originale“. „Fotos übernehmen“ entfällt; schon übernommene Fotos fragt FotoKit je Herkunftsordner, auch nach dem Umbenennen (sonst „Herkunft unbekannt“). Ein Projekt ohne Unterordner und mit einem Termin sieht aus wie bisher. Ältere FotoKit-Fassungen ändern eine Projektdatei von 2.7.0 nicht (geschützter Modus).'],
@@ -816,7 +816,7 @@ function dokuGeaendert(betroffen){
 /** Fotos neu eingelesen (neue/entfernte Dateien): Bestand anders als bei der PDF → Doku geändert (einmal). 2.7.0: „bestand“ nennt
     nur die Fotos direkt in „Fotos“ (damit vergleicht BerichtKit bis 1.23 – mit Wegen meldete es die Doku „veraltet“), die Fotos in
     Unterordnern stehen in „bestandUnterordner“; Fotos eines gerade nicht lesbaren Ordners zählen nicht als entfernt (R2). */
-function dokuBestandPruefen(){
+function dokuBestandPruefen(nurJeTermin){
   const ext = P.data && P.data.extensions, b = ext && ext.bilddoku;
   if (!ext || P.readOnly) return;
   const anders = (liste, jetzt) => { const damals = new Set(liste.filter(n => !unlesbarerSchluessel(n))); return jetzt.length !== damals.size || jetzt.some(n => !damals.has(n)); };
@@ -827,7 +827,7 @@ function dokuBestandPruefen(){
      „Alle Termine“, ein Termin oder kein Eintrag je Termin: Vergleich mit allen Fotos wie bisher. */
   const bt = jeTermin && b && typeof b.termin === 'string' && b.termin !== 'alle' && docs[b.termin] && Array.isArray(docs[b.termin].bestand) ? b.termin : null;
   const altAktuell = () => { const e = P.data.extensions; return !(e.dokuGeaendert && e.dokuGeaendert > b.erstellt); };   // sonst schon veraltet
-  if (b && !bt && Array.isArray(b.bestand)){
+  if (b && !bt && !nurJeTermin && Array.isArray(b.bestand)){   // nurJeTermin (Zusammenführen): nur der Bestand je Termin, s. mergeExternal
     const direkt = S.items.filter(it => !it.ordner).map(it => it.name), unter = S.items.filter(it => it.ordner).map(it => it.name);
     if (anders(b.bestand, direkt) || anders(Array.isArray(b.bestandUnterordner) ? b.bestandUnterordner : [], unter)){   // m3: nur im Speicher
       if (altAktuell()) P.data.extensions = { ...P.data.extensions, dokuGeaendert: dokuZeit(P.data.extensions) };
@@ -923,6 +923,10 @@ const ohneLk = x => Object.fromEntries(Object.entries(x || {}).map(([n, v]) => {
 /** E2: Form des Feldes „probeLabelKit“ je Bild ({"P4": "EG Küche Heizkörper"}); anders geformt bleibt es als unbekanntes Feld stehen. */
 function lkGueltig(v){ return !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length > 0 && Object.entries(v).every(([k, t]) => /^P\d+$/.test(k) && typeof t === 'string' && t.length <= 500); }
 const dokuInhalt = d => kanonisch(DOKU_KINDS.map(k => k === 'discard' ? [...(d[k] || [])].sort() : k === 'extra' ? ohneLk(d[k]) : d[k] === undefined ? (k === 'order' ? [] : {}) : d[k]));
+/** Termin-Zuordnungen (je Ordner und je Foto) – sie bestimmen, welche Fotos in die Doku eines Termins gehören; „am“/„vorschlag“ zählen nicht. */
+const zuordnungInhalt = d => kanonisch([
+  Object.fromEntries(Object.entries((d && d.extensions && d.extensions.ordnerTermine && typeof d.extensions.ordnerTermine === 'object' && !Array.isArray(d.extensions.ordnerTermine) ? d.extensions.ordnerTermine : {})).map(([k, v]) => [k, v && typeof v === 'object' ? v.termin : v])),
+  Object.fromEntries(Object.entries((d && d.imageExtensions) || {}).filter(([, v]) => v && v.termin !== undefined).map(([n, v]) => [n, v.termin]))]);
 const ohneDokuStand = x => { const r = { ...(x || {}) }; for (const k of DOKU_FELDER) delete r[k]; return r; };
 function dokuStandMischen(o, t){
   o = o || {}; t = t || {}; const r = {};
@@ -1213,6 +1217,12 @@ function mergeExternal(theirs){
   }
   P.data = m;
   S.herkunft = herkunftLesen();
+  /* Review #95 (P1): Termin-Zuordnungen (Ordner, je Foto) sind kein „Doku-Inhalt“ oben, bestimmen aber, welche Fotos in die Doku eines
+     Termins gehören. Kommen beim Zusammenführen Zuordnungen zusammen, die eine Seite beim Erstellen ihrer PDF nicht kannte (ein Fenster
+     ordnet einen Ordner Termin 1 zu, das andere erstellt gleichzeitig die Doku für Termin 1), stimmt der vermerkte Bestand dieser Doku
+     nicht mehr. Darum hier der Vergleich je Termin wie beim Einlesen – genau die betroffenen Dokus gelten als geändert, eine Doku, die
+     die Zuordnung schon kannte, bleibt aktuell. */
+  if (mehrereTermine() && (zuordnungInhalt(m) !== zuordnungInhalt(o) || zuordnungInhalt(m) !== zuordnungInhalt(theirs))) dokuBestandPruefen(true);
   applyMergedToItems(orderChanged);
   out.theirs.delete('');
   const known = new Set(S.items.map(it => it.name));
